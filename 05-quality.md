@@ -298,6 +298,32 @@ task20: Beim Server-Start `docker ps --filter "name=runbot-"` gegen `registry.js
 
 ---
 
+### bug19 moodleUser.ts ruft nicht-existierende CLI-Skripte auf
+
+Feature: feat01
+Status: fixed (2026-04-09)
+Entdeckt: Verify-Lauf task14, Service-Log `demo-leitnerflow-7408b5`, `demo-leitnerflow-fae033`
+
+**Description**
+`src/services/moodleUser.ts` rief `php admin/cli/create_user.php` und `php admin/cli/enrol_user.php` auf. Diese Dateien existieren in Moodle-Core nicht — weder in 4.x noch in 5.x (waren nie Standard-CLI-Skripte, vielleicht Copy-Paste aus einem Plugin-Repo). Der Container antwortete konsistent mit `Could not open input file: admin/cli/create_user.php`, alle 3 Retries schlugen fehl, Provisionierung brach ab, `nginx.writeInstanceConfig()` wurde nie aufgerufen. Deswegen hatten auch die 6 orphan-Verzeichnisse in `/opt/runbot/` nie eine nginx-Config.
+
+Hätte früher auffallen müssen: task02 Verify war nie wirklich durchgelaufen, weil schon Schritt "User anlegen" vorher geknallt hat. Die "Ready"-Mails die vorher kamen, waren wahrscheinlich von einem früheren Code-Stand mit anderer Logik.
+
+**Log-Auszug**
+```
+[moodleUser] createDemoUser attempt 1/3 failed:
+  stdout: Could not open input file: admin/cli/create_user.php
+```
+
+**Fix**
+Temporäres PHP-Script in den Moodle-Dir schreiben (der via `MOODLE_DOCKER_WWWROOT` im Container als `/var/www/html` gemountet ist), dann per `docker exec webserver php <script>` aufrufen. Das Script benutzt Moodle's native `user_create_user()` + `user_update_user()` + `$auth->user_update_password()` APIs. Analog für `enrollUserInDemoCourse` mit `enrol_get_plugin('manual')->enrol_user()`.
+
+Script wird nach Ausführung via try/finally wieder entfernt, auch bei Fehlern.
+
+Deployed im Commit TBD.
+
+---
+
 ### bug18 Snapshot-Restore macht kein DB-weites URL-Rewrite
 
 Feature: feat05

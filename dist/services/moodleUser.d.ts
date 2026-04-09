@@ -12,6 +12,7 @@ export declare function createDemoUser(instance: MoodleInstance, email: string, 
 /**
  * Gibt dem Demo-Nutzer Kurs-Einschreibung (Student-Rolle).
  * Setzt voraus dass ein Demo-Kurs mit shortname "demo" im Snapshot existiert.
+ * Schlägt still fehl wenn Kurs nicht existiert (nicht fatal).
  */
 export declare function enrollUserInDemoCourse(instance: MoodleInstance, email: string): Promise<void>;
 //# sourceMappingURL=moodleUser.d.ts.map
