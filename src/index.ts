@@ -344,7 +344,16 @@ async function runHTTP(): Promise<void> {
   // ── Live-Status der Demo-Provisionierung (feat09) ────────────────────────
   // Die Warteseite pollt diesen Endpoint alle 3s mit dem Request-Token.
   // Token ist Auth — keine zusätzliche Authentifizierung nötig.
-  app.get("/api/demo-status/:token", async (req, res) => {
+  //
+  // ACHTUNG nginx-Routing: Der nginx vor diesem Server proxyt mit einem
+  // `proxy_pass http://127.0.0.1:3000/;` (Trailing-Slash) — dadurch wird
+  // der `/api/`-Präfix beim Forward GESTRIPPT. Express sieht also den
+  // Pfad OHNE `/api/`. Um den Browser-Request `/api/demo-status/:token`
+  // trotzdem zu matchen, registrieren wir hier BEIDE Pfade. Identischer
+  // Bug hat uns schon bei /configs und /plugin getroffen — historisch mit
+  // je einem Alias gelöst. TODO: irgendwann nginx reparieren und die
+  // Aliase entfernen (feat13/task31 im 04-tasks.md).
+  const demoStatusHandler: express.RequestHandler = async (req, res) => {
     const { token } = req.params;
     let request;
     try {
@@ -394,14 +403,24 @@ async function runHTTP(): Promise<void> {
         password: DEMO_PASSWORD,
       } : {}),
     });
-  });
+  };
+  app.get("/api/demo-status/:token", demoStatusHandler);
+  // Alias für nginx-Stripping (siehe Kommentar oben)
+  app.get("/demo-status/:token", demoStatusHandler);
 
   // ── Plugin detail API ─────────────────────────────────────────────────────
-  // GET /api/plugin/:id → JSON: { config, github, iconUrl }
+  // GET /api/plugininfo/:id → JSON: { config, github, iconUrl }
   // Called by plugin-detail.html to populate the page dynamically.
   // iconUrl wird best-effort aus pix/monologo.{svg,png}|icon.{svg,png} geholt
   // (feat11/task23). Fehler = null, kein Blocker für den Rest.
-  app.get("/api/plugin/:id", async (req, res) => {
+  //
+  // Name bewusst `plugininfo` (nicht `plugin`): Nginx strippt `/api/` vor
+  // dem Forward an Express. Ein Endpoint namens `/api/plugin/:id` würde
+  // darum als `/plugin/:id` bei Express ankommen und dort mit dem HTML-
+  // Handler für die Detail-Seite kollidieren. Der Bug war vorher da und
+  // still: `loadPluginData()` im Frontend hat HTML bekommen und den
+  // JSON.parse silent gefangen → GitHub-Daten fehlten wortlos.
+  const pluginInfoHandler: express.RequestHandler = async (req, res) => {
     try {
       const configs = await loadConfigs().catch(() => []);
       const config = configs.find(c => c.id === req.params.id);
@@ -414,7 +433,7 @@ async function runHTTP(): Promise<void> {
       if (config.githubRepo) {
         const [g, icon] = await Promise.all([
           github.fetchPluginData(config.githubRepo).catch(err => {
-            console.error(`[api/plugin] GitHub fetch failed for ${req.params.id}:`, err);
+            console.error(`[api/plugininfo] GitHub fetch failed for ${req.params.id}:`, err);
             return null;
           }),
           github.resolvePluginIconUrl(config.githubRepo).catch(() => null),
@@ -426,7 +445,10 @@ async function runHTTP(): Promise<void> {
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
-  });
+  };
+  app.get("/api/plugininfo/:id", pluginInfoHandler);
+  // Alias für nginx-Stripping — siehe Kommentar oben.
+  app.get("/plugininfo/:id", pluginInfoHandler);
 
   // GET /api/configs — alias so the portal's /api/configs URL works
   app.get("/api/configs", async (_req, res) => {

@@ -541,7 +541,13 @@ let ITEM = { id: pluginId, moodleVersion:'5.0', phpVersion:'8.3', db:'pgsql',
 
 async function loadPluginData() {
   try {
-    const r = await fetch(`${API}/api/plugin/${pluginId}`);
+    // WICHTIG: /api/plugininfo/:id (nicht /api/plugin/:id). Nginx strippt
+    // das /api/-Präfix vor dem Forward an Express, darum würde
+    // /api/plugin/:id bei Express als /plugin/:id ankommen — und dort
+    // matched der HTML-Server für die Detail-Seite, nicht das JSON-API.
+    // Das führte bis 2026-04-09 zu einem stillen JSON.parse-Fehler (User
+    // sah nur den statischen Config-Fallback, keine GitHub-Daten/Icon).
+    const r = await fetch(`${API}/api/plugininfo/${pluginId}`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     const cfg = d.config;
