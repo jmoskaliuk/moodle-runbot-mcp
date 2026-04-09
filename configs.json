@@ -25,5 +25,32 @@
     "githubRepo": "jmoskaliuk/moodle-runbot-mcp",
     "snapshotId": "leitnerflow-v1",
     "visible": true
+  },
+  {
+    "id": "exam2pdf",
+    "type": "plugin",
+    "name": "Quiz PDF Certificate",
+    "category": "reporting",
+    "categoryLabel": "Reporting",
+    "icon": "📄",
+    "iconBg": "#fef3c7",
+    "description": "Automatische PDF-Zertifikate nach bestandenen Moodle-Quizzes — mit Fragen & Antworten, E-Mail-Versand und konfigurierbarer Aufbewahrungsfrist",
+    "features": [
+      "PDF-Zertifikat nach bestandener Prüfung",
+      "Automatischer E-Mail-Versand",
+      "Konfigurierbar pro Quiz",
+      "DSGVO-konform (Löschfrist einstellbar)"
+    ],
+    "db": "pgsql",
+    "phpVersion": "8.2",
+    "moodleVersion": "5.0",
+    "plugin": {
+      "srcPath": "/opt/plugins/local_eledia_exam2pdf",
+      "type": "local",
+      "name": "eledia_exam2pdf"
+    },
+    "githubRepo": "jmoskaliuk/local_eledia_exam2pdf",
+    "snapshotId": "exam2pdf-v1",
+    "visible": false
   }
 ]

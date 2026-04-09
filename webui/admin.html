@@ -162,8 +162,8 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
             <th>E-Mail</th>
             <th>Name</th>
             <th>Config</th>
+            <th>Token</th>
             <th>Status</th>
-            <th>Phase</th>
             <th>Angefragt</th>
             <th>Instanz</th>
           </tr>
@@ -211,9 +211,21 @@ function absTime(iso) {
   return new Date(iso).toLocaleString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 
-function pill(status) {
+const PHASE_LABEL = {
+  running:              'ok',
+  error:                'Fehler',
+  waiting:              'wartend',
+  provisioning:         'provisioning',
+  installing_plugin:    'plugin install',
+  starting_containers:  'container start',
+  restoring_snapshot:   'snapshot',
+  creating_user:        'nutzer anlegen',
+};
+
+function pill(status, isPhase = false) {
   const cls = `pill pill-${(status||'').replace(/[^a-z_]/g,'')}`;
-  return `<span class="${cls}">${status||'—'}</span>`;
+  const label = isPhase ? (PHASE_LABEL[status] ?? status) : status;
+  return `<span class="${cls}">${label||'—'}</span>`;
 }
 
 // ── Instanzen ──────────────────────────────────────────────────────────────────
@@ -240,7 +252,7 @@ function renderInstances(instances) {
       : `<span class="mono">${inst.id}</span>`;
     return `<tr>
       <td class="mono">${inst.id}</td>
-      <td>${pill(inst.status)}</td>
+      <td>${pill(inst.status, true)}</td>
       <td>${inst.configId ?? inst.prId ?? '—'}</td>
       <td title="${inst.createdAt}">${relTime(inst.createdAt)}</td>
       <td title="${inst.lastActivity}">${relTime(inst.lastActivity)}</td>
@@ -339,7 +351,7 @@ function renderTokens(requests) {
       <td>${req.name}</td>
       <td>${req.configId}</td>
       <td>${pill(req.status)}</td>
-      <td>${req.phase ? pill(req.phase) : '—'}</td>
+      <td>${req.phase ? pill(req.phase, true) : '—'}</td>
       <td title="${req.requestedAt}">${absTime(req.requestedAt)}</td>
       <td>${inst}</td>
     </tr>`;

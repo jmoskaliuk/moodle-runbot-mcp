@@ -739,6 +739,23 @@ Die `/request-demo`-Bestätigungs-E-Mail (`src/services/email.ts`) zeigte eine Z
 
 ---
 
+### task29 Token-Status nach Instanz-Stop auf EXPIRED setzen
+Status: open
+Feature: feat01, feat03
+Entdeckt: Admin-Dashboard zeigt Token-Einträge mit Phase "running" für längst gestoppte Instanzen — historisch korrekter Stand, aber irreführend.
+
+**Problem:** Der `DemoRequest`-Eintrag wird nicht aktualisiert wenn eine Instanz gestoppt/abgeräumt wird (weder durch Cleanup-Scheduler noch durch manuelles Stop im Admin-Dashboard). Ergebnis: Token-Tabelle zeigt dauerhaft `phase=running` für Instanzen, die vor Stunden gestoppt wurden.
+
+**Lösung:**
+1. `services/tokens.ts` → neue Funktion `expireRequest(token: string)`: setzt `status='expired'` und `phase='stopped'` (oder löscht `phase`).
+2. `services/cleanup.ts` → `stopInstance()` ruft `tokens.expireRequest(instance.tokenId)` auf (sofern `instance.tokenId` gesetzt).
+3. `src/index.ts` Admin-Route `DELETE /admin/instances/:id` → ebenfalls `tokens.expireRequest(...)` aufrufen.
+4. `MoodleInstance`-Typ bekommt optionales Feld `tokenId?: string` — wird beim Erstellen der Instanz aus dem Token befüllt.
+
+**Verify:** Nach Stop einer Instanz im Admin-Dashboard muss der zugehörige Token-Eintrag auf `expired` / `stopped` wechseln.
+
+---
+
 ### task27 Details-Link im Demo-Portal auf Plugin-Detail-Seite
 Status: **done 2026-04-09**
 Feature: feat01 (Webui)

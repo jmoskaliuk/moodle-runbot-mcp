@@ -161,10 +161,11 @@ async function runHTTP(): Promise<void> {
   });
 
   // Configs endpoint — vom Portal direkt aufgerufen (kein MCP-Overhead nötig)
-  // GET /configs → alle sichtbaren Demo-Konfigurationen als JSON
+  // GET /configs → alle sichtbaren Demo-Konfigurationen als JSON (visible !== false)
   app.get("/configs", async (_req, res) => {
     try {
-      const configs = await loadConfigs();
+      const all = await loadConfigs();
+      const configs = all.filter(c => c.visible !== false);
       res.json({ count: configs.length, configs });
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -577,7 +578,8 @@ async function runHTTP(): Promise<void> {
   // GET /api/configs — alias so the portal's /api/configs URL works
   app.get("/api/configs", async (_req, res) => {
     try {
-      const configs = await loadConfigs();
+      const all = await loadConfigs();
+      const configs = all.filter(c => c.visible !== false);
       res.json({ count: configs.length, configs });
     } catch (e) {
       res.status(500).json({ error: String(e) });
