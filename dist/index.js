@@ -585,12 +585,8 @@ function buildLoadingPage(firstName, pluginName, token) {
   </div>
   <div class="creds" id="creds">
     <h3>Ihre Zugangsdaten</h3>
-    <p class="creds-hint">Sie können sich mit einem dieser drei Accounts einloggen — alle teilen dasselbe Passwort.</p>
-    <div class="cred-row">
-      <span class="cred-label">Accounts:</span>
-      <span class="cred-val" id="cred-user">admin · teacher · student</span>
-      <button class="copy-btn" data-copy="cred-user">Kopieren</button>
-    </div>
+    <p class="creds-hint">Sie können sich mit einem der folgenden Accounts einloggen — alle teilen dasselbe Passwort.</p>
+    <div id="cred-accounts"></div>
     <div class="cred-row">
       <span class="cred-label">Passwort:</span>
       <span class="cred-val" id="cred-pw"></span>
@@ -667,13 +663,40 @@ function buildLoadingPage(firstName, pluginName, token) {
     document.getElementById('headline').innerHTML = 'Ihre Demo<br>ist bereit!';
     document.getElementById('subtext').innerHTML = 'Ihre <strong>' + (data.pluginName || '${pluginName}') + '</strong>-Instanz läuft.<br>Klicken Sie unten auf <strong>"Demo öffnen"</strong>, um zu starten.';
     markAllDone();
-    // Accounts-Liste: aus data.accounts (neu) oder statisch fallback.
-    // Der Snapshot enthält drei vordefinierte Accounts mit identischem Passwort.
+    // Accounts: pro Account eine eigene Zeile mit eigenem Kopieren-Button.
+    // Vorher war es eine einzige Zeile "admin · teacher · student", bei der
+    // der Kopieren-Button den kompletten String ins Clipboard gelegt hat —
+    // was unsinnig ist, weil man sich nur mit einem Account gleichzeitig
+    // einloggen kann. Johannes hat 2026-04-09 korrigiert.
     const accounts = Array.isArray(data.accounts) && data.accounts.length
-      ? data.accounts.join(' · ')
-      : 'admin · teacher · student';
-    document.getElementById('cred-user').textContent = accounts;
+      ? data.accounts
+      : ['admin', 'teacher', 'student'];
+    const ACCOUNT_LABELS = {
+      admin:   'Admin',
+      teacher: 'Lehrkraft',
+      student: 'Schüler:in',
+    };
+    const accountsBox = document.getElementById('cred-accounts');
+    accountsBox.innerHTML = '';
+    accounts.forEach((acc, idx) => {
+      const row  = document.createElement('div');
+      row.className = 'cred-row';
+      const valId = 'cred-acc-' + idx;
+      const label = ACCOUNT_LABELS[acc] || (acc.charAt(0).toUpperCase() + acc.slice(1));
+      row.innerHTML =
+        '<span class="cred-label">' + label + ':</span>' +
+        '<span class="cred-val" id="' + valId + '"></span>' +
+        '<button class="copy-btn" type="button" data-copy="' + valId + '">Kopieren</button>';
+      // textContent erst nach innerHTML setzen, damit die Schreibweise nicht
+      // durch HTML-Entity-Encoding verändert wird
+      row.querySelector('#' + valId).textContent = acc;
+      accountsBox.appendChild(row);
+    });
     if (data.password) document.getElementById('cred-pw').textContent = data.password;
+    // Nachdem die dynamischen Account-Zeilen gerendert sind, die Copy-Handler
+    // neu verdrahten — die ursprünglichen sind nur für die statisch gerenderten
+    // Elemente (Passwort-Zeile) aktiv.
+    wireCopyButtons();
     document.getElementById('creds').classList.add('show');
     document.getElementById('extend').classList.add('show');
     const btn = document.getElementById('open-btn');
@@ -735,23 +758,30 @@ function buildLoadingPage(firstName, pluginName, token) {
     }
   }
 
-  // Copy-to-clipboard
-  document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const targetId = btn.getAttribute('data-copy');
-      const el = document.getElementById(targetId);
-      if (!el) return;
-      try {
-        await navigator.clipboard.writeText(el.textContent || '');
-        btn.classList.add('copied');
-        btn.textContent = 'Kopiert!';
-        setTimeout(() => {
-          btn.classList.remove('copied');
-          btn.textContent = 'Kopieren';
-        }, 1800);
-      } catch {}
+  // Copy-to-clipboard — idempotent: per data-wired="1" markieren wir schon
+  // verdrahtete Buttons, sodass wireCopyButtons() nach dem dynamischen
+  // Einfügen der Account-Zeilen gefahrlos erneut aufgerufen werden kann.
+  function wireCopyButtons() {
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      if (btn.getAttribute('data-wired') === '1') return;
+      btn.setAttribute('data-wired', '1');
+      btn.addEventListener('click', async () => {
+        const targetId = btn.getAttribute('data-copy');
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        try {
+          await navigator.clipboard.writeText(el.textContent || '');
+          btn.classList.add('copied');
+          btn.textContent = 'Kopiert!';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.textContent = 'Kopieren';
+          }, 1800);
+        } catch {}
+      });
     });
-  });
+  }
+  wireCopyButtons();
 
   // Extend-Code UI (feat12/task26): Aufklapp-Toggle + Submit
   (function(){
