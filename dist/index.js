@@ -154,10 +154,18 @@ async function runHTTP() {
         }
     });
     // GET /confirm/:token — Kunde klickt Link, Demo startet
+    //
+    // ACHTUNG Idempotenz: E-Mail-Clients (Gmail, Outlook, Corporate Link-
+    // Scanner) prefetchen den Link oft mehrfach bevor der Nutzer überhaupt
+    // klickt. Jeder GET darf den Loading-Page anzeigen, aber nur der ERSTE
+    // darf den Hintergrund-Provisioning-Job starten. Sonst bauen wir 2-3
+    // komplette Moodle-Instanzen für denselben Interessenten und er bekommt
+    // mehrere Ready-Mails. Die Reservierung läuft atomar in confirmRequest
+    // via phase="waiting".
     app.get("/confirm/:token", async (req, res) => {
         const { token } = req.params;
-        const request = await tokens.confirmRequest(token);
-        if (!request) {
+        const result = await tokens.confirmRequest(token);
+        if (!result) {
             // Token ungültig oder abgelaufen
             res.status(400).send(`
         <html><body style="font-family:sans-serif;text-align:center;padding:80px;color:#555">
@@ -168,6 +176,7 @@ async function runHTTP() {
       `);
             return;
         }
+        const { request, alreadyStarted } = result;
         // Falls Demo bereits gestartet: direkt weiterleiten
         if (request.status === "started" && request.instanceId) {
             const inst = await getInstance(request.instanceId);
@@ -188,6 +197,13 @@ async function runHTTP() {
         // /api/demo-status/:token den Live-Status pollen kann (feat09/task22).
         const loadingHtml = buildLoadingPage(request.name.split(" ")[0], config.name, token);
         res.send(loadingHtml);
+        // Nur beim ERSTEN Confirm-Treffer den Job starten. Alle weiteren GETs
+        // (Prefetch, Reload, zweiter Tab) beobachten den bestehenden Job über
+        // /api/demo-status.
+        if (alreadyStarted) {
+            console.log(`[confirm] Token ${token.slice(0, 6)}… bereits confirmed — Loading Page ohne neuen Job`);
+            return;
+        }
         // Demo im Hintergrund starten (nach Response-Send)
         setImmediate(async () => {
             try {

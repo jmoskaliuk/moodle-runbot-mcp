@@ -138,21 +138,48 @@ export async function getRequest(token: string): Promise<DemoRequest | undefined
   return tokens[token];
 }
 
-export async function confirmRequest(token: string): Promise<DemoRequest | null> {
+/**
+ * Bestätigt einen Token und reserviert atomar den Slot für den
+ * Hintergrund-Provisioning-Job.
+ *
+ * Rückgabe:
+ *   - `null` → Token ungültig oder abgelaufen
+ *   - `{ request, alreadyStarted: false }` → erster Confirm-Treffer,
+ *     Caller MUSS den Hintergrund-Job starten
+ *   - `{ request, alreadyStarted: true }` → Token wurde bereits confirmed
+ *     (z.B. durch Link-Prefetch des E-Mail-Clients oder einen Reload),
+ *     Caller darf den Loading-Page anzeigen, aber den Job NICHT nochmal
+ *     starten — sonst laufen mehrere Provisionings parallel.
+ *
+ * Die Job-Reservierung erfolgt via `phase = "waiting"` innerhalb derselben
+ * atomaren Transaktion wie der Status-Wechsel — so gibt es kein Fenster,
+ * in dem zwei parallele Aufrufer beide "pending" sehen und beide den Job
+ * starten.
+ */
+export async function confirmRequest(
+  token: string
+): Promise<{ request: DemoRequest; alreadyStarted: boolean } | null> {
   return update(tokens => {
     const req = tokens[token];
 
     if (!req) return null;
-    if (req.status !== "pending") return req; // schon bestätigt
     if (new Date(req.expiresAt) < new Date()) {
       req.status = "expired";
       return null;
     }
 
-    req.status = "confirmed";
-    req.confirmedAt = new Date().toISOString();
-    tokens[token] = req;
-    return req;
+    // Erst-Bestätigung: Status hochsetzen UND Job-Slot reservieren
+    if (req.status === "pending") {
+      req.status = "confirmed";
+      req.confirmedAt = new Date().toISOString();
+      req.phase = "waiting"; // Job-Slot gesperrt
+      tokens[token] = req;
+      return { request: req, alreadyStarted: false };
+    }
+
+    // Bereits bestätigt (Prefetch, Reload, zweiter Tab) — Loading Page
+    // darf angezeigt werden, aber der Job darf nicht erneut starten.
+    return { request: req, alreadyStarted: true };
   });
 }
 
