@@ -167,23 +167,38 @@ export async function startContainers(
 }
 
 /**
- * Pollt wait_for_db.php bis die Datenbank erreichbar ist oder Timeout abläuft.
+ * Wartet bis der DB-Container gesund ist.
+ * Pgsql → pg_isready direkt im db-Container (kein Umweg über Webserver).
+ * MariaDB/MySQL → mysqladmin ping im db-Container.
+ * Fallback: wait_for_db.php im Webserver-Container (alte Methode).
  */
 async function waitForDatabase(instance: MoodleInstance, timeoutSecs: number): Promise<void> {
   const env = envString(composeEnv(instance));
   const compose = path.join(instance.moodleDockerDir, "bin", "moodle-docker-compose");
   const deadline = Date.now() + timeoutSecs * 1000;
 
-  console.error(`[docker] Waiting for database (max ${timeoutSecs}s)…`);
+  // Kurz warten damit docker compose up -d die Container anlegen kann
+  await new Promise<void>(r => setTimeout(r, 8000));
+
+  const isPostgres = instance.db === "pgsql";
+  const healthCmd = isPostgres
+    ? `${env} ${compose} exec -T db pg_isready -U moodle`
+    : `${env} ${compose} exec -T db mysqladmin ping -h localhost --silent`;
+
+  console.error(`[docker] Waiting for database (max ${timeoutSecs}s, cmd: ${isPostgres ? "pg_isready" : "mysqladmin ping"})…`);
+
   while (Date.now() < deadline) {
     try {
-      await execAsync(
-        `${env} ${compose} exec -T webserver php admin/cli/wait_for_db.php`,
-        { cwd: instance.moodleDockerDir, maxBuffer: 1024 * 1024 }
-      );
-      console.error(`[docker] Database is ready`);
+      const { stdout, stderr } = await execAsync(healthCmd, {
+        cwd: instance.moodleDockerDir, maxBuffer: 512 * 1024
+      });
+      console.error(`[docker] Database ready — ${stdout.trim() || stderr.trim()}`);
+      // Kurze Pause damit postgres vollständig initialisiert ist
+      await new Promise<void>(r => setTimeout(r, 2000));
       return;
-    } catch {
+    } catch (e) {
+      const msg = (e as Error).message?.slice(0, 120) ?? "";
+      console.error(`[docker] DB not ready yet: ${msg}`);
       await new Promise<void>(r => setTimeout(r, 5000));
     }
   }
