@@ -88,12 +88,13 @@ In `index.ts` catch-Block eingebaut — non-fatal (eigener try/catch für E-Mail
 ---
 
 ### task08 Demo-Portal Frontend
-Status: open
+Status: done
 Feature: feat01
 
-Frontend (HTML/JS) für `demo.eledia.ai` noch nicht im Repo sichtbar.
-Klären: existiert bereits als separates Repo oder muss noch erstellt werden?
-Benötigt: GET `/configs`, POST `/request-demo`.
+`webui/` mit `demo-portal.html`, `plugin-detail.html`, `index.html` bereits vorhanden.
+Bugs behoben: `runFlow()` (nicht definiert, JS-Fehler) entfernt, tote MCP-Direktstart-Reste
+(`drawSteps`, `bar`, `mcp`-Helper) entfernt. API-URLs auf relative Pfade umgestellt
+(`window.location.origin+'/api'` statt hartkodierter Domain).
 
 ---
 

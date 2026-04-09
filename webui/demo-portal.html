@@ -325,9 +325,9 @@ footer a:hover{color:var(--ink)}
 </div>
 
 <script>
-const MCP='https://demo.eledia.ai/api/mcp';
-const CONFIGS_URL='https://demo.eledia.ai/api/configs';
-const STEPS=['Moodle-Umgebung vorbereiten','Plugin installieren','Container starten','Datenbank & Demo-Daten einrichten','Instanz bereit'];
+// API-Basis relativ zur aktuellen Domain — funktioniert auf demo.eledia.ai und lokal
+const API=window.location.origin+'/api';
+const CONFIGS_URL=API+'/configs';
 
 // ── State ─────────────────────────────────────────────────────────
 let P=[];          // Configs vom Server
@@ -438,7 +438,7 @@ function start(id){
   const i=inst[id];
   if(i?.status==='running'){window.open(i.url,'_blank');return;}
   cur=P.find(p=>p.id===id);if(!cur)return;
-  openModal();runFlow();
+  openModal();
 }
 
 function openModal(){
@@ -475,7 +475,7 @@ async function submitForm(){
   btn.textContent='Wird gesendet…';
 
   try{
-    const r=await fetch('https://demo.eledia.ai/api/request-demo',{
+    const r=await fetch(API+'/request-demo',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email:emailVal,name:nameVal||'Demo-Nutzer',configId:cur.id})
@@ -502,25 +502,6 @@ async function submitForm(){
     }
     err.textContent=e.message||'E-Mail konnte nicht gesendet werden.';
   }
-}
-
-function drawSteps(a){
-  document.getElementById('pSteps').innerHTML=STEPS.map((s,i)=>{
-    const c=i<a?'done':i===a?'active':'';
-    return`<div class="ps ${c}"><div class="ps-ind">${i<a?'✓':i+1}</div><span>${s}</span></div>`;
-  }).join('');
-}
-function bar(p){document.getElementById('pBar').style.width=p+'%'}
-
-// ── MCP Helper ────────────────────────────────────────────────────
-async function mcp(tool,args){
-  const r=await fetch(MCP,{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method:'tools/call',params:{name:tool,arguments:args}})});
-  if(!r.ok)throw new Error('HTTP '+r.status);
-  const d=await r.json();
-  if(d.error)throw new Error(d.error.message);
-  return JSON.parse(d.result?.content?.[0]?.text??'{}');
 }
 
 // ── Intersection Observer ─────────────────────────────────────────

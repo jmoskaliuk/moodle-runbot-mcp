@@ -305,3 +305,26 @@ Snapshots sind komprimierte DB-Dumps (`.sql.gz`) + Metadata-JSON im `SNAPSHOT_DI
 **MCP-Endpoint:** `POST /mcp` — stateless, neuer Transport pro Request (`StreamableHTTPServerTransport`)
 
 **Health Check:** `GET /health` → `{ status: "ok", server: "moodle-runbot-mcp-server" }`
+
+---
+
+## Webui (`webui/`)
+
+Statische HTML-Dateien, vom nginx aus `$APP_DIR/webui/` serviert. Kein Build-Schritt nötig.
+
+| Datei | Zweck |
+|-------|-------|
+| `demo-portal.html` | Hauptportal — Plugin-Karten, Demo-Anfrage-Modal |
+| `plugin-detail.html` | Detailseite für einzelne Plugins |
+| `index.html` | MCP-Debug-Interface (internes Tool) |
+
+**demo-portal.html**
+- Lädt Plugin-Karten via `GET /api/configs` beim Seitenstart
+- Fallback-Configs (hardcoded) wenn Server nicht erreichbar
+- Klick auf "Demo starten" → Modal mit E-Mail-Formular
+- Modal sendet `POST /api/request-demo` → zeigt "Bitte prüfen Sie Ihr Postfach"
+- API-Basis: `window.location.origin + '/api'` (relativ, kein hartkodiertes Domain)
+
+**nginx-Routing**
+- `GET /` → `webui/demo-portal.html` (statisch)
+- `location /api/` → `proxy_pass http://127.0.0.1:3000/` (MCP-Server, `/api/`-Prefix wird gestripped)
