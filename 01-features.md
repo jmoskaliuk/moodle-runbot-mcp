@@ -7,6 +7,34 @@ Es ist die **Source of Truth für beabsichtigtes Verhalten** — keine Implement
 
 ---
 
+## ✍️ Feature-Template für Johannes
+
+Neue Feature-Ideen unten als `featXX`-Block anhängen (XX = nächste freie
+Nummer). Du musst nicht alles ausfüllen — Claude ergänzt Non-goals, offene
+Fragen etc. im nächsten Task. Halbfertig ist besser als nichts.
+
+```markdown
+### featXX <prägnanter Titel>
+
+**Goal**
+<ein bis zwei Sätze — was soll das Produkt können, und für wen>
+
+**Behavior** (vorläufig okay)
+- <stichpunktartig beschreiben was der Nutzer sieht/tut>
+- <was das System im Hintergrund macht>
+
+**Open Questions**
+- <Dinge die du bewusst offen lässt, damit Claude nachfragt>
+
+**Non-goals** (optional)
+- <was explizit NICHT dazugehört — hilft Scope-Creep zu vermeiden>
+```
+
+Für ganz frühe Ideen reicht auch ein Eintrag in `04-tasks.md → 💡 Ideen`.
+Sobald du merkst "das wird ein Feature", wandert der Eintrag hierher.
+
+---
+
 ## Product Overview
 
 ### Purpose

@@ -7,6 +7,53 @@ Enthält: neue Beobachtungen, Tasks, Klärungsbedarf, aktive Arbeit, Verifikatio
 
 ---
 
+## ✍️ Quick-Capture für Johannes
+
+Neue Bugs und Feature-Ideen einfach unten in die passende Sektion kopieren.
+Du musst nicht perfekt schreiben — halbfertig ist besser als nichts. Claude
+liest diese Sektionen beim nächsten Task automatisch und formuliert bei
+Bedarf aus, fragt nach, oder erstellt daraus ausgearbeitete Task-Einträge.
+
+**Bug-Template (unter `## 🐞 Bugs` einfügen):**
+
+```markdown
+### bugXX <kurzer Titel>
+Status: open
+Entdeckt: 2026-04-09
+Betroffen: <Datei/Feature/URL falls bekannt>
+Repro: <was hast du gemacht, was ist passiert, was hättest du erwartet>
+Workaround: <falls du einen hast, sonst leer>
+```
+
+**Feature-Template (unter `## 💡 Ideen` einfügen oder direkt nach `01-features.md` → `featXX`):**
+
+```markdown
+### ideaXX <kurzer Titel>
+Datum: 2026-04-09
+Wunsch: <ein Satz — was soll das Produkt tun>
+Warum: <kurz — welches Problem löst es>
+Offen: <was ist dir noch unklar>
+```
+
+Für größere Features lieber direkt in `01-features.md` als `featXX`-Block
+(dort steht ein analoges Template oben).
+
+---
+
+## 🐞 Bugs
+
+*(Neue Bug-Beobachtungen hier reinkippen — Claude sortiert und priorisiert
+im nächsten Task. Format siehe Quick-Capture oben.)*
+
+---
+
+## 💡 Ideen
+
+*(Halbgare Feature-Gedanken hier. Sobald konkret genug, wandern sie in
+`01-features.md` als `featXX`-Block.)*
+
+---
+
 ## 🆕 New
 
 *(Neue Ideen, Beobachtungen, ungefilterte Einträge hier)*
