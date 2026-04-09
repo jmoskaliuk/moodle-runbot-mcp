@@ -1,6 +1,14 @@
 import type { MoodleInstance } from "../types.js";
 /**
- * Clone moodle-docker and moodle core for a new instance.
+ * Clone moodle-docker und moodle core für eine neue Instanz. Patcht config.php
+ * für Produktionsbetrieb hinter nginx:
+ *   - $CFG->wwwroot auf https://{id}.{BASE_DOMAIN} ohne Port-Suffix
+ *   - $CFG->sslproxy = true (nginx terminiert TLS extern)
+ *
+ * Der Override-Block wird VOR require_once('/lib/setup.php') eingefügt, damit
+ * er alle vorherigen Template-Assignments überschreibt. Ohne diesen Patch hängt
+ * das moodle-docker Template MOODLE_DOCKER_WEB_PORT an wwwroot an, und Moodle
+ * kennt keinen sslproxy → Mixed-Content + Redirect-Loops.
  */
 export declare function provisionInstance(instance: MoodleInstance): Promise<void>;
 /**

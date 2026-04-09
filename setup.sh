@@ -190,11 +190,70 @@ success "Firewall konfiguriert (SSH + 80 + 443)"
 # ── 10. nginx Konfiguration ───────────────────────────────────────────────────
 info "nginx konfigurieren…"
 
+# Cert-Status VOR dem Schreiben der Config prüfen (wird in Schritt 12 nochmal
+# genauer geprüft — hier nur: existieren die Cert-Files überhaupt?).
+CERT_LIVE_DIR="/etc/letsencrypt/live/$DOMAIN"
+MAIN_HAS_HTTPS=false
+if [[ -f "$CERT_LIVE_DIR/fullchain.pem" && -f "$CERT_LIVE_DIR/privkey.pem" ]]; then
+  MAIN_HAS_HTTPS=true
+fi
+
 # Demo-Portal + MCP API
+if [[ "$MAIN_HAS_HTTPS" == "true" ]]; then
 cat > /etc/nginx/sites-available/runbot <<EOF
-# ── MCP API & Demo-Portal ────────────────────────────────────────
+# ── MCP API & Demo-Portal (HTTPS) ────────────────────────────────
+# HTTP → HTTPS Redirect, plus ACME-Challenge Passthrough
 server {
     listen 80;
+    listen [::]:80;
+    server_name $DOMAIN www.$DOMAIN;
+
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name $DOMAIN www.$DOMAIN;
+
+    ssl_certificate     $CERT_LIVE_DIR/fullchain.pem;
+    ssl_certificate_key $CERT_LIVE_DIR/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    client_max_body_size 32M;
+
+    # Demo-Portal (statische HTML)
+    root $APP_DIR/webui;
+    index demo-portal.html;
+
+    # MCP Server API — langer Timeout weil instance_start ~60s dauert
+    location /api/ {
+        proxy_pass http://127.0.0.1:$MCP_PORT/;
+        proxy_http_version 1.1;
+        proxy_set_header Host              \$host;
+        proxy_set_header X-Real-IP         \$remote_addr;
+        proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout    300s;
+        proxy_connect_timeout 10s;
+    }
+
+    # Statische Dateien
+    location / { try_files \$uri \$uri/ =404; }
+}
+EOF
+else
+cat > /etc/nginx/sites-available/runbot <<EOF
+# ── MCP API & Demo-Portal (HTTP-only, noch kein Cert) ────────────
+# Nach Wildcard-Cert-Erstellung setup.sh erneut ausführen oder
+# Config manuell auf HTTPS upgraden.
+server {
+    listen 80;
+    listen [::]:80;
     server_name $DOMAIN www.$DOMAIN;
 
     # Demo-Portal (statische HTML)
@@ -207,23 +266,26 @@ server {
     # MCP Server API — langer Timeout weil instance_start ~60s dauert
     location /api/ {
         proxy_pass http://127.0.0.1:$MCP_PORT/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_read_timeout 300s;
+        proxy_set_header Host              \$host;
+        proxy_set_header X-Real-IP         \$remote_addr;
+        proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_read_timeout    300s;
         proxy_connect_timeout 10s;
     }
 
     # Statische Dateien
     location / { try_files \$uri \$uri/ =404; }
 }
+EOF
+fi
 
 # ── Moodle Demo-Instanzen (Wildcard-Subdomains) ──────────────────
 # Jede Instanz läuft auf einem eigenen Port (8100–8199).
-# Statt einer nginx-Map nutzen wir ein kleines Lua/Python-Script NICHT —
-# stattdessen: der MCP Server schreibt für jede Instanz eine eigene
-# nginx-Config-Datei in /etc/nginx/conf.d/demo-*.conf und reloaded nginx.
-# Dadurch funktioniert proxy_pass ohne Variable-Tricks.
-EOF
+# Der MCP Server schreibt für jede Instanz eine eigene nginx-Config-Datei
+# in /etc/nginx/conf.d/demo-*.conf (siehe src/services/nginx.ts) und reloaded
+# nginx. Die Wildcard-Subdomains brauchen das Wildcard-Cert aus
+# $CERT_LIVE_DIR/ — ohne Cert schreibt der MCP Server keine Config und loggt
+# eine Warnung.
 
 # Leeres Map-File anlegen (wird vom MCP Server befüllt)
 touch "$WORK_DIR/nginx-ports.map"
@@ -243,12 +305,38 @@ else
 fi
 
 # ── 12. SSL (Let's Encrypt) ───────────────────────────────────────────────────
-echo ""
-warn "SSL-Zertifikat: Führe nach DNS-Setup aus:"
-echo "    certbot --nginx -d $DOMAIN -d www.$DOMAIN"
-echo "    # Für Wildcard (Demo-Subdomains):"
-echo "    certbot certonly --manual --preferred-challenges dns -d '*.$DOMAIN'"
-echo ""
+CERT_LIVE_DIR="/etc/letsencrypt/live/$DOMAIN"
+WILDCARD_OK=false
+if [[ -f "$CERT_LIVE_DIR/fullchain.pem" && -f "$CERT_LIVE_DIR/privkey.pem" ]]; then
+  # Prüfen ob Cert tatsächlich Wildcard abdeckt (SAN mit *.$DOMAIN)
+  if openssl x509 -in "$CERT_LIVE_DIR/fullchain.pem" -noout -text 2>/dev/null | grep -q "DNS:\*\.$DOMAIN"; then
+    success "Wildcard-Zertifikat vorhanden unter $CERT_LIVE_DIR/"
+    WILDCARD_OK=true
+  else
+    warn "Zertifikat unter $CERT_LIVE_DIR/ existiert, enthält aber KEIN *.$DOMAIN SAN"
+    warn "Demo-Subdomains funktionieren nicht! Erneuern mit:"
+    echo "    certbot certonly --manual --preferred-challenges dns -d '$DOMAIN' -d '*.$DOMAIN' --expand"
+  fi
+else
+  warn "Kein Zertifikat unter $CERT_LIVE_DIR/ — Demo-Subdomains werden nicht funktionieren"
+fi
+
+if [[ "$WILDCARD_OK" != "true" ]]; then
+  echo ""
+  echo -e "${YELLOW}  ─── Wildcard-SSL manuell einrichten ───${NC}"
+  echo "  Die Demo-Plattform braucht ein Wildcard-Cert für *.$DOMAIN."
+  echo "  DNS-01-Challenge muss manuell bestätigt werden:"
+  echo ""
+  echo "    1. DNS-Record setzen: $DOMAIN und *.$DOMAIN → $(curl -s ifconfig.me 2>/dev/null || echo 'DEINE-IP')"
+  echo "    2. Zertifikat anfordern (interaktiv):"
+  echo "         certbot certonly --manual --preferred-challenges dns \\"
+  echo "           -d '$DOMAIN' -d 'www.$DOMAIN' -d '*.$DOMAIN' \\"
+  echo "           --agree-tos -m admin@$DOMAIN"
+  echo "    3. TXT-Record setzen wie von certbot angefordert, Enter drücken"
+  echo "    4. nginx reload: systemctl reload nginx"
+  echo "    5. moodle-runbot neu starten: systemctl restart moodle-runbot"
+  echo ""
+fi
 
 # ── 13. Zusammenfassung ───────────────────────────────────────────────────────
 echo ""

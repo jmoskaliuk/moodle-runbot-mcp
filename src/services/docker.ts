@@ -67,7 +67,15 @@ function envString(env: Record<string, string>): string {
 // ── Core operations ───────────────────────────────────────────────────────────
 
 /**
- * Clone moodle-docker and moodle core for a new instance.
+ * Clone moodle-docker und moodle core für eine neue Instanz. Patcht config.php
+ * für Produktionsbetrieb hinter nginx:
+ *   - $CFG->wwwroot auf https://{id}.{BASE_DOMAIN} ohne Port-Suffix
+ *   - $CFG->sslproxy = true (nginx terminiert TLS extern)
+ *
+ * Der Override-Block wird VOR require_once('/lib/setup.php') eingefügt, damit
+ * er alle vorherigen Template-Assignments überschreibt. Ohne diesen Patch hängt
+ * das moodle-docker Template MOODLE_DOCKER_WEB_PORT an wwwroot an, und Moodle
+ * kennt keinen sslproxy → Mixed-Content + Redirect-Loops.
  */
 export async function provisionInstance(instance: MoodleInstance): Promise<void> {
   const instanceDir = path.join(WORK_DIR, instance.id);
@@ -96,9 +104,67 @@ export async function provisionInstance(instance: MoodleInstance): Promise<void>
   }
 
   // 3. Copy moodle-docker config.php template
+  const configPath = path.join(instance.moodleDir, "config.php");
   await run(
-    `cp ${instance.moodleDockerDir}/config.docker-template.php ${instance.moodleDir}/config.php`
+    `cp ${instance.moodleDockerDir}/config.docker-template.php ${configPath}`
   );
+
+  // 4. config.php für Produktionsbetrieb patchen (nur wenn BASE_DOMAIN gesetzt)
+  const BASE_DOMAIN = process.env.BASE_DOMAIN ?? "";
+  if (BASE_DOMAIN) {
+    await patchConfigForProduction(configPath, instance, BASE_DOMAIN);
+  }
+}
+
+/**
+ * Fügt einen Override-Block in config.php ein, der $CFG->wwwroot auf die
+ * HTTPS-Subdomain ohne Port setzt und $CFG->sslproxy = true aktiviert.
+ *
+ * Strategie: Wir finden das finale require_once('__DIR__ . /lib/setup.php')
+ * (immer letzter Befehl in einer Moodle config.php) und injizieren unseren
+ * Block direkt davor. Das überschreibt alle vorherigen Template-Assignments.
+ *
+ * Fallback: Wenn das require_once nicht matcht (geändertes Template), hängen
+ * wir den Block am Ende an und loggen eine Warnung.
+ */
+async function patchConfigForProduction(
+  configPath: string,
+  instance: MoodleInstance,
+  baseDomain: string
+): Promise<void> {
+  const wwwroot = `https://${instance.id}.${baseDomain}`;
+  const overrideBlock = `
+// ── eLeDia Runbot overrides ─────────────────────────────────────
+// Auto-generiert von src/services/docker.ts — nicht manuell bearbeiten.
+// Gründe für den Override:
+//   1. moodle-docker Template hängt MOODLE_DOCKER_WEB_PORT an wwwroot an,
+//      aber nginx proxied auf Port 443 — Port darf nicht im wwwroot stehen.
+//   2. nginx terminiert TLS extern; Moodle muss mit sslproxy=true laufen,
+//      sonst kommen interne Links als http:// raus → Mixed-Content.
+$CFG->wwwroot  = '${wwwroot}';
+$CFG->sslproxy = true;
+unset($CFG->behat_wwwroot); // Behat nutzt eigenen Host, nicht überschreiben
+// ────────────────────────────────────────────────────────────────
+`;
+
+  let cfg = await fs.readFile(configPath, "utf-8");
+
+  // Finde die finale require_once(__DIR__ . '/lib/setup.php') Zeile.
+  // Akzeptiert Single- oder Double-Quotes und optionale Whitespaces.
+  const setupRequireRe =
+    /(require_once\s*\(\s*__DIR__\s*\.\s*['"]\/lib\/setup\.php['"]\s*\)\s*;)/;
+
+  if (setupRequireRe.test(cfg)) {
+    cfg = cfg.replace(setupRequireRe, `${overrideBlock}\n$1`);
+  } else {
+    console.error(
+      `[docker] WARNING: require_once('/lib/setup.php') nicht in ${configPath} gefunden — ` +
+      `Override-Block wird am Ende angehängt. Das funktioniert vermutlich NICHT.`
+    );
+    cfg += "\n" + overrideBlock + "\n";
+  }
+
+  await fs.writeFile(configPath, cfg, "utf-8");
 }
 
 /**

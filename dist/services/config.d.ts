@@ -18,6 +18,8 @@ export interface DemoConfig {
     phpVersion: string;
     db: string;
     visible: boolean;
+    type?: string;
+    githubRepo?: string;
 }
 export declare function loadConfigs(): Promise<DemoConfig[]>;
 export declare function getConfig(id: string): Promise<DemoConfig | undefined>;

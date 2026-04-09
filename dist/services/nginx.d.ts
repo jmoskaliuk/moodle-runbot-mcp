@@ -10,7 +10,8 @@ export declare function registerInstance(instanceId: string, port: number): Prom
 export declare function unregisterInstance(instanceId: string): Promise<void>;
 /**
  * Räumt alle demo-*.conf Dateien auf.
- * Nützlich beim Server-Neustart.
+ * Gedacht für Server-Neustart — sollte beim boot aufgerufen werden,
+ * damit Waisen (Configs für abgestürzte Instanzen) verschwinden.
  */
 export declare function cleanupAllConfigs(): Promise<void>;
 //# sourceMappingURL=nginx.d.ts.map

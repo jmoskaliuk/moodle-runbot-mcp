@@ -13,6 +13,7 @@ import { registerConfigList, registerConfigGet, } from "./tools/configs.js";
 import { loadConfigs } from "./services/config.js";
 import * as tokens from "./services/tokens.js";
 import * as email from "./services/email.js";
+import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
 import * as moodleUser from "./services/moodleUser.js";
 import { getInstance, saveInstance, allocatePort } from "./services/registry.js";
@@ -204,7 +205,7 @@ async function runHTTP() {
                     db: config.db,
                     webPort: port,
                     status: "starting",
-                    url: BASE_DOMAIN ? `http://${id}.${BASE_DOMAIN}` : `http://localhost:${port}`,
+                    url: BASE_DOMAIN ? `https://${id}.${BASE_DOMAIN}` : `http://localhost:${port}`,
                     createdAt: new Date().toISOString(),
                     lastActivity: new Date().toISOString(),
                     composeProject,
@@ -238,9 +239,54 @@ async function runHTTP() {
             }
             catch (e) {
                 console.error("[confirm] Demo-Start fehlgeschlagen:", e);
+                // Nutzer über Fehler informieren
+                await email.sendErrorEmail(request, config.name).catch((mailErr) => {
+                    console.error("[confirm] Fehler-E-Mail konnte nicht gesendet werden:", mailErr);
+                });
             }
         });
     });
+    // ── Plugin detail API ─────────────────────────────────────────────────────
+    // GET /api/plugin/:id → JSON: { config, github }
+    // Called by plugin-detail.html to populate the page dynamically.
+    app.get("/api/plugin/:id", async (req, res) => {
+        try {
+            const configs = await loadConfigs().catch(() => []);
+            const config = configs.find(c => c.id === req.params.id);
+            if (!config) {
+                res.status(404).json({ error: `Plugin '${req.params.id}' nicht gefunden` });
+                return;
+            }
+            let githubData = null;
+            if (config.githubRepo) {
+                githubData = await github.fetchPluginData(config.githubRepo).catch(err => {
+                    console.error(`[api/plugin] GitHub fetch failed for ${req.params.id}:`, err);
+                    return null;
+                });
+            }
+            res.json({ config, github: githubData });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // GET /api/configs — alias so the portal's /api/configs URL works
+    app.get("/api/configs", async (_req, res) => {
+        try {
+            const configs = await loadConfigs();
+            res.json({ count: configs.length, configs });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // GET /plugin/:id → serve plugin-detail.html (JS reads id from URL)
+    app.get("/plugin/:id", (_req, res) => {
+        res.sendFile(path.join(process.cwd(), "webui", "plugin-detail.html"));
+    });
+    // Serve static files from webui/ (demo-portal.html, assets, etc.)
+    app.use(express.static(path.join(process.cwd(), "webui")));
+    // ─────────────────────────────────────────────────────────────────────────
     const port = parseInt(process.env.PORT ?? "3000");
     app.listen(port, () => {
         console.error(`[moodle-runbot] MCP server listening on http://0.0.0.0:${port}/mcp`);

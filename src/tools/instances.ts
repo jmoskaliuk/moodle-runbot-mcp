@@ -17,7 +17,9 @@ const PORT_END = parseInt(process.env.PORT_END ?? "8199");
 const BASE_DOMAIN = process.env.BASE_DOMAIN ?? ""; // e.g. runbot.example.com
 
 function instanceUrl(instance: MoodleInstance): string {
-  if (BASE_DOMAIN) return `http://${instance.id}.${BASE_DOMAIN}`;
+  // Produktion: nginx proxied https://{id}.{BASE_DOMAIN} auf 127.0.0.1:{webPort}.
+  // Dev/lokal: kein BASE_DOMAIN → direkter Zugriff auf den Docker-Port.
+  if (BASE_DOMAIN) return `https://${instance.id}.${BASE_DOMAIN}`;
   return `http://localhost:${instance.webPort}`;
 }
 

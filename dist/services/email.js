@@ -230,4 +230,70 @@ export async function sendDemoReadyEmail(request, pluginName, demoUrl) {
         text: `Ihre ${pluginName} Demo ist bereit:\n${demoUrl}\n\nLogin: ${request.email} / demo1234\nLäuft 60 Minuten.`,
     });
 }
+// ── E-Mail: Demo-Start fehlgeschlagen ─────────────────────────────────────────
+export async function sendErrorEmail(request, pluginName) {
+    const firstName = request.name.split(" ")[0];
+    const retryUrl = `${BASE_URL}`;
+    const html = `
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#fafaf8;font-family:Helvetica,Arial,sans-serif;color:#2d3142">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fafaf8;padding:40px 0">
+  <tr>
+    <td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e8eaee;border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="padding:32px 40px 24px;border-bottom:1px solid #e8eaee">
+            <span style="font-family:Georgia,serif;font-size:20px;color:#0f1117">
+              eLeDia<span style="color:#1a56db">.</span>
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px">
+            <p style="font-family:Georgia,serif;font-size:26px;font-weight:300;color:#0f1117;line-height:1.3;margin:0 0 20px">
+              ${firstName}, leider ist<br>etwas schiefgelaufen.
+            </p>
+            <p style="font-size:15px;color:#7a8090;line-height:1.7;margin:0 0 28px;font-weight:300">
+              Ihre <strong style="color:#2d3142">${pluginName}</strong>-Demo konnte leider
+              nicht gestartet werden. Bitte versuchen Sie es erneut — das Problem
+              ist meist vorübergehend.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="margin:0 0 32px">
+              <tr>
+                <td style="background:#1a56db;border-radius:8px">
+                  <a href="${retryUrl}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:500;color:#fff;text-decoration:none">
+                    Erneut versuchen →
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="font-size:13px;color:#7a8090;line-height:1.6;margin:0">
+              Falls das Problem weiterhin besteht, antworten Sie einfach auf diese E-Mail.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #e8eaee;background:#fafaf8">
+            <p style="font-size:12px;color:#7a8090;margin:0">
+              eLeDia GmbH · <a href="https://eledia.ai" style="color:#1a56db">eledia.ai</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`.trim();
+    const transporter = createTransporter();
+    await transporter.sendMail({
+        from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+        to: `"${request.name}" <${request.email}>`,
+        subject: `Ihre ${pluginName} Demo konnte nicht gestartet werden`,
+        html,
+        text: `Hallo ${firstName},\n\nIhre ${pluginName}-Demo konnte leider nicht gestartet werden.\n\nBitte versuchen Sie es erneut: ${retryUrl}\n\nFalls das Problem weiterhin besteht, antworten Sie auf diese E-Mail.\n\neLeDia GmbH`,
+    });
+}
 //# sourceMappingURL=email.js.map
