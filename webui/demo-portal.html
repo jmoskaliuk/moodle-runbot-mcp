@@ -76,11 +76,17 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .step-t{font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px}
 .step-d{font-size:14px;color:var(--muted);line-height:1.6}
 .plugins-sec{padding:80px 0}
-.plugins-hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:48px;gap:24px;flex-wrap:wrap}
+.plugins-hdr{margin-bottom:40px}
+.plugins-hdr-top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:24px}
+.type-filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:20px;border-bottom:1px solid var(--rule);margin-bottom:16px}
+.tbtn{font-size:13px;font-weight:500;padding:8px 18px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans)}
+.tbtn:hover{color:var(--ink);background:var(--bg)}
+.tbtn.active{background:var(--ink);color:#fff}
 .filters{display:flex;gap:8px;flex-wrap:wrap}
 .fbtn{font-size:12px;padding:6px 14px;border-radius:20px;border:1px solid var(--rule);background:var(--white);color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans)}
 .fbtn:hover{border-color:var(--ink);color:var(--ink)}
 .fbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+#catFilters{transition:opacity .2s}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px}
 .card{background:var(--white);border:1px solid var(--rule);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s}
 .card:hover{box-shadow:0 8px 32px rgba(0,0,0,.08);transform:translateY(-2px)}
@@ -161,7 +167,9 @@ footer a:hover{color:var(--ink)}
 <nav>
   <a class="nav-logo" href="#">eLeDia<span>.</span></a>
   <div class="nav-links">
-    <a href="#plugins">Plugins</a>
+    <a href="#demos" onclick="filterType('plugin')" data-i18n="nav_plugins">Plugins</a>
+    <a href="#demos" onclick="filterType('theme')" data-i18n="nav_themes">Themes</a>
+    <a href="#demos" onclick="filterType('config')" data-i18n="nav_configs">Konfigurationen</a>
     <a href="#how" data-i18n="nav_how">Wie es funktioniert</a>
     <a href="https://eledia.de/kontakt" class="nav-cta" target="_blank" data-i18n="nav_contact">Kontakt</a>
     <div class="lang-toggle">
@@ -216,15 +224,24 @@ footer a:hover{color:var(--ink)}
 
 <hr class="div">
 
-<section class="plugins-sec" id="plugins">
+<section class="plugins-sec" id="demos">
   <div class="wrap">
     <div class="plugins-hdr">
-      <div>
-        <div class="eyebrow" data-i18n="plugins_eyebrow">Verfügbare Plugins</div>
-        <h2 class="sec-title" data-i18n="plugins_title">Was möchten Sie testen?</h2>
-        <p class="sec-lead" data-i18n="plugins_lead">Alle Plugins sind für Moodle 5.x entwickelt und Open Source.</p>
+      <div class="plugins-hdr-top">
+        <div>
+          <div class="eyebrow" data-i18n="plugins_eyebrow">Verfügbare Demos</div>
+          <h2 class="sec-title" data-i18n="plugins_title">Was möchten Sie testen?</h2>
+          <p class="sec-lead" data-i18n="plugins_lead">Plugins, Themes und Konfigurationen für Moodle 5.x — alle Open Source.</p>
+        </div>
       </div>
-      <div class="filters">
+      <div class="type-filters">
+        <button class="tbtn active" id="tbAll"    onclick="filterType('all',  this)" data-i18n="type_all">Alle</button>
+        <button class="tbtn"        id="tbPlugin" onclick="filterType('plugin',this)" data-i18n="type_plugins">Plugins</button>
+        <button class="tbtn"        id="tbTheme"  onclick="filterType('theme', this)" data-i18n="type_themes">Themes</button>
+        <button class="tbtn"        id="tbConfig" onclick="filterType('config',this)" data-i18n="type_configs">Konfigurationen</button>
+        <button class="tbtn"        id="tbMoodle" onclick="filterType('vanilla',this)" data-i18n="type_moodle">Moodle Versionen</button>
+      </div>
+      <div id="catFilters" class="filters">
         <button class="fbtn active" onclick="filter('all',this)" data-i18n="filter_all">Alle</button>
         <button class="fbtn" onclick="filter('lernen',this)" data-i18n="filter_learn">Lernen</button>
         <button class="fbtn" onclick="filter('verwaltung',this)" data-i18n="filter_admin">Verwaltung</button>
@@ -316,7 +333,9 @@ let lang='de';
 
 const T={
   de:{
+    nav_plugins:'Plugins',nav_themes:'Themes',nav_configs:'Konfigurationen',
     nav_how:'Wie es funktioniert',nav_contact:'Kontakt',
+    type_all:'Alle',type_plugins:'Plugins',type_themes:'Themes',type_configs:'Konfigurationen',type_moodle:'Moodle Versionen',
     hero_eyebrow:'Moodle Plugin Demos',
     hero_h1:'Plugins <em>erleben</em>,<br>bevor Sie entscheiden.',
     hero_lead:'Starten Sie in Sekunden eine vollständige Moodle-Instanz mit dem Plugin Ihrer Wahl — vorkonfiguriert, mit echten Beispieldaten, ohne Installation.',
@@ -326,8 +345,8 @@ const T={
     step1_t:'Plugin wählen',step1_d:'Wählen Sie das Plugin, das Sie interessiert. Jede Demo kommt mit sinnvollen Beispieldaten und einem vorkonfigurierten Kurs.',
     step2_t:'Demo starten',step2_d:'Ein Klick genügt. Wir starten eine isolierte Moodle-Instanz exklusiv für Sie — dauert typischerweise 30–60 Sekunden.',
     step3_t:'Frei erkunden',step3_d:'Ihre persönliche Demo läuft 60 Minuten. Danach wird sie automatisch gelöscht. Keine Registrierung, keine Daten.',
-    plugins_eyebrow:'Verfügbare Plugins',plugins_title:'Was möchten Sie testen?',
-    plugins_lead:'Alle Plugins sind für Moodle 5.x entwickelt und Open Source.',
+    plugins_eyebrow:'Verfügbare Demos',plugins_title:'Was möchten Sie testen?',
+    plugins_lead:'Plugins, Themes und Konfigurationen für Moodle 5.x — alle Open Source.',
     filter_all:'Alle',filter_learn:'Lernen',filter_admin:'Verwaltung',filter_report:'Reporting',
     band_title:'Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.',
     band_text:'Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.',
@@ -350,7 +369,9 @@ const T={
     err_email:'E-Mail konnte nicht gesendet werden.',
   },
   en:{
+    nav_plugins:'Plugins',nav_themes:'Themes',nav_configs:'Configurations',
     nav_how:'How it works',nav_contact:'Contact',
+    type_all:'All',type_plugins:'Plugins',type_themes:'Themes',type_configs:'Configurations',type_moodle:'Moodle Versions',
     hero_eyebrow:'Moodle Plugin Demos',
     hero_h1:'Experience plugins <em>before</em><br>you decide.',
     hero_lead:'Launch a full Moodle instance in seconds with the plugin of your choice — pre-configured, with real sample data, no installation required.',
@@ -360,8 +381,8 @@ const T={
     step1_t:'Choose a plugin',step1_d:'Select the plugin you\'re interested in. Each demo comes with meaningful sample data and a pre-configured course.',
     step2_t:'Start the demo',step2_d:'One click is all it takes. We spin up an isolated Moodle instance exclusively for you — typically takes 30–60 seconds.',
     step3_t:'Explore freely',step3_d:'Your personal demo runs for 60 minutes, then it\'s automatically deleted. No registration, no data retained.',
-    plugins_eyebrow:'Available plugins',plugins_title:'What would you like to try?',
-    plugins_lead:'All plugins are developed for Moodle 5.x and are open source.',
+    plugins_eyebrow:'Available demos',plugins_title:'What would you like to try?',
+    plugins_lead:'Plugins, themes and configurations for Moodle 5.x — all open source.',
     filter_all:'All',filter_learn:'Learning',filter_admin:'Administration',filter_report:'Reporting',
     band_title:'Full Moodle environment.<br>Zero effort on your part.',
     band_text:'Each demo runs in a fully isolated Docker environment on our servers. No data is stored permanently. After 60 minutes the instance is automatically removed.',
@@ -410,6 +431,7 @@ let inst={};       // laufende Instanzen: id → { url, status }
 let cur=null;      // aktuell gestartetes Plugin
 let url=null;      // URL der fertigen Demo
 let activeFilter='all';
+let activeType='all';
 
 // ── Configs laden ─────────────────────────────────────────────────
 async function loadConfigs(){
@@ -435,36 +457,59 @@ async function loadConfigs(){
 
 // Fallback falls Server noch nicht läuft (lokale Entwicklung)
 const FALLBACK_CONFIGS=[
-  {id:'leitnerflow',name:'LeitnerFlow',category:'lernen',categoryLabel:'Lernen & Spaced Repetition',
+  // ── Plugins ───────────────────────────────────────────────────────
+  {id:'leitnerflow',type:'plugin',name:'LeitnerFlow',category:'lernen',categoryLabel:'Lernen & Spaced Repetition',
    icon:'🃏',iconBg:'#eff6ff',
    description:'Karteikarten-System nach der Leitner-Methode direkt in Moodle.',
    features:['5-Box Leitner-System','Integration mit Question Bank','Fortschritts-Dashboard','Gradebook-Integration'],
    plugin:{srcPath:'/opt/plugins/mod_eledialeitnerflow',type:'mod',name:'eledialeitnerflow'},
    snapshotId:'leitnerflow-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
-  {id:'cohortbridge',name:'CohortBridge',category:'verwaltung',categoryLabel:'Verwaltung & Synchronisation',
+  {id:'cohortbridge',type:'plugin',name:'CohortBridge',category:'verwaltung',categoryLabel:'Verwaltung & Synchronisation',
    icon:'🔗',iconBg:'#f0fdf4',
    description:'Synchronisiert Moodle-Kohorten aus externen Systemen automatisch.',
    features:['LDAP, CSV, REST-API','Regelbasierte Zuweisung','Audit-Log','Scheduled Tasks'],
    plugin:{srcPath:'/opt/plugins/local_cohortbridge',type:'local',name:'cohortbridge'},
    snapshotId:'cohortbridge-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
-  {id:'gradingsnapshot',name:'GradingSnapshot',category:'reporting',categoryLabel:'Reporting & Bewertung',
+  {id:'gradingsnapshot',type:'plugin',name:'GradingSnapshot',category:'reporting',categoryLabel:'Reporting & Bewertung',
    icon:'📸',iconBg:'#fdf4ff',
    description:'Zeitgesteuerte Snapshots des Gradebook-Stands für Prüfungskommissionen.',
    features:['Gradebook-Snapshots','Vergleichsansicht','PDF-Export','Kursfilter'],
    plugin:{srcPath:'/opt/plugins/report_gradingsnapshot',type:'report',name:'gradingsnapshot'},
    snapshotId:'gradingsnapshot-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
-  {id:'vanilla',name:'Vanilla Moodle 5.0',category:'lernen',categoryLabel:'Referenz',
+  // ── Themes ────────────────────────────────────────────────────────
+  {id:'boost-union',type:'theme',name:'Boost Union',category:'design',categoryLabel:'Theme',
+   icon:'🎨',iconBg:'#f5e4ef',
+   description:'Das mächtigste Boost-basierte Theme für Moodle — vollständig anpassbar.',
+   features:['Logo & Farben per Admin','Custom CSS/SCSS','Flexibler Header & Footer','Barrierefreiheit AA'],
+   plugin:null,snapshotId:'boost-union-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+  // ── Konfigurationen ───────────────────────────────────────────────
+  {id:'hochschul-setup',type:'config',name:'Hochschul-Setup',category:'konfiguration',categoryLabel:'Konfiguration',
+   icon:'🎓',iconBg:'#f0f9ff',
+   description:'Vollständige Hochschulumgebung mit typischen Kursen, Rollen und Workflows.',
+   features:['LeitnerFlow + GradingSnapshot','Boost Union Theme','5 Musterkurse','Dozenten- & Studierenden-Rollen'],
+   plugin:null,snapshotId:'hochschul-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+  // ── Moodle Versionen ──────────────────────────────────────────────
+  {id:'vanilla-5',type:'vanilla',name:'Vanilla Moodle 5.0',category:'referenz',categoryLabel:'Referenz',
    icon:'🏔',iconBg:'#f8fafc',
-   description:'Sauberes Moodle 5.0 ohne Plugins — als Referenz.',
-   features:['Standard-Moodle','Demo-Kurse','Alle Standardaktivitäten','Vergleichsbasis'],
+   description:'Sauberes Moodle 5.0 ohne Plugins — als Referenz und Vergleichsbasis.',
+   features:['Standard-Moodle 5.0','Demo-Kurse','Alle Standardaktivitäten','PHP 8.3 + PostgreSQL'],
    plugin:null,snapshotId:'vanilla-5.0',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+  {id:'vanilla-4',type:'vanilla',name:'Vanilla Moodle 4.5',category:'referenz',categoryLabel:'Referenz',
+   icon:'🏔',iconBg:'#f8fafc',
+   description:'Moodle 4.5 LTS — für Vergleiche mit der aktuellen LTS-Version.',
+   features:['Standard-Moodle 4.5 LTS','Demo-Kurse','Alle Standardaktivitäten','PHP 8.2 + PostgreSQL'],
+   plugin:null,snapshotId:'vanilla-4.5',moodleVersion:'4.5',phpVersion:'8.2',db:'pgsql'},
 ];
 
 // ── Render ────────────────────────────────────────────────────────
 function render(f='all'){
   activeFilter=f;
   const g=document.getElementById('grid');
-  const visible=P.filter(p=>f==='all'||p.category===f);
+  const visible=P.filter(p=>{
+    const typeOk=activeType==='all'||(p.type??'plugin')===activeType;
+    const catOk=f==='all'||p.category===f;
+    return typeOk&&catOk;
+  });
 
   if(!visible.length){
     g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);font-size:14px">${t('no_plugins')}</div>`;
@@ -501,6 +546,26 @@ function render(f='all'){
     </div>`;
   }).join('');
   g.querySelectorAll('.fade-up').forEach(el=>obs.observe(el));
+}
+
+function filterType(type,btn){
+  activeType=type;
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));
+  // btn kann undefined sein wenn per nav-link aufgerufen
+  if(btn) btn.classList.add('active');
+  else{
+    const map={all:'tbAll',plugin:'tbPlugin',theme:'tbTheme',config:'tbConfig',vanilla:'tbMoodle'};
+    document.getElementById(map[type]??'tbAll')?.classList.add('active');
+  }
+  // Kategorie-Filter nur bei Plugins zeigen
+  const cf=document.getElementById('catFilters');
+  if(cf) cf.style.display=(type==='plugin'||type==='all')?'flex':'none';
+  // Kategorie-Filter zurücksetzen
+  if(type!=='plugin'&&type!=='all'){
+    activeFilter='all';
+    document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('active',b.dataset.i18n==='filter_all'||b.textContent==='Alle'||b.textContent==='All'));
+  }
+  render(activeFilter);
 }
 
 function filter(f,btn){
