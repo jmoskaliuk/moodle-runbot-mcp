@@ -6,10 +6,29 @@
 //   2. Komprimiert als .sql.gz in /opt/snapshots/
 //   3. Metadata-Datei speichern (Moodle-Version, PHP, DB-Typ, Plugins)
 //
-// Ablauf snapshot_restore (beim instance_start):
-//   1. Snapshot-Datei in DB-Container kopieren
-//   2. pg_restore (oder mysql) einspielen
-//   3. Moodle-Config anpassen (siteurl, dataroot)
+// Ablauf snapshot_restore (beim instance_start, nach startContainers):
+//   1. Leere moodle-DB droppen (pgsql) bzw. mysql lädt "INSERT" mit DROP-
+//      Klauseln aus dem Dump.
+//   2. zcat | psql/mysql spielt den Dump ein.
+//   3. `mdl_sessions` wird geleert — sonst erben wir Session-Records vom
+//      Seed-Host (anderer wwwroot), und Moodle wirft sporadisch
+//      "Invalid login, session mismatch".
+//
+// WICHTIG — URL-Rewrite passiert NICHT hier:
+//   `$CFG->wwwroot` wird ausschließlich aus `config.php` gelesen. Der
+//   canonical Patch-Point ist `patchConfigForProduction()` in docker.ts,
+//   ausgeführt durch `provisionInstance()` VOR `startContainers()`. Ein
+//   `admin/cli/cfg.php --name=wwwroot --set=…` schreibt nur ein
+//   `mdl_config`-Row, die Moodle nie liest — früher hier als No-Op drin.
+//   Entfernt 2026-04-09 (task19).
+//
+// MOODLEDATA — nicht im Snapshot enthalten:
+//   Der Snapshot deckt nur die Datenbank ab. Alles was in moodledata liegt
+//   (hochgeladene Dateien, Cache, temp, Filter-Konfigs mit Bildern,
+//   Course-Summary-Files) fehlt nach Restore. Seed-Kurse daher so bauen,
+//   dass sie keine File-Uploads, keine Bilder in Labels, keine
+//   Resource-Module mit angehängten Dateien verwenden. Siehe 04-tasks.md
+//   task19 Precheck-Liste.
 
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -160,24 +179,45 @@ export async function restoreSnapshot(
     );
   }
 
-  // 3. Moodle-Config auf neue URL und Pfade anpassen
-  const newUrl = instance.url;
-  const newDataroot = `/var/moodledata`; // Standard im moodle-docker Container
+  // 3. Session-Tabelle leeren.
+  // Der Seed-Host hatte einen anderen `wwwroot`, also enthalten die
+  // `mdl_sessions`-Records einen falschen `sid`-Kontext. Moodle kann dadurch
+  // beim ersten Login "Invalid login, session mismatch" werfen. Die Tabelle
+  // ist sicher zu truncaten — es gibt noch keine aktiven Browser-Sessions
+  // auf der frischen Instanz.
+  if (instance.db === "pgsql") {
+    await run(
+      `${env} ${bin} exec -T db ` +
+      `psql -U moodle -c "TRUNCATE TABLE mdl_sessions;" moodle`
+    ).catch((e) => {
+      console.error(`[snapshot] WARN: TRUNCATE mdl_sessions failed (pgsql): ${String(e)}`);
+    });
+  } else if (instance.db === "mariadb" || instance.db === "mysql") {
+    await run(
+      `${env} ${bin} exec -T db ` +
+      `mysql -u moodle -pm@0dl3ing -e "TRUNCATE TABLE mdl_sessions;" moodle`
+    ).catch((e) => {
+      console.error(`[snapshot] WARN: TRUNCATE mdl_sessions failed (mysql): ${String(e)}`);
+    });
+  }
 
-  await run(
-    `${env} ${bin} exec -T webserver php admin/cli/cfg.php ` +
-    `--name=wwwroot --set="${newUrl}"`
-  ).catch(() => {}); // Nicht fatal
-
-  await run(
-    `${env} ${bin} exec -T webserver php admin/cli/cfg.php ` +
-    `--name=dataroot --set="${newDataroot}"`
-  ).catch(() => {});
-
-  // 4. Caches purgen
+  // 4. Caches purgen.
+  // Nach DB-Restore sind Moodle-interne Caches (mdl_config_plugins,
+  // langcache, stringcache) nicht mehr mit dem Container-Filesystem
+  // synchron — muss manuell getriggert werden, sonst zeigt das Frontend
+  // gelegentlich Plugin-Versionen aus dem Seed-Host.
   await run(
     `${env} ${bin} exec -T webserver php admin/cli/purge_caches.php`
   ).catch(() => {});
+
+  // 5. Reminder (nur Log, kein Fehler): moodledata ist NICHT im Snapshot.
+  // Falls der Seed-Kurs Dateien benötigt, würden sie jetzt fehlen. Siehe
+  // Header-Kommentar dieses Files für Details.
+  console.error(
+    `[snapshot] restored ${path.basename(snapshotFile)} → ${instance.id}. ` +
+    `Reminder: moodledata is NOT part of snapshots — file uploads in the ` +
+    `seed course will be missing. wwwroot is handled via config.php, not here.`
+  );
 }
 
 // ── Snapshot auflisten ────────────────────────────────────────────────────────

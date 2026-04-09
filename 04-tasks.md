@@ -348,11 +348,18 @@ Offen als Follow-Up (nicht Teil von task18): `statActive` („Demos aktiv") wird
 ---
 
 ### task19 Snapshot leitnerflow-v1 auf VPS erstellen
-Status: runbook ready (requires VPS access)
+Status: runbook ready (requires VPS access) — Code-Fallstricke 2026-04-09 in `src/services/snapshot.ts` behoben (siehe Auditnotizen unten)
 Feature: feat01, feat05
 Bugs: bug13
 
 **Voraussetzung:** task14/15 müssen verified sein, sonst läuft die Seed-Instanz nicht über HTTPS und das könnte die Moodle-URLs im Snapshot verschmutzen.
+
+**Pre-Snapshot-Checkliste (zwingend, sonst ist der Snapshot am Ende unbrauchbar):**
+- [ ] task14 + task15 grün → Seed-Instanz läuft unter `https://demo-seed-….demo.eledia.ai`, sslproxy aktiv
+- [ ] `$CFG->wwwroot` in der Seed-Instanz zeigt auf HTTPS-Subdomain ohne Port
+- [ ] Seed-Kurs verwendet **keine** File-Uploads, Bilder in Labels, Resource-Module mit Anhängen oder File-Submissions (moodledata wird nicht mit-snapshotted → die Dateien wären in jeder gestarteten Demo futsch)
+- [ ] Seed-Kurs nutzt nur Text, HTML-Editor-Inline-Inhalte, LeitnerFlow-Karten (Karten sind 100% DB-basiert)
+- [ ] Die drei Demo-Accounts (admin, teacher, student) existieren im Snapshot mit `DEMO_PASSWORD` als Kennwort (siehe feat07 / task24)
 
 **Runbook (auf VPS ausführen):**
 
@@ -367,12 +374,19 @@ curl -sX POST http://localhost:3000/mcp/call \
 ```
 
 ```bash
-# 2) Demo-Daten anlegen: Kurs "demo-leitnerflow", Testnutzer, 2-3 befüllte Kartensets
+# 2) Demo-Daten anlegen: Kurs "Demo LeitnerFlow", drei Accounts, befüllte Kartensets
 #    Manuell über Browser auf https://<instance-id>.demo.eledia.ai als admin:
+#    - Login admin / demo1234 (default install_database.php-Passwort)
+#    - Password auf $DEMO_PASSWORD setzen
+#    - Zwei weitere User anlegen:
+#        teacher / $DEMO_PASSWORD  (Rolle: Teacher)
+#        student / $DEMO_PASSWORD  (Rolle: Student)
 #    - Site administration → Courses → Add new course "Demo LeitnerFlow"
+#    - teacher als Teacher, student als Student in den Kurs einschreiben
 #    - LeitnerFlow-Aktivität hinzufügen, mit 10-15 Beispielkarten vorbefüllen
-#    - Testnutzer "demo1" / "Demo-Password123!" anlegen, in Kurs einschreiben
-#    - Einmal "Karten lernen" durchlaufen damit Attempt-History existiert
+#      (NUR Text! Keine Bilder, keine Audio-Dateien.)
+#    - Einmal als student "Karten lernen" durchlaufen damit Attempt-History existiert
+#    - KEINE File-Uploads, KEINE Bilder in Labels, KEINE Resource-Module
 ```
 
 ```bash
@@ -387,6 +401,16 @@ curl -sX POST http://localhost:3000/mcp/call \
 # 4) Snapshot verifizieren
 ls -lah /opt/snapshots/leitnerflow-v1*
 # Erwartung: leitnerflow-v1.sql.gz (~2-5 MB) + leitnerflow-v1.json (Metadaten)
+
+# Sicherheits-Check: wwwroot-Leaks im Dump?
+zcat /opt/snapshots/leitnerflow-v1.sql.gz \
+  | grep -E "https://demo-seed-[a-z0-9]+\.demo\.eledia\.ai" \
+  | head -20
+# Erwartung: nur Einträge in mdl_config (siteurl) und evtl. log tables.
+# Wichtig: mdl_sessions ist beim Restore leer — wird via TRUNCATE
+# in snapshot.ts::restoreSnapshot() bereinigt. Der wwwroot selbst wird
+# NICHT aus dem Dump gelesen, sondern aus der per-Instanz gepatchten
+# config.php (patchConfigForProduction in docker.ts).
 
 curl -sX POST http://localhost:3000/mcp/call \
   -H "Authorization: Bearer $MCP_API_KEY" \
@@ -417,11 +441,23 @@ Commit + Push → GitHub Actions deployed auf VPS.
 - E-Mail klicken → Ladeseite
 - Zeit bis "Demo bereit" messen; Ziel: < 90s (statt ~3min bei Neuprovisionierung)
 - In der fertigen Demo prüfen ob Seed-Kurs "Demo LeitnerFlow" vorhanden ist
+- Als `admin`, dann `teacher`, dann `student` einloggen (drei Reloads); kein "Invalid login, session mismatch"
 - Loading-Page-Schritte 3/5 ("Kurs vorbereiten...") passt dann inhaltlich
 
-**Fallstricke:**
-- Snapshot enthält die `$CFG->wwwroot` der Seed-Instanz. Wenn `wwwroot` als Absolut-String in Moodle-Logs/Sessions/Events gelandet ist, muss `snapshot_restore()` die URL umschreiben. Prüfen ob `src/services/snapshot.ts` das macht — falls nicht, neuer Bug.
-- Dateien in `moodledata/` werden im Snapshot NICHT mitgenommen (nur DB). Das ist ok für LeitnerFlow, aber falls der Seed-Kurs Bilder enthält, werden die fehlen. Entweder keine Bilder verwenden oder `moodledata` mitsnapshoten (eigener Task).
+**Code-Audit vom 2026-04-09 (`src/services/snapshot.ts`, commit folgt):**
+
+Drei Fallstricke gefunden und behoben, bevor der Snapshot auf dem VPS erstellt wird:
+
+1. **Dead `cfg.php --name=wwwroot`/`--name=dataroot`-Calls entfernt.**
+   `$CFG->wwwroot` und `$CFG->dataroot` werden ausschließlich aus `config.php` gelesen, nie aus `mdl_config`. Die CLI-Calls schrieben nur bogus-Rows, die Moodle ignoriert hat. Canonical Patch-Point ist `patchConfigForProduction()` in `src/services/docker.ts`, ausgeführt von `provisionInstance()` **vor** `startContainers()`. Das heißt: Bevor die DB überhaupt existiert, ist die `config.php` schon auf die neue Subdomain umgebogen. Der Restore muss URLs nicht mehr anfassen.
+
+2. **`TRUNCATE mdl_sessions` nach DB-Import eingefügt.**
+   Der Seed-Dump enthält Session-Records der Seed-Instanz (anderer wwwroot → andere `sesskey`/`sid`-Kontexte). Ohne Cleanup wirft Moodle beim ersten Login-Versuch auf der neuen Instanz sporadisch "Invalid login, session mismatch". Jetzt wird die Tabelle direkt nach dem `zcat`-Import geleert (pgsql und mariadb/mysql jeweils mit Fallback-Log bei Fehler). Es gibt zum Zeitpunkt des Restores noch keine aktiven Browser-Sessions, also sicher.
+
+3. **Moodledata-Warnung explizit geloggt.**
+   `moodledata` ist **nicht** Teil eines Snapshots. Bisher war das nur eine stille Annahme — jetzt gibt `restoreSnapshot()` am Ende eine Log-Zeile aus, die den Operator daran erinnert. Der Header-Kommentar der Datei dokumentiert das ebenso und verweist auf die Pre-Snapshot-Checkliste oben.
+
+Diese drei Fixes laufen mit dem nächsten Deploy auf dem VPS. Für die Snapshot-Erstellung selbst ist keine Code-Änderung mehr nötig — nur die Pre-Snapshot-Checkliste abarbeiten, dann das Runbook.
 
 ---
 
