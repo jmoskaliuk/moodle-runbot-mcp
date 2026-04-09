@@ -361,70 +361,114 @@ Bugs: bug13
 - [ ] Seed-Kurs nutzt nur Text, HTML-Editor-Inline-Inhalte, LeitnerFlow-Karten (Karten sind 100% DB-basiert)
 - [ ] Die drei Demo-Accounts (admin, teacher, student) existieren im Snapshot mit `DEMO_PASSWORD` als Kennwort (siehe feat07 / task24)
 
+**Hinweis zum alten Runbook (vor 2026-04-09):** Die früheren curl-Beispiele in diesem Task waren mehrfach falsch — sie benutzten `/mcp/call` (existiert nicht, richtig ist `/mcp` mit MCP JSON-RPC), `Authorization: Bearer …` (richtig ist `x-api-key: …`) und `instance_start({configId: "leitnerflow"})` (die Config-basierten Starts laufen über `/request-demo` → `/confirm/:token`, nicht über das MCP-Tool — das Tool verlangt `prId`, `branch`, `pluginSrcPath`, `pluginType`, `pluginName`). Das Runbook wurde deshalb komplett umgebaut.
+
 **Runbook (auf VPS ausführen):**
 
 ```bash
-# 1) Seed-Instanz über HTTP-API starten (NICHT über request-demo, sonst Token-Dance)
-curl -sX POST http://localhost:3000/mcp/call \
-  -H "Authorization: Bearer $MCP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"instance_start","arguments":{"configId":"leitnerflow","owner":"seed@eledia.ai"}}' \
-  | jq .
-# Warten bis status=running (ca. 90-180s bei leerem Cache)
+# 0) Vorbereitung: Helper-Script einsatzbereit machen
+cd /opt/moodle-runbot-mcp
+chmod +x scripts/seed-snapshot.sh      # liegt nach Deploy im Repo
+./scripts/seed-snapshot.sh help        # zeigt alle Commands
+./scripts/seed-snapshot.sh list-snapshots  # sollte "(leer)" oder altes
+                                            # leitnerflow-v1 zeigen
 ```
 
 ```bash
-# 2) Demo-Daten anlegen: Kurs "Demo LeitnerFlow", drei Accounts, befüllte Kartensets
-#    Manuell über Browser auf https://<instance-id>.demo.eledia.ai als admin:
-#    - Login admin / demo1234 (default install_database.php-Passwort)
-#    - Password auf $DEMO_PASSWORD setzen
-#    - Zwei weitere User anlegen:
-#        teacher / $DEMO_PASSWORD  (Rolle: Teacher)
-#        student / $DEMO_PASSWORD  (Rolle: Student)
-#    - Site administration → Courses → Add new course "Demo LeitnerFlow"
-#    - teacher als Teacher, student als Student in den Kurs einschreiben
-#    - LeitnerFlow-Aktivität hinzufügen, mit 10-15 Beispielkarten vorbefüllen
-#      (NUR Text! Keine Bilder, keine Audio-Dateien.)
-#    - Einmal als student "Karten lernen" durchlaufen damit Attempt-History existiert
-#    - KEINE File-Uploads, KEINE Bilder in Labels, KEINE Resource-Module
+# 1) Seed-Instanz über das reguläre Demo-Portal starten
+#    Im Browser:
+#      → https://demo.eledia.ai
+#      → LeitnerFlow → "Demo starten"
+#      → Vorname: Seed / Nachname: Admin / E-Mail: <eigene@adresse>
+#      → Formular absenden
+#      → Bestätigungsmail öffnen → Link klicken
+#      → Loading-Page zeigt "Demo bereit" nach ca. 90-180s
+#
+#    Das ist der getestete Happy-Path (feat01/feat06) — einfacher und
+#    robuster als einen MCP-Call nachzubauen. Die erzeugte Instanz hat
+#    alle Plugin-Dateien, die gepatchte config.php und einen laufenden
+#    Admin-Account aus install_database.php.
 ```
 
 ```bash
-# 3) Snapshot erstellen (MCP-Tool)
-INSTANCE_ID="demo-seed-xxxxxx"  # aus Schritt 1
-curl -sX POST http://localhost:3000/mcp/call \
-  -H "Authorization: Bearer $MCP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"snapshot_create\",\"arguments\":{\"instanceId\":\"$INSTANCE_ID\",\"snapshotId\":\"leitnerflow-v1\",\"description\":\"LeitnerFlow Demo mit Beispielkurs und -karten\"}}" \
-  | jq .
+# 2) Instanz-ID herausfinden
+./scripts/seed-snapshot.sh list-instances
+#
+# Erwartung: eine Zeile mit Status=running, URL=https://pr-demo-….demo.eledia.ai
+# Die ID (pr-demo-xxxxxx) merken → wird in Schritt 4 gebraucht.
+```
 
-# 4) Snapshot verifizieren
+```bash
+# 3) Demo-Daten anlegen — MANUELL im Browser, als admin
+#
+#    Login-URL: siehe Schritt 2 (URL der Instanz)
+#    Default-Admin: admin / demo1234    (aus install_database.php)
+#
+#    Setup-Reihenfolge (strikt einhalten, sonst fehlt später etwas):
+#
+#    a) Password auf $DEMO_PASSWORD setzen (siehe /etc/moodle-runbot.env,
+#       Variable DEMO_PASSWORD). Login-Dialog erzwingt das sowieso.
+#
+#    b) Zwei weitere User anlegen (Site administration → Users → Add a new user):
+#         Username: teacher  / Password: $DEMO_PASSWORD  / Rolle später: Teacher
+#         Username: student  / Password: $DEMO_PASSWORD  / Rolle später: Student
+#       Wichtig: E-Mail-Adressen so wählen, dass sie NICHT mit dem Username
+#       identisch sind (task17-Entscheidung vom 2026-04-09: Login ≠ E-Mail).
+#
+#    c) Site administration → Courses → Add new course "Demo LeitnerFlow"
+#
+#    d) Im Kurs: teacher als Teacher, student als Student einschreiben
+#
+#    e) LeitnerFlow-Aktivität hinzufügen. 10-15 Beispielkarten vorbefüllen,
+#       NUR Text (keine Bilder, keine Audio, keine File-Anhänge).
+#
+#    f) Als student einloggen, einmal "Karten lernen" durchlaufen damit
+#       Attempt-History existiert. Wieder ausloggen.
+#
+#    g) VERBOTEN im Seed-Kurs:
+#         - File-Uploads (werden nicht mit-snapshotted → kaputt in jeder Demo)
+#         - Bilder in Labels / HTML-Editor
+#         - Resource-Module mit angehängten Dateien
+#         - Image-Filter
+```
+
+```bash
+# 4) Snapshot erstellen
+INSTANCE_ID="pr-demo-xxxxxx"  # aus Schritt 2
+
+./scripts/seed-snapshot.sh create-snapshot \
+  "$INSTANCE_ID" \
+  leitnerflow-v1 \
+  "LeitnerFlow Demo" \
+  "Moodle 5.0 mit LeitnerFlow, Beispielkurs und 15 Karten" \
+  mod_eledialeitnerflow
+
+# Erwartung: JSON mit snapshotId, file, sizeFormatted, createdAt
+# File-Pfad: /opt/snapshots/leitnerflow-v1.sql.gz
+```
+
+```bash
+# 5) Snapshot verifizieren
 ls -lah /opt/snapshots/leitnerflow-v1*
 # Erwartung: leitnerflow-v1.sql.gz (~2-5 MB) + leitnerflow-v1.json (Metadaten)
 
+./scripts/seed-snapshot.sh list-snapshots
+# Erwartung: leitnerflow-v1 taucht auf
+
 # Sicherheits-Check: wwwroot-Leaks im Dump?
 zcat /opt/snapshots/leitnerflow-v1.sql.gz \
-  | grep -E "https://demo-seed-[a-z0-9]+\.demo\.eledia\.ai" \
-  | head -20
-# Erwartung: nur Einträge in mdl_config (siteurl) und evtl. log tables.
-# Wichtig: mdl_sessions ist beim Restore leer — wird via TRUNCATE
-# in snapshot.ts::restoreSnapshot() bereinigt. Der wwwroot selbst wird
+  | grep -Eo "https://pr-demo-[a-z0-9]+\.demo\.eledia\.ai" \
+  | sort -u
+# Hinweis: ein paar Treffer in mdl_config (siteurl) und mdl_logstore_*
+# sind OK. mdl_sessions ist beim Restore leer — wird via TRUNCATE in
+# snapshot.ts::restoreSnapshot() bereinigt. Der wwwroot selbst wird
 # NICHT aus dem Dump gelesen, sondern aus der per-Instanz gepatchten
 # config.php (patchConfigForProduction in docker.ts).
-
-curl -sX POST http://localhost:3000/mcp/call \
-  -H "Authorization: Bearer $MCP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"snapshot_list","arguments":{}}' \
-  | jq .
 ```
 
 ```bash
-# 5) Seed-Instanz kann jetzt gestoppt werden
-curl -sX POST http://localhost:3000/mcp/call \
-  -H "Authorization: Bearer $MCP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"instance_stop\",\"arguments\":{\"instanceId\":\"$INSTANCE_ID\"}}"
+# 6) Seed-Instanz stoppen
+./scripts/seed-snapshot.sh stop-instance "$INSTANCE_ID"
 ```
 
 **6) configs.json anpassen (im Repo, nicht auf VPS):**
