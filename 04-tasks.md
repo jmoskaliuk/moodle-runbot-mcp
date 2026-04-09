@@ -46,7 +46,7 @@ Für größere Features lieber direkt in `01-features.md` als `featXX`-Block
 im nächsten Task. Format siehe Quick-Capture oben.)*
 
 ### bug18 Plugin-Detail: „Demo starten"-Flow zeigt `http://localhost:8100`
-Status: open
+Status: **fixed 2026-04-09** (commit `4aa961d`, Variante B umgesetzt)
 Entdeckt: 2026-04-09 (Johannes)
 Betroffen: `webui/plugin-detail.html` Zeilen 699 + 702 (`launch()` → `finish()`)
 Repro: Auf der Plugin-Detail-Seite den „Demo starten"-Button drücken. Statt
@@ -78,6 +78,18 @@ Empfehlung: Variante B — zwei parallele Flows sind unnötige Wartungslast
 und der Token-Flow ist bereits der getestete Produktions-Pfad. Aber das
 ist eine Design-Entscheidung von Johannes, darum zunächst als Bug
 aufgenommen, nicht sofort umgesetzt.
+
+**Resolution (2026-04-09, commit `4aa961d`):** Johannes hat sich für
+Variante B entschieden. Der alte Direkt-Launch-Pfad in `plugin-detail.html`
+wurde ersatzlos gestrichen (`STEPS`, `launch()`, `finish()`, `openDemo()`,
+`updateBand()`, `startCountdown()`, `mcpCall()`, `renderSteps()` + alle
+hardcoded localhost-Fallbacks raus). `startDemo()` öffnet jetzt dasselbe
+Modal wie die Portal-Startseite; `submitForm()` POSTet auf
+`/api/request-demo` mit `configId: ITEM.id` und zeigt den „E-Mail wurde
+gesendet"-Success-State. Es gibt jetzt genau **einen** Demo-Start-Pfad
+in der gesamten Webui. Nebenbei wurde task17 damit komplett erledigt.
+Live-Verify ist durch: alle neuen DOM-Elemente da, alte Funktionen
+gelöscht (`launch` ist `undefined`).
 
 ---
 
@@ -310,26 +322,28 @@ Bugs: bug09
 ---
 
 ### task17 plugin-detail.html: MCP-Variable + Demo-Flow-Integration
-Status: open
+Status: **done 2026-04-09** (commit `4aa961d`, zusammen mit bug18 Variante B)
 Feature: feat01 (Webui)
 Bugs: bug07, bug08, bug12
 
-1. `fetch(MCP, ...)` → `fetch(\`${API}/api/request-demo\`, ...)` (MCP war undefined)
-2. `startDemo()` umbauen: darf nicht `instance_start` direkt aufrufen. Stattdessen dasselbe Modal wie demo-portal.html öffnen, POST auf `/api/request-demo`, "Bitte prüfen Sie Ihr Postfach" anzeigen.
-3. `heroTitle` ↔ `heroDesc` Copy-Paste beheben.
-4. Hardcoded deutsche Strings auf `data-i18n` umstellen.
-5. Plugin-Detail-Seite in demo-portal.html verlinken (Details-Button auf Karten).
+1. `fetch(MCP, ...)` → `fetch(\`${API}/api/request-demo\`, ...)` (MCP war undefined) — **done** (`mcpCall()` komplett raus)
+2. `startDemo()` umbauen: darf nicht `instance_start` direkt aufrufen. Stattdessen dasselbe Modal wie demo-portal.html öffnen, POST auf `/api/request-demo`, "Bitte prüfen Sie Ihr Postfach" anzeigen. — **done**
+3. `heroTitle` ↔ `heroDesc` Copy-Paste beheben. — **done** (im gleichen Zug mitbereinigt)
+4. Hardcoded deutsche Strings auf `data-i18n` umstellen. — verschoben auf task21-Nachzügler (reine Copy-Arbeit, nicht blockierend)
+5. Plugin-Detail-Seite in demo-portal.html verlinken (Details-Button auf Karten). — **done** (Portal-Grid hat bereits „Details"-Link)
 
 ---
 
 ### task18 demo-portal.html: Hero-Stat + globales close() beheben
-Status: partial (bug11 fixed, bug10 offen)
+Status: **done 2026-04-09**
 Feature: feat01 (Webui)
 Bugs: bug10, bug11
 
-1. `statPlugins` → `statActive` (ID-Mismatch). — offen
-2. Hardcoded `6` → `configs.length`. — offen
+1. ID-Mismatch zwischen `statPlugins` (im JS) und dem Hero-Stat-`<div>` (ohne ID) beheben. — **fixed 2026-04-09** (`id="statPlugins"` auf Line 204 ergänzt, so dass `loadData()`/`fetch`-Catch `P.length` schreiben kann). **Hinweis**: Die ursprüngliche Task-Beschreibung sprach von `statPlugins → statActive`, das wäre aber falsch gewesen — `statActive` zählt „Demos aktiv", nicht Plugins. Der JS-Code war immer korrekt; das DOM hatte schlicht die ID nicht.
+2. Hardcoded `6` → `configs.length`. — **fixed 2026-04-09** (Platzhalter `—`, JS ersetzt sofort nach `loadData()`, konsistent mit `statActive`-Platzhalter.)
 3. `function close()` → `closeModal()`. — **fixed 2026-04-09** (Hotfix nach User-Report)
+
+Offen als Follow-Up (nicht Teil von task18): `statActive` („Demos aktiv") wird nie befüllt — dafür bräuchte es ein öffentliches Zähl-Endpoint, das anonym die Anzahl laufender Instanzen liefert, ohne IDs/Owner zu leaken. Abgelegt als task27 (Idea, noch nicht angelegt).
 
 ---
 
@@ -412,16 +426,20 @@ Commit + Push → GitHub Actions deployed auf VPS.
 ---
 
 ### task20 Startup-Cleanup für Orphan-Container
-Status: open
+Status: **done 2026-04-09**
 Feature: feat06
 Bugs: bug17
 
 Beim Start von `src/index.ts`:
-1. `docker ps --format '{{.Names}}' --filter "name=runbot-"` ausführen
-2. Mit `registry.listInstances()` vergleichen
-3. Container ohne Registry-Eintrag → `docker compose down -v` + `rm -rf /opt/runbot/<id>` + nginx-Config entfernen
-4. `nginx.cleanupAllConfigs()` aufrufen (Funktion existiert bereits, wird nirgends gecallt)
-5. Log-Line mit Anzahl entfernter Waisen
+1. `docker ps --format '{{.Names}}' --filter "name=runbot-"` ausführen — **done** (`docker ps -a` + Filter in `cleanupOrphans()` / `src/services/cleanup.ts`)
+2. Mit `registry.listInstances()` vergleichen — **done** (`knownIds` Set aus `getAllInstances()`)
+3. Container ohne Registry-Eintrag → Container entfernen + `/opt/runbot/<id>` löschen + nginx-Config entfernen — **done**. Verwendet `docker rm -fv` statt `docker compose down -v`, weil wir bei Waisen kein `moodle-docker`-Repo mehr zur Hand haben (compose bräuchte die ENV-Variablen, die wir nicht mehr kennen).
+4. ~`nginx.cleanupAllConfigs()` aufrufen~ — **bewusst NICHT aufgerufen**, weil diese Funktion ALLE runbot-*.conf löscht, auch die von gültigen Instanzen. Stattdessen `findOrphanNginxConfigs()` mit Registry-Abgleich + nur die Waisen entfernen.
+5. Log-Line mit Anzahl entfernter Waisen — **done** (eine Summary-Zeile mit Container/Dir/Config-Counts + Details darunter).
+
+Zusätzlich als Grundlage für task26 eingebaut: Der `runCleanup()`-Scheduler respektiert jetzt `instance.maxAgeMinutes` (Override) und rechnet die Laufzeit ab `extendedBy.at` statt `createdAt`, damit verlängerte Instanzen korrekt ablaufen. Der `MoodleInstance`-Typ hat die neuen Felder `maxAgeMinutes?: number` und `extendedBy?: {code, at}` bekommen.
+
+**Startup-Reihenfolge in `src/index.ts`:** `cleanupOrphans()` läuft **vor** `runHTTP()`, damit Ports frei sind, bevor `allocatePort()` das erste Mal aufgerufen wird, und **vor** `startCleanupScheduler()`, damit der periodische Job nicht mit der Waisen-Säuberung kollidiert.
 
 ---
 
@@ -558,7 +576,7 @@ Feature: feat11
 ---
 
 ### task26 Code-basierte Demo-Verlängerung
-Status: open
+Status: **done 2026-04-09** (UI im Loading-Page-Template, Backend in `src/index.ts`, Scheduler in `src/services/cleanup.ts`)
 Feature: feat12
 
 **Entscheidung (2026-04-09, Johannes):**
@@ -569,16 +587,20 @@ Feature: feat12
   (Komma-getrennte Code-Namen, kein `:MINUTEN`-Suffix mehr — TTL ist global).
 
 **Scope:**
-1. Env-Variable `EXTEND_CODES` parsen: Komma-getrennte Liste von Code-Namen
-2. Globale Konstante `EXTEND_CODE_TTL_MINUTES = 1440` (überschreibbar via `EXTEND_CODE_TTL_MINUTES` Env)
-3. Neues Feld in `MoodleInstance`: `extendedBy?: {code: string, at: string}` (nur 1x pro Instanz verwendbar)
-4. Neue Route `POST /api/extend-code` mit Body `{token: string, code: string}`:
-   - Token → Request → instanceId → Instance laden
-   - Code in `EXTEND_CODES` nachschlagen (case-insensitive)
-   - Wenn gültig und Instanz noch nicht verlängert: `instance.extendedBy` setzen, `instance.maxAgeMinutes = EXTEND_CODE_TTL_MINUTES` (override des globalen Defaults)
-   - Antwort: `{ok: true, extendedUntil: "2026-04-10T16:30:00Z"}` oder `{error: "..."}`
-5. Frontend (Warteseite + innerhalb der laufenden Demo irgendwo): kleines Eingabefeld "Verlängerungscode" im Footer oder in der Creds-Box
-6. Cleanup-Scheduler muss individuelle `maxAgeMinutes` respektieren (nicht mehr nur global `DEMO_MAX_AGE_MINUTES`)
+1. Env-Variable `EXTEND_CODES` parsen: Komma-getrennte Liste von Code-Namen — **done** (`src/index.ts`, `EXTEND_CODES: Set<string>` mit Uppercase-Normalisierung beim Start, Log-Line wenn Codes geladen)
+2. Globale Konstante `EXTEND_CODE_TTL_MINUTES = 1440` (überschreibbar via `EXTEND_CODE_TTL_MINUTES` Env) — **done**
+3. Neues Feld in `MoodleInstance`: `extendedBy?: {code: string, at: string}` (nur 1x pro Instanz verwendbar) — **done** (zusätzlich `maxAgeMinutes?: number`, beide in `src/types.ts`)
+4. Neue Route `POST /api/extend-code` mit Body `{token: string, code: string}` — **done** (inkl. nginx-Strip-Alias `POST /extend-code`):
+   - Token → Request → instanceId → Instance laden ✓
+   - Code in `EXTEND_CODES` nachschlagen (case-insensitive) ✓
+   - Wenn gültig und Instanz noch nicht verlängert: `instance.extendedBy` + `maxAgeMinutes` setzen, **zusätzlich `lastActivity = now`** — sonst killt `tooIdle` die frisch verlängerte Instanz. Das stand nicht im Task-Scope, fiel beim Schreiben auf.
+   - Antwort: `{ok: true, extendedUntil: "...", maxAgeMinutes: 1440}` oder `{error: "..."}`
+5. Frontend-Eingabefeld "Verlängerungscode" — **done** im Loading-Page-Template (`buildLoadingPage()` in `src/index.ts`). Aufklappbarer Akkordeon-Block unter der Creds-Box, nur im Ready-State sichtbar. Keyboard: Enter submittet. Nach erfolgreicher Einlösung werden Input + Button disabled. Absichtlich NICHT auf die Portal-Startseite oder die Plugin-Detail-Seite — die haben zu dem Zeitpunkt noch keine Instanz.
+6. Cleanup-Scheduler muss individuelle `maxAgeMinutes` respektieren — **done**. `runCleanup()` rechnet ab `extendedBy.at` statt `createdAt`, wenn `maxAgeMinutes` gesetzt ist. Das adressiert den Fallstrick "nach 58 Min verlängert → 2 Min später weg".
+
+**Was noch offen ist (nicht-blockierend):**
+- Codes im Admin-Dashboard (task25) als Teil der Live-Anzeige listen
+- Rate-Limit für `/api/extend-code` (aktuell ungelimitet — theoretisch könnte jemand Codes per Brute-Force durchprobieren, aber pro Token-Inhaber ist das Risiko niedrig, weil Token selbst schon zufällig ist)
 
 **Code-Generation-Workflow (manuell, Admin):**
 ```bash
@@ -661,7 +683,7 @@ https://demo-xxxxxx.demo.eledia.ai aufrufen, einloggen, DevTools → Network: al
 
 - [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash (muss manuell durch Cert-Rename simuliert werden)
 - [ ] MCP `instance_status` liefert `https://` URL konsistent mit E-Mail (task16) — in Punkt 4 mit abgedeckt
-- [ ] plugin-detail.html "Demo starten" öffnet Modal, crasht nicht (task17 — noch nicht deployed)
+- [x] plugin-detail.html "Demo starten" öffnet Modal, crasht nicht (task17 + bug18 — commit `4aa961d`, live verifiziert)
 
 ---
 

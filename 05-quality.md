@@ -186,14 +186,14 @@ task16: `http://` → `https://` wenn `BASE_DOMAIN` gesetzt.
 ### bug10 demo-portal.html: statPlugins-ID existiert nicht
 
 Feature: feat01 (Webui)
-Status: open (task18)
+Status: **fixed 2026-04-09** (task18)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
-Code ruft `document.getElementById('statPlugins')` auf, aber das Element im DOM heißt `statActive`. Der Stat wird nie aktualisiert. Zusätzlich ist die Hero-Stat "Plugins verfügbar" hardcoded auf `6`, obwohl `configs.json` nur einen Eintrag enthält.
+Code ruft `document.getElementById('statPlugins')` auf, aber das Element im DOM hat gar keine ID (nur die Nachbar-Stat „Demos aktiv" hat `id="statActive"`). Der Stat wird daher nie aktualisiert. Zusätzlich ist die Hero-Stat „Plugins verfügbar" hardcoded auf `6`, obwohl `configs.json` inzwischen einen anderen Count hat.
 
 **Fix**
-task18: ID konsistent auf `statActive` bringen, Hardcoded-6 durch `configs.length` ersetzen.
+task18: `id="statPlugins"` an das fehlende `<div class="stat-val">` angeheftet und Hardcoded-`6` durch `—` ersetzt. `loadData()` ruft `document.getElementById('statPlugins').textContent = P.length` sowohl im Success- als auch im Fallback-Pfad — d.h. der Stat zeigt jetzt immer die tatsächliche Länge von `configs.json` bzw. der `FALLBACK_CONFIGS`. `statActive` („Demos aktiv") bleibt vorerst auf `—` stehen (eigenes Follow-Up, das ein öffentliches Zähl-Endpoint braucht).
 
 ---
 
@@ -287,14 +287,14 @@ Nur `express-rate-limit` (5 Requests / 15 Min pro IP). Keine Captcha, keine E-Ma
 ### bug17 Kein Startup-Cleanup für Orphan-Container
 
 Feature: feat06
-Status: open (task20)
+Status: **fixed 2026-04-09** (task20)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
 Wenn der Node-Prozess während einer Provisionierung abstürzt, bleiben Docker-Container + `runbot-*`-Compose-Projekte + `/opt/runbot/demo-*`-Verzeichnisse + nginx-Configs zurück. Der Cleanup-Scheduler findet sie nicht, weil kein Registry-Eintrag existiert.
 
 **Fix**
-task20: Beim Server-Start `docker ps --filter "name=runbot-"` gegen `registry.json` abgleichen und Waisen entfernen. Zusätzlich `nginx.cleanupAllConfigs()` aufrufen — die Funktion existiert bereits, wird aber nirgends gecallt.
+task20: Neue Funktion `cleanupOrphans()` in `src/services/cleanup.ts`. Wird aus `src/index.ts` **vor** `runHTTP()` aufgerufen — noch bevor der HTTP-Server Anfragen annimmt und bevor der Cleanup-Scheduler läuft. Gleicht `docker ps -a --filter "name=runbot-"`, alle `<id>`-Directories unter `RUNBOT_WORK_DIR` und alle `runbot-*.conf` in `NGINX_CONF_DIR` gegen `registry.getAllInstances()` ab. Bewusst NICHT verwendet wird `nginx.cleanupAllConfigs()` — das würde auch Configs von gültigen Instanzen wegräumen. Stattdessen selektiv nur Waisen. Loggt eine Summary mit Container/Dir/Config-Counts.
 
 ---
 

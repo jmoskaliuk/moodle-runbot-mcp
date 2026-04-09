@@ -24,6 +24,17 @@ export interface MoodleInstance {
   moodleDockerDir: string;  // path to cloned moodle-docker repo
   moodleDir: string;        // path to moodle codebase
   error?: string;
+
+  // task26 / feat12: Extension-Codes
+  // Wenn gesetzt, überschreibt `maxAgeMinutes` den globalen
+  // `DEMO_MAX_AGE_MINUTES` — gerechnet wird ab `extendedBy.at`, damit
+  // eine nach 58 Min verlängerte Instanz nicht unmittelbar danach
+  // abläuft.
+  maxAgeMinutes?: number;
+  extendedBy?: {
+    code: string;           // Welcher Code wurde eingelöst (uppercase)
+    at:   string;           // ISO-Timestamp der Verlängerung
+  };
 }
 
 export interface TestRun {

@@ -21,6 +21,11 @@ export interface MoodleInstance {
     moodleDockerDir: string;
     moodleDir: string;
     error?: string;
+    maxAgeMinutes?: number;
+    extendedBy?: {
+        code: string;
+        at: string;
+    };
 }
 export interface TestRun {
     id: string;

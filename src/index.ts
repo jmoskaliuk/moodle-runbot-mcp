@@ -8,7 +8,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import express from "express";
 import rateLimit from "express-rate-limit";
 
-import { startCleanupScheduler, recordActivity } from "./services/cleanup.js";
+import { startCleanupScheduler, recordActivity, cleanupOrphans } from "./services/cleanup.js";
 
 import {
   registerInstanceStart,
@@ -74,6 +74,31 @@ registerConfigGet(server);
 // ── Transport selection ───────────────────────────────────────────────────────
 
 const transport = process.env.TRANSPORT ?? "stdio";
+
+// ── Extend-Codes (task26 / feat12) ────────────────────────────────────────────
+// Komma-getrennte Liste von Codes, die auf der Warteseite / in der laufenden
+// Demo eingelöst werden können, um die Instanz auf `EXTEND_CODE_TTL_MINUTES`
+// (default 1440 Min = 1 Tag) zu verlängern. Normalisiert beim Start zu
+// Uppercase-Set, damit der Runtime-Lookup O(1) und case-insensitive ist.
+//
+// Beispiel-Env: `EXTEND_CODES=EDUMA2026,PRIVATE,TRAIN01`
+// Codes werden beim Start eingelesen — Änderungen erfordern einen
+// `systemctl restart moodle-runbot`.
+const EXTEND_CODES: Set<string> = new Set(
+  (process.env.EXTEND_CODES ?? "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+);
+const EXTEND_CODE_TTL_MINUTES: number = parseInt(
+  process.env.EXTEND_CODE_TTL_MINUTES ?? "1440",
+  10
+);
+if (EXTEND_CODES.size > 0) {
+  console.error(
+    `[extend-codes] ${EXTEND_CODES.size} code(s) loaded, TTL=${EXTEND_CODE_TTL_MINUTES}min`
+  );
+}
 
 async function runHTTP(): Promise<void> {
   const app = express();
@@ -408,6 +433,89 @@ async function runHTTP(): Promise<void> {
   // Alias für nginx-Stripping (siehe Kommentar oben)
   app.get("/demo-status/:token", demoStatusHandler);
 
+  // ── Extend-Code API (task26 / feat12) ─────────────────────────────────────
+  // Messe-/Trainings-Teilnehmer können mit einem vorgenerierten Code ihre
+  // Demo-Instanz auf 24h verlängern. Codes kommen aus `EXTEND_CODES` (Env,
+  // kommasepariert). Alle Codes haben dieselbe TTL (`EXTEND_CODE_TTL_MINUTES`,
+  // default 1440 Min = 1 Tag). Jede Instanz kann **maximal einmal** verlängert
+  // werden; wiederholte Einlösungen derselben Instanz oder eines bereits
+  // verbrauchten Codes sind no-ops bzw. werfen einen Fehler.
+  //
+  // Vergleich ist case-insensitive. Leading/trailing Whitespace wird
+  // getrimmt. Codes im Env-String werden beim Startup einmal geparst und
+  // im Set `EXTEND_CODES` gehalten.
+  //
+  // Auth: Token. Wer den Token hat, darf verlängern — derselbe Schutz wie
+  // beim Demo-Status-Polling.
+  const extendCodeHandler: express.RequestHandler = async (req, res) => {
+    const { token, code } = (req.body ?? {}) as { token?: string; code?: string };
+    if (!token || !code) {
+      res.status(400).json({ error: "token und code sind erforderlich" });
+      return;
+    }
+
+    if (EXTEND_CODES.size === 0) {
+      res.status(503).json({ error: "Verlängerungs-Codes sind nicht konfiguriert" });
+      return;
+    }
+
+    const normalizedCode = code.trim().toUpperCase();
+    if (!EXTEND_CODES.has(normalizedCode)) {
+      res.status(400).json({ error: "Code ist ungültig" });
+      return;
+    }
+
+    let request;
+    try {
+      request = await tokens.getRequest(token);
+    } catch (e) {
+      console.error(`[extend-code] getRequest failed for ${token.slice(0,6)}…:`, e);
+      res.status(503).json({ error: "Token-Registry temporär nicht lesbar" });
+      return;
+    }
+    if (!request) {
+      res.status(404).json({ error: "Token nicht gefunden" });
+      return;
+    }
+    if (!request.instanceId) {
+      res.status(409).json({ error: "Demo ist noch nicht gestartet — Verlängerung erst möglich, sobald die Instanz läuft" });
+      return;
+    }
+
+    const inst = await getInstance(request.instanceId);
+    if (!inst) {
+      res.status(404).json({ error: "Instanz nicht gefunden (bereits abgelaufen?)" });
+      return;
+    }
+
+    if (inst.extendedBy) {
+      res.status(409).json({
+        error: `Instanz wurde bereits am ${inst.extendedBy.at} verlängert (Code: ${inst.extendedBy.code})`,
+      });
+      return;
+    }
+
+    const now = new Date();
+    inst.extendedBy    = { code: normalizedCode, at: now.toISOString() };
+    inst.maxAgeMinutes = EXTEND_CODE_TTL_MINUTES;
+    inst.lastActivity  = now.toISOString(); // Idle-Counter zurücksetzen, sonst killt tooIdle
+    await saveInstance(inst);
+
+    const extendedUntil = new Date(now.getTime() + EXTEND_CODE_TTL_MINUTES * 60 * 1000);
+    console.error(
+      `[extend-code] ${inst.id} verlängert mit Code ${normalizedCode} ` +
+      `bis ${extendedUntil.toISOString()} (+${EXTEND_CODE_TTL_MINUTES}min)`
+    );
+
+    res.json({
+      ok: true,
+      extendedUntil: extendedUntil.toISOString(),
+      maxAgeMinutes: EXTEND_CODE_TTL_MINUTES,
+    });
+  };
+  app.post("/api/extend-code", extendCodeHandler);
+  app.post("/extend-code", extendCodeHandler); // nginx-Strip-Alias
+
   // ── Plugin detail API ─────────────────────────────────────────────────────
   // GET /api/plugininfo/:id → JSON: { config, github, iconUrl }
   // Called by plugin-detail.html to populate the page dynamically.
@@ -539,6 +647,24 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   .err{display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px 20px;margin-top:20px;color:#b91c1c;font-size:13px;text-align:left}
   .err.show{display:block}
   .err a{color:#b91c1c;text-decoration:underline}
+  /* Extend-Code-Box (feat12/task26) — nur sichtbar im Ready-State */
+  .extend{display:none;text-align:left;background:#fafaf8;border:1px solid #e8eaee;border-radius:10px;padding:14px 18px;margin-top:14px;font-size:12px;color:#7a8090;font-weight:300}
+  .extend.show{display:block}
+  .extend-head{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .extend-chevron{transition:transform .2s;font-size:10px;color:#7a8090}
+  .extend.open .extend-chevron{transform:rotate(90deg)}
+  .extend-body{display:none;margin-top:10px}
+  .extend.open .extend-body{display:block}
+  .extend-body p{font-size:11px;color:#7a8090;margin:0 0 8px;line-height:1.5;font-weight:300}
+  .extend-row{display:flex;gap:6px}
+  .extend-row input{flex:1;background:#fff;border:1px solid #e8eaee;border-radius:6px;padding:7px 10px;font-size:12px;color:#0f1117;font-family:inherit;text-transform:uppercase}
+  .extend-row input:focus{outline:none;border-color:#1a56db}
+  .extend-row button{background:#1a56db;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit}
+  .extend-row button:hover{background:#1547b8}
+  .extend-row button:disabled{background:#cbd5e1;cursor:not-allowed}
+  .extend-msg{font-size:11px;margin-top:8px;display:none}
+  .extend-msg.ok{display:block;color:#059669}
+  .extend-msg.err{display:block;color:#b91c1c}
 </style>
 </head>
 <body>
@@ -566,6 +692,20 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
       <span class="cred-label">Passwort:</span>
       <span class="cred-val" id="cred-pw"></span>
       <button class="copy-btn" data-copy="cred-pw">Kopieren</button>
+    </div>
+  </div>
+  <div class="extend" id="extend">
+    <div class="extend-head" id="extend-toggle">
+      <span class="extend-chevron">▶</span>
+      <span>Verlängerungscode einlösen</span>
+    </div>
+    <div class="extend-body">
+      <p>Sie haben von uns einen Code erhalten? Lösen Sie ihn ein, um die Demo auf <strong>24 Stunden</strong> zu verlängern.</p>
+      <div class="extend-row">
+        <input type="text" id="extend-input" placeholder="z.B. EDUMA2026" maxlength="32" autocomplete="off" spellcheck="false">
+        <button id="extend-btn" type="button">Einlösen</button>
+      </div>
+      <div class="extend-msg" id="extend-msg"></div>
     </div>
   </div>
   <a class="primary-btn" id="open-btn" href="#" target="_blank" rel="noopener">Demo öffnen →</a>
@@ -632,6 +772,7 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     document.getElementById('cred-user').textContent = accounts;
     if (data.password) document.getElementById('cred-pw').textContent = data.password;
     document.getElementById('creds').classList.add('show');
+    document.getElementById('extend').classList.add('show');
     const btn = document.getElementById('open-btn');
     if (data.url) btn.href = data.url;
     btn.classList.add('show');
@@ -709,6 +850,66 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     });
   });
 
+  // Extend-Code UI (feat12/task26): Aufklapp-Toggle + Submit
+  (function(){
+    const wrap  = document.getElementById('extend');
+    const head  = document.getElementById('extend-toggle');
+    const input = document.getElementById('extend-input');
+    const btnEl = document.getElementById('extend-btn');
+    const msg   = document.getElementById('extend-msg');
+    if (!wrap || !head || !input || !btnEl || !msg) return;
+
+    head.addEventListener('click', () => wrap.classList.toggle('open'));
+
+    async function submit() {
+      const code = (input.value || '').trim().toUpperCase();
+      if (!code) {
+        msg.className = 'extend-msg err';
+        msg.textContent = 'Bitte einen Code eingeben.';
+        input.focus();
+        return;
+      }
+      btnEl.disabled = true;
+      btnEl.textContent = 'Prüfe…';
+      msg.className = 'extend-msg';
+      msg.textContent = '';
+      try {
+        const r = await fetch('/api/extend-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: TOKEN, code: code }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          msg.className = 'extend-msg err';
+          msg.textContent = d.error || ('Fehler: HTTP ' + r.status);
+          btnEl.disabled = false;
+          btnEl.textContent = 'Einlösen';
+          return;
+        }
+        const until = d.extendedUntil ? new Date(d.extendedUntil) : null;
+        const untilStr = until
+          ? until.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+          : '24 Stunden';
+        msg.className = 'extend-msg ok';
+        msg.textContent = '✓ Verlängert bis ' + untilStr;
+        input.disabled = true;
+        btnEl.disabled = true;
+        btnEl.textContent = 'Eingelöst';
+      } catch (e) {
+        msg.className = 'extend-msg err';
+        msg.textContent = 'Netzwerkfehler. Bitte noch einmal versuchen.';
+        btnEl.disabled = false;
+        btnEl.textContent = 'Einlösen';
+      }
+    }
+
+    btnEl.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+  })();
+
   // Erst-Poll nach kurzer Delay (gibt dem Backend-setPhase Zeit zu schreiben),
   // dann alle 3s.
   setTimeout(async () => {
@@ -727,10 +928,25 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 if (transport === "http") {
-  runHTTP().then(() => startCleanupScheduler()).catch((e) => {
-    console.error("Fatal:", e);
-    process.exit(1);
-  });
+  // Startup-Reihenfolge:
+  //   1. Orphan-Cleanup BEVOR der HTTP-Server Anfragen annimmt und bevor der
+  //      Cleanup-Scheduler läuft — so kollidiert die Waisen-Säuberung nicht
+  //      mit einem parallel laufenden `instance_start` und blockierte Ports
+  //      sind frei, bevor `allocatePort()` das erste Mal läuft.
+  //   2. HTTP-Server starten.
+  //   3. Periodischer Cleanup-Scheduler.
+  cleanupOrphans()
+    .catch((e) => {
+      // Nicht fatal — wenn der Cleanup fehlschlägt, startet der Server trotzdem.
+      // Die Fehler sind in `cleanupOrphans()` bereits geloggt.
+      console.error("[moodle-runbot] Orphan cleanup encountered errors:", e);
+    })
+    .then(() => runHTTP())
+    .then(() => startCleanupScheduler())
+    .catch((e) => {
+      console.error("Fatal:", e);
+      process.exit(1);
+    });
 } else {
   runStdio().catch((e) => {
     console.error("Fatal:", e);
