@@ -348,9 +348,18 @@ Offen als Follow-Up (nicht Teil von task18): `statActive` („Demos aktiv") wird
 ---
 
 ### task19 Snapshot leitnerflow-v1 auf VPS erstellen
-Status: runbook ready (requires VPS access) — Code-Fallstricke 2026-04-09 in `src/services/snapshot.ts` behoben (siehe Auditnotizen unten)
+Status: **done 2026-04-09** — leitnerflow-v1.sql.gz (224.7 KB) liegt auf dem VPS unter `/opt/snapshots/`, `configs.json` umgestellt
 Feature: feat01, feat05
 Bugs: bug13
+
+**Durchgeführt am 2026-04-09:**
+- Seed-Instanz `demo-leitnerflow-c371aa` über demo.eledia.ai gestartet
+- Seed-Kurs manuell im Browser angelegt (admin/teacher/student, Demo-Kurs, LeitnerFlow-Karten, keine File-Uploads)
+- `./scripts/seed-snapshot.sh create-snapshot` erfolgreich → `/opt/snapshots/leitnerflow-v1.sql.gz`
+- `./scripts/seed-snapshot.sh stop-instance demo-leitnerflow-c371aa` → sauber aufgeräumt
+- `configs.json`: `snapshotId: null` → `"leitnerflow-v1"`
+
+Offen: E2E-Test mit einer frisch aus dem Snapshot gestarteten Demo (Login admin → teacher → student, kein session mismatch). Das macht Johannes von Hand sobald CI den configs.json-Change deployed hat.
 
 **Voraussetzung:** task14/15 müssen verified sein, sonst läuft die Seed-Instanz nicht über HTTPS und das könnte die Moodle-URLs im Snapshot verschmutzen.
 
