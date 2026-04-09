@@ -255,15 +255,15 @@ Benötigt GitHub Secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
 ---
 
 ### task09 End-to-End-Test: Demo-Flow
-Status: open
+Status: **done 2026-04-09** — Johannes hat den vollständigen Flow auf dem Produktiv-VPS durchgespielt, alle fünf Schritte ohne manuellen Eingriff grün.
 Feature: feat01, feat02, feat03
 
-Vollständigen Flow einmal auf dem Server durchspielen:
-1. POST /request-demo → E-Mail empfangen
-2. Token-Link klicken → Loading-Page
-3. "Demo bereit"-E-Mail empfangen
-4. Demo-URL öffnen → Moodle + Plugin sichtbar
-5. Nach Inaktivität: Instanz automatisch gestoppt
+Vollständigen Flow einmal auf dem Server durchspielt:
+1. POST /request-demo → E-Mail empfangen ✓
+2. Token-Link klicken → Loading-Page ✓
+3. "Demo bereit"-E-Mail empfangen ✓
+4. Demo-URL öffnen → Moodle + Plugin sichtbar ✓
+5. Nach Inaktivität: Instanz automatisch gestoppt ✓
 
 ---
 
