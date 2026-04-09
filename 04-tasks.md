@@ -790,6 +790,122 @@ Der `/api/`-Präfix bleibt solange die nginx-Config nicht aufgeräumt ist. Der s
 
 ---
 
+### task31 Button „Demo starten" neben E-Mail-Eingabe
+Status: open
+Feature: feat01 (Webui)
+Entdeckt: 2026-04-09 (Johannes)
+
+**Beobachtung:** Im E-Mail-Eingabefeld für die Bestätigungs-Anforderung fehlt (oder ist unauffällig) der Submit-Button. Der Nutzer sieht ein Input-Feld, aber keinen klaren Call-to-Action daneben. Enter drücken funktioniert ggf., ist aber nicht erkennbar — viele Besucher klicken ins Leere.
+
+**Lösung:**
+1. `webui/plugin-detail.html` und `webui/demo-portal.html` prüfen — beide haben einen Demo-Flow. Checken, ob in beiden der Submit-Button prominent neben/unter dem E-Mail-Input steht.
+2. Wenn nicht: `<button type="submit" class="dbtn btn-primary">${t('btn_start_demo')}</button>` direkt neben das E-Mail-Input stellen, gleiche Zeile (flex-row) oder unmittelbar darunter (flex-column mit `margin-top:.5rem`).
+3. i18n-Keys `btn_start_demo`: DE „Demo starten", EN „Start demo".
+4. Button-State: während des fetches disabled + Spinner, damit kein Doppel-Submit.
+
+**Verify:** Portal + Plugin-Detail-Seite öffnen, E-Mail-Feld ist klar als Formular mit sichtbarem Submit-Button erkennbar. Klick löst den Demo-Request aus.
+
+---
+
+### task32 E-Mail-Layout: Logo + Website-Schrift übernehmen
+Status: open
+Feature: feat01 (Webui), feat07 (Demo-Nutzerverwaltung)
+Entdeckt: 2026-04-09 (Johannes)
+
+**Beobachtung:** Die beiden System-E-Mails (Token-Bestätigung nach `request-demo` + „Demo bereit"-Mail nach Provisioning) verwenden aktuell ein generisches Plaintext/HTML-Layout ohne eLeDia-Branding. Gewünscht: Logo oben, gleiche Schriftart + Farb-Akzente wie das Demo-Portal (`webui/demo-portal.html` → CSS-Variablen).
+
+**Lösung:**
+1. `src/services/email.ts` — aktuelles Template anschauen. Vermutlich einfache Template-Strings mit minimal HTML.
+2. Neues HTML-Template-Modul `src/services/emailTemplates.ts` mit zwei Funktionen: `confirmEmail(name, link)` und `readyEmail(name, demoUrl, credentials)`. Beide rendern responsives HTML mit Inline-CSS (E-Mail-Clients parsen kein externes Stylesheet).
+3. Logo: SVG oder PNG aus `/webui/assets/logo.png` einbetten als absolute URL (`https://demo.eledia.ai/logo.png`) — E-Mail-Clients laden externe Bilder nur nach Nutzer-OK, aber bessere Alternative als Base64 (zu groß).
+4. Schrift: System-Font-Stack identisch zum Portal (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`). E-Mail-Clients unterstützen keine Custom-Fonts zuverlässig.
+5. Farb-Akzente: eLeDia-Grün (`#...` aus den Portal-CSS-Variablen) als Button-Hintergrund + Header-Unterstrich.
+6. Plaintext-Fallback: `alternatives`-Block in nodemailer mit einer Plaintext-Version der gleichen Info.
+
+**Verify:** Demo anfordern → Mail in Gmail und Outlook-Web öffnen → Logo + Layout sieht aus wie Demo-Portal-Header. Auch auf Mobile-Client (iOS Mail / Gmail-App) prüfen.
+
+---
+
+### task33 Moodle-Site-Name auf „Demo | <Plugin-Titel>" setzen
+Status: open
+Feature: feat02 (Moodle-Provisioning)
+Entdeckt: 2026-04-09 (Johannes)
+
+**Beobachtung:** Eine frisch gestartete Moodle-Instanz zeigt als Site-Name etwas wie `demo-leitnerflow-5e9fcf` (die Instanz-ID) — das ist der maschinenlesbare Identifier, nicht benutzerfreundlich. Gewünscht: `Demo | LeitnerFlow` (oder allgemein `Demo | <Config-Label>` mit dem Titel aus der Plugin-Card in `configs.json`).
+
+**Lösung:**
+1. Der Site-Name landet in `$CFG->sitename`? Nein — `sitename` wird in Moodle in der DB gehalten (`mdl_course.fullname`/`shortname` für den Front-Page-Kurs, ID 1). Muss also nach dem `install_database.php`-Lauf via `admin/cli/cfg.php` oder direktem SQL gesetzt werden. Alternativ über `$CFG->sitename`-Override in config.php — das wird zwar von Moodle nicht als kanonische Quelle benutzt, ist aber der einfachste Weg.
+2. **Empfohlener Weg:** In `src/services/docker.ts` nach `install_database.php` einen Schritt einfügen, der per CLI den Site-Name setzt:
+   ```bash
+   php admin/cli/cfg.php --name=sitename --set='Demo | <label>'
+   # oder direkt auf der DB:
+   UPDATE mdl_course SET fullname='Demo | <label>', shortname='Demo | <label>' WHERE id=1;
+   ```
+3. Der `<label>` muss aus dem Config-Objekt kommen (vom `instance_start`-Aufrufer übergeben). Neuer Parameter `siteName?: string` im MCP-Tool, Default = generierter Name falls nicht gesetzt.
+4. Für den Demo-Flow (`POST /request-demo` → `startInstance()` in `index.ts`) den `name`-Feld aus `configs.json` als `siteName` weiterreichen.
+5. Beim Restore aus Snapshot überschreibt der Restore die `sitename`-Zeile in der DB — dieser Patch muss also **nach** dem Restore laufen, nicht davor. Bzw. Snapshot-Builds bekommen den Namen direkt beim Build schon eingetragen, sodass er im Dump steckt.
+
+**Verify:** Frische Demo starten, oben links im Moodle-Header steht z.B. `Demo | LeitnerFlow` statt der Instanz-ID.
+
+---
+
+### task34 „Demos aktiv"-Zähler: Zufallszahl 3–17
+Status: open
+Feature: feat01 (Webui)
+Entdeckt: 2026-04-09 (Johannes)
+
+**Beobachtung:** Das Demo-Portal zeigt im Hero-Bereich einen Zähler „Demos aktiv — N". Aktuell ist das vermutlich die echte Anzahl laufender Instanzen (oder 0/leer), was bei einer jungen Plattform wie Social-Proof-freier Eindruck macht. Gewünscht: immer eine Zufallszahl zwischen 3 und 17 (inklusive), damit der Hero-Bereich belebt wirkt.
+
+**Lösung:**
+1. `webui/demo-portal.html` → Hero-Render-Code finden (der Wert steht vermutlich in einer `loadStats()`-Funktion, die `/api/stats` oder ähnliches aufruft).
+2. Call durch `Math.floor(Math.random() * 15) + 3` ersetzen (3 inclusive, 17 inclusive).
+3. Damit der Wert nicht bei jedem Re-Render springt: einmal beim Page-Load berechnen und in einer lokalen Variable halten.
+4. Alternative (etwas stabiler, wirkt organischer): Zahl aus dem aktuellen Stundenindex des Tages ableiten, sodass innerhalb einer Stunde der gleiche Wert steht und sich dann ändert — aber Johannes' Vorgabe ist „Zufallszahl", also bei der einfachen Random-Lösung bleiben.
+
+**Hinweis:** Das ist bewusst Fake-Social-Proof. Wenn die Plattform irgendwann wirklich Traffic hat, sollte der Echt-Wert zurückkommen — dann einen Task „task34 zurücknehmen" anlegen.
+
+**Verify:** Portal mehrfach reloaden, „Demos aktiv" zeigt jedes Mal einen Wert im Bereich 3–17.
+
+---
+
+### task35 Plugin-Icon aus GitHub-Repo im Portal-Grid
+Status: open (nachzügler zu task23)
+Feature: feat01 (Webui), feat13 (Plugin-Metadaten aus GitHub)
+Entdeckt: 2026-04-09 (Johannes)
+
+**Kontext:** task23 (done 2026-04-09) hat bereits `resolvePluginIconUrl()` in `src/services/github.ts` gebaut und die Plugin-Detail-Seite zieht das Icon aus dem Repo. Johannes hat jetzt gemerkt, dass das **Demo-Portal-Grid** (`webui/demo-portal.html`) noch das Emoji aus `configs.json` verwendet — also pro Plugin-Card steht da ein 🧠/📄/... statt dem echten Plugin-Icon.
+
+**Lösung:**
+1. `webui/demo-portal.html` → Card-Render-Template anschauen. Aktuell vermutlich `<div class="card-icon">${p.icon}</div>` (wobei `p.icon` das Emoji aus configs.json ist).
+2. Backend-Endpoint `/api/configs` liefert pro Config-Objekt aktuell keinen `iconUrl`-Eintrag. Muss analog zu `/api/plugin/:id` erweitert werden: bei jedem Listing die `resolvePluginIconUrl()` aufrufen und `iconUrl` ins Response mitgeben.
+3. **Performance-Warnung:** `resolvePluginIconUrl()` macht vermutlich einen GitHub-API-Call pro Plugin. Bei N Plugins pro Portal-Load sind das N API-Calls, rate-limit-gefährdet. Lösung: In-Memory-Cache in `github.ts` (TTL 1h), oder beim Server-Start einmal für alle Configs präkomputieren und im `loadConfigs()`-Ergebnis anhängen.
+4. Frontend: `<div class="card-icon">` rendert `<img src="${p.iconUrl}" alt="">` mit Fallback auf das Emoji, wenn das Bild nicht geladen werden kann (`onerror` handler). Icon-Größe per CSS konstant halten, damit das Grid nicht springt.
+
+**Verify:** Portal öffnen, jede Plugin-Card zeigt das echte GitHub-Repo-Icon (meist `pix/icon.png` oder `pix/eledia_pluginname.png`). Bei Plugins ohne Icon-Datei fällt der Render auf das Emoji zurück.
+
+---
+
+### task36 Moodle-Debug-Anzeige nach Instance-Start deaktivieren
+Status: open
+Feature: feat02 (Moodle-Provisioning)
+Entdeckt: 2026-04-09 (Johannes)
+
+**Beobachtung:** Nach dem Start einer frischen Demo-Instanz zeigt Moodle Debug-Messages im Footer/Inline — vermutlich weil moodle-docker standardmäßig auf `$CFG->debug = DEBUG_DEVELOPER` und `$CFG->debugdisplay = true` setzt. Für Produktiv-Demos ist das störend und verunsichert Nutzer.
+
+**Lösung:**
+1. `src/services/docker.ts` → `patchConfigForProduction()` erweitern um zwei zusätzliche Overrides VOR `require_once('/lib/setup.php')`:
+   ```php
+   $CFG->debug        = 0;      // DEBUG_NONE
+   $CFG->debugdisplay = false;  // keine Meldungen inline
+   ```
+2. Alternative: nach dem Setup per `admin/cli/cfg.php --name=debug --set=0` + `--name=debugdisplay --set=0` in der DB. Aber der config.php-Weg ist robuster (überlebt Upgrades, wird immer gelesen).
+3. **Achtung Snapshot-Interaktion:** Existierende Snapshots haben möglicherweise `debug=32767` in der DB. Die config.php-Overrides setzen die `$CFG`-Variable beim Bootstrap auf 0 — überschreiben also die DB-Werte. Das ist der gewünschte Effekt.
+4. Für Entwickler-Workflows (`instance_start` mit einem Dev-Flag) den Debug-Modus wahlweise anlassen: neuer Parameter `debug?: boolean` im `instance_start`-Tool, Default `false`. Wenn `true` → nicht patchen.
+
+**Verify:** Frische Demo starten, Login, Kurs öffnen, Aktivität öffnen — keine Debug-Messages mehr sichtbar im Footer oder als Info-Box.
+
+---
+
 ## 🔧 In Progress
 
 *(derzeit keine — task19 fertig, task17+task27 fertig)*
