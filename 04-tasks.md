@@ -15,10 +15,7 @@ Enthält: neue Beobachtungen, Tasks, Klärungsbedarf, aktive Arbeit, Verifikatio
 
 ## ❓ Clarification Needed
 
-- **feat04:** Welches Format und Verzeichnis für Plugin-Configs? (`src/services/config.ts` noch nicht dokumentiert)
-- **feat07:** Welches Passwort bekommt der Demo-Nutzer? Wird es in der "Demo bereit"-E-Mail mitgeschickt?
-- **feat06:** Wie lang ist der Inaktivitäts-Timeout? Ist er konfigurierbar?
-- **feat01:** Was passiert wenn Demo-Start fehlschlägt — bekommt der Nutzer eine Fehler-E-Mail?
+- **feat01:** Was passiert wenn Demo-Start fehlschlägt — bekommt der Nutzer eine Fehler-E-Mail? → task07
 
 ---
 
@@ -45,38 +42,39 @@ HTTP→HTTPS-Redirect + HTTPS-Block mit Wildcard-Zertifikat.
 ---
 
 ### task03 feat04 dokumentieren
-Status: open
+Status: done
 Feature: feat04
 
-`src/services/config.ts` lesen und `03-dev-doc.md` → feat04-Abschnitt vervollständigen.
-Config-Format in `01-features.md` → feat04 klären.
+Config-Format: `configs.json` im Root, `DemoConfig`-Struktur mit `plugin`, `snapshotId`, `visible`-Flag.
+`03-dev-doc.md` und `01-features.md` aktualisiert.
 
 ---
 
 ### task04 feat05 Snapshot-System dokumentieren
-Status: open
+Status: done
 Feature: feat05
 
-`src/services/snapshot.ts` lesen und `03-dev-doc.md` → feat05-Abschnitt vervollständigen.
+Snapshot: `.sql.gz` + `.json` unter `/opt/snapshots/`. pgsql + mariadb/mysql unterstützt.
+Restore-Ablauf: DROP/CREATE DB → Import → wwwroot/dataroot setzen → Caches purgen.
+`03-dev-doc.md` aktualisiert.
 
 ---
 
 ### task05 feat06 Cleanup-Scheduler dokumentieren
-Status: open
+Status: done
 Feature: feat06
 
-`src/services/cleanup.ts` lesen: Timeout-Wert, Scheduler-Intervall, Cleanup-Logik.
-`03-dev-doc.md` → feat06-Abschnitt vervollständigen.
+Timeouts: 60 Min max, 15 Min Inaktivität, 60s Polling-Interval — alle via Env konfigurierbar.
+Cleanup-Sequenz vollständig dokumentiert. `01-features.md` und `03-dev-doc.md` aktualisiert.
 
 ---
 
 ### task06 feat07 Demo-Nutzerverwaltung dokumentieren + Passwort klären
-Status: open
+Status: done
 Feature: feat07
 
-`src/services/moodleUser.ts` lesen.
-Klären: welches Passwort bekommt Demo-Nutzer? Wird es in E-Mail mitgeteilt?
-`02-user-doc.md` und `03-dev-doc.md` aktualisieren.
+Passwort: `demo1234` (hardcoded). Wird aktuell nicht in E-Mail mitgeschickt → bug03 offen.
+Demo-Kurs shortname: `"demo"`. `03-dev-doc.md` und `01-features.md` aktualisiert.
 
 ---
 

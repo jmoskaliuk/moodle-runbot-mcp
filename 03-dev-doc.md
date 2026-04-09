@@ -175,45 +175,119 @@ Zwei HTTP-Endpoints in `src/index.ts` orchestrieren den vollständigen Flow.
 
 ## feat04 — Plugin-Konfigurationssystem (`src/services/config.ts`)
 
-*Implementierungsdetails noch nicht vollständig dokumentiert — `config.ts` lesen.*
+**Overview**
+Configs werden aus `configs.json` im Projekt-Root geladen. Pfad überschreibbar via `CONFIGS_FILE`-Env-Variable.
 
-**Bekannt:**
-- `loadConfigs()` gibt `RunbotConfig[]` zurück
-- Configs enthalten: `id`, `name`, `moodleVersion`, `phpVersion`, `db`, `plugin?`, `snapshotId?`
-- `GET /configs` gibt alle Configs als JSON zurück (für Demo-Portal)
+**DemoConfig-Struktur**
+
+```typescript
+{
+  id:            string      // "leitnerflow"
+  name:          string      // "LeitnerFlow"
+  category:      string      // interne Kategorie
+  categoryLabel: string      // Anzeigename der Kategorie
+  icon:          string      // Icon-Name oder URL
+  iconBg:        string      // Hintergrundfarbe für Icon
+  description:   string      // Beschreibungstext für Portal-Karte
+  features:      string[]    // Feature-Liste für Portal-Karte
+  plugin:        PluginRef | null   // null = Vanilla-Moodle ohne Extra-Plugin
+  snapshotId:    string | null      // null = leere Installation
+  moodleVersion: string      // "4.5"
+  phpVersion:    string      // "8.2"
+  db:            string      // "pgsql"
+  visible:       boolean     // false = in Portal-Liste versteckt
+}
+```
+
+**PluginRef-Struktur**
+```typescript
+{ srcPath: string, type: string, name: string }
+// z.B. { srcPath: "/opt/plugins/mod_leitnerflow", type: "mod", name: "eledialeitnerflow" }
+```
+
+**API**
+- `loadConfigs()` → lädt alle Configs mit `visible !== false`
+- `getConfig(id)` → gibt einzelne Config zurück
+- `GET /configs` → gibt alle sichtbaren Configs als JSON zurück (für Demo-Portal)
+
+**Constraints**
+- `configs.json` wird bei jedem Aufruf neu gelesen (kein Caching)
+- Fehler beim Laden wirft Exception mit Pfadangabe
 
 ---
 
 ## feat05 — Snapshot-System (`src/services/snapshot.ts`)
 
-*Implementierungsdetails noch nicht vollständig dokumentiert — `snapshot.ts` lesen.*
+**Overview**
+Snapshots sind komprimierte DB-Dumps (`.sql.gz`) + Metadata-JSON im `SNAPSHOT_DIR`.
 
-**Bekannt:**
-- `getSnapshot(snapshotId)` → gibt Snapshot-Objekt mit `file`-Pfad zurück
-- `restoreSnapshot(instance, file)` → DB-Import in laufenden Container
-- MCP-Tools: `snapshot_list`, `snapshot_create`, `snapshot_delete`
+**SnapshotMeta-Struktur**
+```typescript
+{
+  id, label, description,
+  dbType, moodleVersion, phpVersion,
+  plugins: string[],   // ["mod_eledialeitnerflow"]
+  sizeBytes, createdAt,
+  file: string         // absoluter Pfad zur .sql.gz
+}
+```
+
+**createSnapshot(instance, id, label, description, plugins)**
+- pgsql: `pg_dump -U moodle moodle | gzip > {file}`
+- mariadb/mysql: `mysqldump -u moodle -pm@0dl3ing moodle | gzip > {file}`
+- Schreibt Metadata als `{id}.json` neben der `.sql.gz`
+
+**restoreSnapshot(instance, snapshotFile)**
+1. pgsql: DROP + CREATE DATABASE, dann `zcat | psql`
+2. mariadb/mysql: `zcat | mysql`
+3. `php admin/cli/cfg.php --name=wwwroot --set="{url}"`
+4. `php admin/cli/cfg.php --name=dataroot --set="/var/moodledata"`
+5. `php admin/cli/purge_caches.php`
+- Schritte 3–5 sind non-fatal (`.catch(() => {})`)
+
+**Storage**
+- Verzeichnis: `/opt/snapshots/` (überschreibbar via `SNAPSHOT_DIR`)
+- Format: `{id}.sql.gz` + `{id}.json`
 
 ---
 
 ## feat06 — Automatisches Aufräumen (`src/services/cleanup.ts`)
 
-**Bekannt:**
-- `startCleanupScheduler()` → wird beim HTTP-Server-Start aufgerufen
-- `recordActivity(instanceId)` → aktualisiert `lastActivity` in Registry
-- `POST /ping/:instanceId` → ruft `recordActivity()` auf
+**Timeouts (konfigurierbar via Env)**
 
-*Cleanup-Intervall und Timeout-Konfiguration: `cleanup.ts` lesen.*
+| Variable | Default | Bedeutung |
+|----------|---------|-----------|
+| `DEMO_MAX_AGE_MINUTES` | `60` | Maximale Gesamtlaufzeit einer Instanz |
+| `DEMO_INACTIVITY_MINUTES` | `15` | Inaktivitäts-Timeout |
+| `CLEANUP_INTERVAL_SECONDS` | `60` | Scheduler-Polling-Intervall |
+
+**Ablauf `runCleanup()`**
+- Läuft alle 60s + sofort beim Start
+- Prüft jede Instanz: `age > MAX_AGE_MS` oder `inactive > INACTIVITY_MS && status === "running"`
+- Cleanup-Sequenz: `status = "stopping"` → `unregisterInstance()` → `stopContainers()` → `cleanupInstanceDir()` → `deleteInstance()`
+- Bei Fehler: `status = "error"`, `error`-Feld gesetzt (bleibt in Registry sichtbar)
+
+**`recordActivity(instanceId)`**
+- Aktualisiert `inst.lastActivity` auf `new Date().toISOString()`
+- Wird über `POST /ping/:instanceId` aufgerufen
 
 ---
 
 ## feat07 — Demo-Nutzerverwaltung (`src/services/moodleUser.ts`)
 
-**Bekannt:**
-- `createDemoUser(instance, email, firstName, lastName)` → legt Moodle-Nutzer an
-- `enrollUserInDemoCourse(instance, email)` → schreibt Nutzer in Demo-Kurs ein
-- Implementierung vermutlich via `php admin/cli/...` im Webserver-Container
+**createDemoUser(instance, email, firstName, lastName)**
+- Username: E-Mail bereinigt (nur alphanumerisch, max 20 Zeichen) + 2 zufällige Ziffern
+- Passwort: **`demo1234`** (hardcoded)
+- CLI: `php admin/cli/create_user.php --email --username --password --firstname --lastname --auth=manual`
+- Idempotent: wenn `already exists` oder `duplicate` im stderr → kein Fehler, nur Log
 
-*Passwort-Vergabe und Demo-Kurs-ID: `moodleUser.ts` lesen.*
+**enrollUserInDemoCourse(instance, email)**
+- CLI: `php admin/cli/enrol_user.php --email --courseshortname="demo" --roleshortname="student"`
+- Setzt Demo-Kurs mit shortname `"demo"` im Snapshot voraus
+- Non-fatal: schlägt fehl wenn Kurs nicht existiert → nur Log, kein throw
+
+**Passwort in E-Mail**
+- `demo1234` wird aktuell **nicht** in der "Demo bereit"-E-Mail mitgeschickt → bug03 / task06
 
 ---
 

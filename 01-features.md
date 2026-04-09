@@ -130,8 +130,10 @@ Verschiedene Demo-Szenarien (verschiedene Plugins, Versionen, Demo-Daten) sind o
 **Non-goals**
 - Keine Admin-UI für Config-Verwaltung
 
-**Open Questions**
-- Welches Format und welches Verzeichnis für Config-Dateien? (`src/services/config.ts` prüfen)
+**Decisions**
+- Format: JSON (`configs.json` im Projekt-Root, überschreibbar via `CONFIGS_FILE`)
+- Felder pro Config: `id`, `name`, `category`, `description`, `features[]`, `plugin`, `snapshotId`, `moodleVersion`, `phpVersion`, `db`, `visible`
+- `visible: false` versteckt eine Config im Portal ohne sie zu löschen
 
 ---
 
@@ -161,6 +163,12 @@ Instanzen werden nach Inaktivität automatisch gestoppt und gelöscht, um Server
 - Instanzen ohne Aktivität nach konfigurierter Zeit → automatisch stoppen + aufräumen
 - `POST /ping/:instanceId`: expliziter Aktivitäts-Ping (von nginx oder Demo-Instanz)
 
+**Decisions**
+- Max. Gesamtlaufzeit: 60 Min (`DEMO_MAX_AGE_MINUTES`)
+- Inaktivitäts-Timeout: 15 Min (`DEMO_INACTIVITY_MINUTES`)
+- Scheduler-Interval: 60s (`CLEANUP_INTERVAL_SECONDS`)
+- Alle Werte via Env-Variable konfigurierbar
+
 **Non-goals**
 - Keine manuelle Verlängerung durch Interessenten (feat08 für MCP-Tool `instance_extend`)
 
@@ -179,8 +187,9 @@ Der Interessent bekommt einen personalisierten Nutzer-Account in seiner Demo-Ins
 **Non-goals**
 - Kein Auto-Login (SSO/Token-basierter direkter Zugang)
 
-**Open Questions**
-- Wird ein Standard-Passwort vergeben? Wie wird es dem Nutzer mitgeteilt?
+**Decisions**
+- Passwort: `demo1234` (hardcoded)
+- Passwort wird aktuell **nicht** in der "Demo bereit"-E-Mail mitgeschickt → offen (bug03)
 
 ---
 
