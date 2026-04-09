@@ -117,6 +117,9 @@ async function patchConfigForProduction(configPath, instance, baseDomain) {
 //      sonst kommen interne Links als http:// raus → Mixed-Content.
 $CFG->wwwroot  = '${wwwroot}';
 $CFG->sslproxy = true;
+$CFG->tool_replace_allowdb = true; // admin/tool/replace/cli/replace.php für Snapshot-URL-Rewrite freigeben
+$CFG->debug        = 0;            // Keine PHP-Notices/-Warnings im Browser (Demo-Nutzer sollen keinen Debug-Output sehen)
+$CFG->debugdisplay = 0;
 unset($CFG->behat_wwwroot); // Behat nutzt eigenen Host, nicht überschreiben
 // ────────────────────────────────────────────────────────────────
 `;

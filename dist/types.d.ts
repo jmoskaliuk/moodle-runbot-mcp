@@ -26,6 +26,8 @@ export interface MoodleInstance {
         code: string;
         at: string;
     };
+    pinned?: boolean;
+    pinReason?: string;
 }
 export interface TestRun {
     id: string;

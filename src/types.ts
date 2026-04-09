@@ -35,6 +35,15 @@ export interface MoodleInstance {
     code: string;           // Welcher Code wurde eingelöst (uppercase)
     at:   string;           // ISO-Timestamp der Verlängerung
   };
+
+  // task30: Snapshot-Building / Admin-gepinnte Instanzen
+  // Wenn `pinned === true`, wird die Instanz vom Cleanup-Scheduler komplett
+  // ignoriert — weder `maxAge` noch `inactivity` triggern einen Stop. Wird
+  // vom `snapshot_build`-Workflow genutzt, damit der Scheduler die Instanz
+  // nicht mitten im pg_dump abräumt. Auch sinnvoll für manuell via Admin-UI
+  // angepinnte Langläufer (z.B. Dauer-Demo für Messen).
+  pinned?:    boolean;
+  pinReason?: string;       // menschenlesbar, z.B. "snapshot_build:exam2pdf-v1"
 }
 
 export interface TestRun {

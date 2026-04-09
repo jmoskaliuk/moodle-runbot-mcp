@@ -6,9 +6,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import basicAuth from "express-basic-auth";
 import { startCleanupScheduler, recordActivity, cleanupOrphans } from "./services/cleanup.js";
 import { registerInstanceStart, registerInstanceStop, registerInstanceStatus, registerInstanceList, registerInstanceLogs, registerInstanceRunTests, registerInstanceExtend, registerInstanceTimeRemaining, } from "./tools/instances.js";
-import { registerSnapshotList, registerSnapshotCreate, registerSnapshotDelete, } from "./tools/snapshots.js";
+import { registerSnapshotList, registerSnapshotCreate, registerSnapshotDelete, registerSnapshotBuild, } from "./tools/snapshots.js";
 import { registerConfigList, registerConfigGet, } from "./tools/configs.js";
 import { loadConfigs } from "./services/config.js";
 import * as tokens from "./services/tokens.js";
@@ -16,7 +17,7 @@ import * as email from "./services/email.js";
 import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
-import { getInstance, saveInstance, allocatePort } from "./services/registry.js";
+import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
 import * as nginxSvc from "./services/nginx.js";
 import { randomBytes } from "crypto";
@@ -39,6 +40,7 @@ registerInstanceTimeRemaining(server);
 registerSnapshotList(server);
 registerSnapshotCreate(server);
 registerSnapshotDelete(server);
+registerSnapshotBuild(server);
 // Config tools
 registerConfigList(server);
 registerConfigGet(server);
@@ -61,6 +63,20 @@ const EXTEND_CODE_TTL_MINUTES = parseInt(process.env.EXTEND_CODE_TTL_MINUTES ?? 
 if (EXTEND_CODES.size > 0) {
     console.error(`[extend-codes] ${EXTEND_CODES.size} code(s) loaded, TTL=${EXTEND_CODE_TTL_MINUTES}min`);
 }
+// ── Admin-Dashboard (task25 / feat11) ─────────────────────────────────────────
+// HTTP Basic Auth — Server startet nicht ohne ADMIN_PASSWORD um versehentliches
+// Deployment ohne Auth zu verhindern.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
+if (!ADMIN_PASSWORD) {
+    console.error("[admin] FEHLER: ADMIN_PASSWORD nicht gesetzt — Server wird nicht gestartet.");
+    console.error("[admin] Bitte ADMIN_PASSWORD in /etc/moodle-runbot.env setzen und Service neu starten.");
+    process.exit(1);
+}
+const adminAuth = basicAuth({
+    users: { admin: ADMIN_PASSWORD },
+    challenge: true,
+    realm: "eLeDia Runbot Admin",
+});
 async function runHTTP() {
     const app = express();
     app.use(express.json());
@@ -107,10 +123,11 @@ async function runHTTP() {
         res.json({ status: "ok", server: "moodle-runbot-mcp-server" });
     });
     // Configs endpoint — vom Portal direkt aufgerufen (kein MCP-Overhead nötig)
-    // GET /configs → alle sichtbaren Demo-Konfigurationen als JSON
+    // GET /configs → alle sichtbaren Demo-Konfigurationen als JSON (visible !== false)
     app.get("/configs", async (_req, res) => {
         try {
-            const configs = await loadConfigs();
+            const all = await loadConfigs();
+            const configs = all.filter(c => c.visible !== false);
             res.json({ count: configs.length, configs });
         }
         catch (e) {
@@ -470,8 +487,111 @@ async function runHTTP() {
     // GET /api/configs — alias so the portal's /api/configs URL works
     app.get("/api/configs", async (_req, res) => {
         try {
-            const configs = await loadConfigs();
+            const all = await loadConfigs();
+            const configs = all.filter(c => c.visible !== false);
             res.json({ count: configs.length, configs });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // ── Admin-Dashboard (task25) ────────────────────────────────────────────────
+    // Alle /admin/* Routen hinter Basic Auth.
+    // Nginx-Konvention: Der Browser spricht /api/admin/*, nginx strippt /api/
+    // und Express sieht /admin/*. Daher keine /api/-Präfixe in Express.
+    //
+    // Zugang: https://demo.eledia.ai/api/admin  (nginx → GET /admin → admin.html)
+    // Env: ADMIN_PASSWORD=... in /etc/moodle-runbot.env
+    // GET /admin → serve admin.html
+    app.get("/admin", adminAuth, (_req, res) => {
+        res.sendFile(path.join(process.cwd(), "webui", "admin.html"));
+    });
+    // GET /admin/instances → Liste aller Instanzen aus Registry
+    app.get("/admin/instances", adminAuth, async (_req, res) => {
+        try {
+            const instances = await getAllInstances();
+            res.json({ count: instances.length, instances });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // GET /admin/tokens → alle Token-Einträge
+    app.get("/admin/tokens", adminAuth, async (_req, res) => {
+        try {
+            const requests = await tokens.listRequests();
+            res.json({ count: requests.length, requests });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // GET /admin/instances/:id/logs → docker compose logs --tail 100
+    app.get("/admin/instances/:id/logs", adminAuth, async (req, res) => {
+        try {
+            const inst = await getInstance(req.params.id);
+            if (!inst) {
+                res.status(404).json({ error: "Instanz nicht gefunden" });
+                return;
+            }
+            const logs = await dockerSvc.getLogs(inst, 100);
+            res.json({ instanceId: inst.id, logs });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // POST /admin/instances/:id/extend → Laufzeit verlängern
+    // Body: { minutes: number }  (default 60)
+    app.post("/admin/instances/:id/extend", adminAuth, async (req, res) => {
+        try {
+            const inst = await getInstance(req.params.id);
+            if (!inst) {
+                res.status(404).json({ error: "Instanz nicht gefunden" });
+                return;
+            }
+            const minutes = Math.max(1, Math.min(10080, parseInt(req.body?.minutes ?? "60", 10) || 60));
+            const now = new Date().toISOString();
+            inst.maxAgeMinutes = minutes;
+            inst.lastActivity = now; // tooIdle-Timer zurücksetzen
+            if (!inst.extendedBy) {
+                inst.extendedBy = { code: "ADMIN", at: now };
+            }
+            else {
+                inst.extendedBy.at = now; // erneute Verlängerung → Uhr neu starten
+            }
+            await saveInstance(inst);
+            const expiresAt = new Date(new Date(now).getTime() + minutes * 60000).toISOString();
+            res.json({ ok: true, instanceId: inst.id, extendedByMinutes: minutes, expiresAt });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    // DELETE /admin/instances/:id → Instanz stoppen + aufräumen
+    app.delete("/admin/instances/:id", adminAuth, async (req, res) => {
+        const { id } = req.params;
+        try {
+            const inst = await getInstance(id);
+            if (!inst) {
+                res.status(404).json({ error: "Instanz nicht gefunden" });
+                return;
+            }
+            inst.status = "stopping";
+            await saveInstance(inst);
+            // Reihenfolge wie in cleanup.ts: nginx → docker → dir → registry
+            await nginxSvc.unregisterInstance(id).catch((e) => {
+                console.error(`[admin] WARN nginx unregister ${id}:`, e);
+            });
+            await dockerSvc.stopContainers(inst).catch((e) => {
+                console.error(`[admin] WARN docker stop ${id}:`, e);
+            });
+            await dockerSvc.cleanupInstanceDir(inst).catch((e) => {
+                console.error(`[admin] WARN cleanup dir ${id}:`, e);
+            });
+            await deleteInstance(id);
+            console.error(`[admin] Manually deleted instance ${id}`);
+            res.json({ ok: true, instanceId: id });
         }
         catch (e) {
             res.status(500).json({ error: String(e) });
@@ -538,8 +658,13 @@ function buildLoadingPage(firstName, pluginName, token) {
   .creds h3{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:400;color:#0f1117;margin-bottom:6px}
   .creds-hint{font-size:12px;color:#7a8090;line-height:1.5;margin:0 0 12px;font-weight:300}
   .cred-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
-  .cred-row:last-child{margin-bottom:0}
-  .cred-label{color:#7a8090;min-width:80px}
+  /* Nur die allerletzte Zeile innerhalb der Creds-Box (das ist die Passwort-
+     Zeile) darf den Bottom-Margin verlieren. Ein naives :last-child greift
+     sonst auch auf die letzte Account-Zeile (Teilnehmer/in) innerhalb von
+     #cred-accounts und klebt sie an die Passwort-Zeile — genau der Fehler
+     den Johannes 2026-04-09 im Screenshot markiert hat. */
+  .creds > .cred-row:last-child{margin-bottom:0}
+  .cred-label{color:#7a8090;min-width:96px}
   .cred-val{font-family:'SF Mono','Menlo',monospace;background:#fff;border:1px solid #e8eaee;border-radius:6px;padding:5px 10px;flex:1;color:#0f1117;font-size:12px;word-break:break-all}
   .copy-btn{background:#fff;border:1px solid #e8eaee;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;color:#7a8090;transition:all .2s;font-family:inherit}
   .copy-btn:hover{border-color:#1a56db;color:#1a56db}
@@ -673,8 +798,8 @@ function buildLoadingPage(firstName, pluginName, token) {
       : ['admin', 'teacher', 'student'];
     const ACCOUNT_LABELS = {
       admin:   'Admin',
-      teacher: 'Lehrkraft',
-      student: 'Schüler:in',
+      teacher: 'Trainer/in',
+      student: 'Teilnehmer/in',
     };
     const accountsBox = document.getElementById('cred-accounts');
     accountsBox.innerHTML = '';

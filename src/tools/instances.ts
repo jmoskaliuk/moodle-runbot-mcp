@@ -58,6 +58,13 @@ Examples:
           .describe("Optional: Snapshot-ID für Demo-Daten, z.B. 'leitnerflow-v1'. " +
                     "Wenn angegeben: DB aus Snapshot (schnell, mit Demo-Daten). " +
                     "Ohne: leere Moodle-Installation."),
+        pinned: z.boolean().default(false)
+          .describe("task30: Wenn true, wird die Instanz vom Cleanup-Scheduler ignoriert " +
+                    "(weder maxAge noch inactivity triggern Stop). Für snapshot_build-Workflow " +
+                    "oder Langläufer wie Messe-Demos. Default: false."),
+        pinReason: z.string().optional()
+          .describe("task30: Menschenlesbarer Grund für pinned, z.B. 'snapshot_build:exam2pdf-v1'. " +
+                    "Wird im Admin-Dashboard angezeigt."),
       }).strict(),
       annotations: {
         readOnlyHint: false,
@@ -66,7 +73,7 @@ Examples:
         openWorldHint: false,
       },
     },
-    async ({ prId, branch, pluginSrcPath, pluginType, pluginName, moodleVersion, phpVersion, db, snapshotId }) => {
+    async ({ prId, branch, pluginSrcPath, pluginType, pluginName, moodleVersion, phpVersion, db, snapshotId, pinned, pinReason }) => {
       const id = `pr-${prId}-${shortId()}`;
       const composeProject = `runbot-${id}`.replace(/[^a-z0-9-]/g, "-");
       const instanceDir = path.join(WORK_DIR, id);
@@ -107,6 +114,7 @@ Examples:
         composeProject,
         moodleDockerDir: path.join(instanceDir, "moodle-docker"),
         moodleDir: path.join(instanceDir, "moodle"),
+        ...(pinned ? { pinned: true, pinReason: pinReason ?? "manually pinned" } : {}),
       };
       instance.url = instanceUrl(instance);
 
@@ -129,7 +137,13 @@ Examples:
         // nginx-Config schreiben damit Subdomain erreichbar ist
         await nginx.registerInstance(instance.id, instance.webPort);
 
-        const result = { instanceId: id, url: instance.url, webPort: port, status: "running" };
+        const result = {
+          instanceId: id,
+          url: instance.url,
+          webPort: port,
+          status: "running",
+          ...(pinned ? { pinned: true, pinReason: pinReason ?? "manually pinned" } : {}),
+        };
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
       } catch (e) {
         instance.status = "error";

@@ -228,6 +228,15 @@ function pill(status, isPhase = false) {
   return `<span class="${cls}">${label||'—'}</span>`;
 }
 
+// task30: Pin-Indikator für Instanzen, die der Cleanup-Scheduler ignoriert.
+// Zeigt ein 📌-Icon mit Tooltip (pinReason), damit sofort klar ist, warum
+// die Instanz länger läuft als das übliche maxAge.
+function pinIndicator(inst) {
+  if (!inst.pinned) return '';
+  const reason = (inst.pinReason ?? 'pinned').replace(/"/g, '&quot;');
+  return ` <span title="${reason}" style="font-size:11px" aria-label="Gepinnt: ${reason}">📌</span>`;
+}
+
 // ── Instanzen ──────────────────────────────────────────────────────────────────
 
 async function loadInstances() {
@@ -252,7 +261,7 @@ function renderInstances(instances) {
       : `<span class="mono">${inst.id}</span>`;
     return `<tr>
       <td class="mono">${inst.id}</td>
-      <td>${pill(inst.status, true)}</td>
+      <td>${pill(inst.status, true)}${pinIndicator(inst)}</td>
       <td>${inst.configId ?? inst.prId ?? '—'}</td>
       <td title="${inst.createdAt}">${relTime(inst.createdAt)}</td>
       <td title="${inst.lastActivity}">${relTime(inst.lastActivity)}</td>

@@ -268,11 +268,11 @@ Vollständigen Flow einmal auf dem Server durchspielt:
 ---
 
 ### task14 nginx HTTPS + Wildcard-Cert verwenden (Bundle mit task15)
-Status: deployed, awaiting manual verify
+Status: **done 2026-04-09** — live-verifiziert im Zuge von task09 (E2E-Durchlauf).
 Feature: feat03
 Bugs: bug02
 
-**Deploy 2026-04-09:** Commit `770dd46` via GitHub Actions Run #20 (41s) erfolgreich auf VPS deployed. Health-Check auf `localhost:3000/health` grün. Code ist auf `/opt/moodle-runbot-mcp`, Service `moodle-runbot` neugestartet.
+**Deploy 2026-04-09:** Commit `770dd46` via GitHub Actions Run #20 (41s) erfolgreich auf VPS deployed. Health-Check auf `localhost:3000/health` grün. Code ist auf `/opt/moodle-runbot-mcp`, Service `moodle-runbot` neugestartet. Wildcard-Cert ist live, nginx liefert HTTPS für `*.demo.eledia.ai`.
 
 `src/services/nginx.ts` generiert aktuell nur einen `listen 80`-Block. Umstellen auf:
 1. HTTP-Block (Port 80) → `return 301 https://$host$request_uri;` (nur für ACME-Challenges Passthrough, Rest redirect)
@@ -290,11 +290,11 @@ Wildcard-Cert selbst bleibt manuell (DNS-01-Challenge erfordert interaktive DNS-
 ---
 
 ### task15 docker.ts: $CFG->wwwroot + sslproxy patchen (Bundle mit task14)
-Status: deployed, awaiting manual verify
+Status: **done 2026-04-09** — live-verifiziert im Zuge von task09. Frische Demo-Instanzen sprechen HTTPS, Login läuft ohne Redirect-Loop, kein Mixed-Content.
 Feature: feat02, feat03
 Bugs: bug06, bug14
 
-**Deploy 2026-04-09:** Commit `770dd46`. `patchConfigForProduction()` schreibt Override-Block VOR `require_once('/lib/setup.php')`. Verifizierung erfordert echte Demo-Provisionierung (siehe "Verify After Deploy" Abschnitt).
+**Deploy 2026-04-09:** Commit `770dd46`. `patchConfigForProduction()` schreibt Override-Block VOR `require_once('/lib/setup.php')`. Verifiziert durch E2E-Durchlauf (task09).
 
 `src/services/docker.ts` → `provisionInstance()` patcht `config.php` nach dem Template-Copy:
 1. `composeEnv()` setzt `MOODLE_DOCKER_WEB_HOST = ${instance.id}.${BASE_DOMAIN}` (für Werkzeuge wie Behat, die den Host direkt lesen).
@@ -313,11 +313,11 @@ Approach gewählt weil: sauberer als Regex-basiertes Port-Block-Entfernen, robus
 ---
 
 ### task16 tools/instances.ts: instanceUrl() auf https
-Status: deployed
+Status: **done 2026-04-09** — live-verifiziert im Zuge von task09.
 Feature: feat03
 Bugs: bug09
 
-`src/tools/instances.ts:19-22` → `instanceUrl()` muss `https://` bei gesetztem `BASE_DOMAIN` liefern, analog zu `src/index.ts:292`. Best practice: Helper in `src/services/registry.ts` oder neuem `src/services/urls.ts` zentralisieren statt an zwei Stellen duplizieren.
+`src/tools/instances.ts:19-22` → `instanceUrl()` liefert `https://` bei gesetztem `BASE_DOMAIN`, bestätigt durch E2E-Durchlauf (task09). Demo-Mail enthält korrekten HTTPS-Link.
 
 ---
 
@@ -757,22 +757,20 @@ Entdeckt: Admin-Dashboard zeigt Token-Einträge mit Phase "running" für längst
 ---
 
 ### task30 Snapshot-Building-Instanzen vor Cleanup schützen
-Status: open
+Status: **done 2026-04-09**
 Feature: feat03 (Runbot-MCP)
 Entdeckt: 2026-04-09 beim Erstellen des `exam2pdf-v1` Snapshots. Die Instanz `pr-exam2pdf-5057e6` wurde um 20:38 fertig bereitgestellt, der Cleanup-Scheduler (`inactivity=15min`) hat sie um 20:54:44 wegen „inactivity timeout (16 min idle)" entfernt — mitten im Snapshot-Workflow, bevor `snapshot_create` aufgerufen werden konnte.
 
 **Problem:** Der Inactivity-Tracker in `services/cleanup.ts` zählt nur HTTP-Requests auf die Moodle-Instanz selbst. Wenn eine Instanz rein für Snapshot-Building gestartet wird (ohne echten User-Traffic), ist sie aus Cleanup-Sicht sofort „idle" und wird nach 15 Min abgeräumt — auch wenn ein Admin gerade die Demo-DB präpariert.
 
-**Lösung:**
-1. `MoodleInstance`-Typ bekommt optionales Feld `pinned?: boolean` und `pinReason?: string`.
-2. `tools/instances.ts` → `instance_start` akzeptiert optionalen Parameter `pinned: boolean` (Default: `false`). Wenn `true`, wird das Feld in der Instance-Registry gesetzt.
-3. `services/cleanup.ts` → `checkInactivity()` überspringt Instanzen mit `pinned === true` komplett (weder maxAge noch inactivity triggern Cleanup).
-4. `tools/snapshots.ts` → neues Tool `snapshot_build` als Convenience-Wrapper: startet eine gepinnte Instanz, wartet bis ready, ruft `snapshot_create` auf, stoppt die Instanz explizit. Ein-Aufruf-Workflow.
-5. Admin-Dashboard: Gepinnte Instanzen bekommen ein 📌-Icon in der Phase-Spalte, damit sichtbar ist warum Cleanup sie ignoriert.
+**Umgesetzt 2026-04-09:**
+1. `MoodleInstance`-Typ: neue optionale Felder `pinned?: boolean` und `pinReason?: string` (`src/types.ts`).
+2. `services/cleanup.ts` → `runCleanup()` überspringt `inst.pinned === true` direkt nach dem `stopping/stopped`-Early-Return, d.h. weder maxAge noch inactivity können greifen.
+3. `tools/instances.ts` → `instance_start` akzeptiert die optionalen Parameter `pinned` + `pinReason` und schreibt sie bei Bedarf in die Instance-Registry.
+4. `tools/snapshots.ts` → neues Tool `snapshot_build` als One-Shot-Wrapper: allokiert Port, legt gepinnte Instance in Registry an, provisioniert/startet Container, erstellt via `snapshot.createSnapshot()` den Dump, und räumt die Instance im `finally`-Block immer auf (auch im Fehlerfall). Nimmt alle Parameter von `instance_start` + `snapshot_create` in einem Call.
+5. `webui/admin.html` → neuer `pinIndicator()`-Helper rendert ein 📌-Icon mit `pinReason`-Tooltip hinter dem Status-Pill, wenn `inst.pinned === true`.
 
-**Verify:** Neue gepinnte Instanz startet, 20 Min nichts tun, Instanz läuft immer noch. `snapshot_build`-Call produziert erfolgreich einen Snapshot ohne manuelle Timing-Koordination.
-
-**Workaround bis zum Fix:** Snapshot innerhalb von 12 Minuten nach `instance_start` auslösen (Puffer zu 15-Min-Timeout).
+**Verify (nach Deploy):** `snapshot_build`-Call auf dem VPS für `exam2pdf-v1` — der Call sollte in einem Durchgang den Dump erzeugen und die temporäre Instanz wieder aufräumen, ohne dass der Cleanup-Scheduler dazwischenfunkt.
 
 ---
 

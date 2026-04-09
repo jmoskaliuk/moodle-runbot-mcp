@@ -98,12 +98,6 @@ export async function sendConfirmationEmail(request, pluginName) {
                       <td style="font-size:13px;color:#7a8090;padding:4px 0">Passwort (für alle)</td>
                       <td style="font-size:13px;color:#0f1117;font-weight:500;text-align:right">demo1234</td>
                     </tr>
-                    <tr>
-                      <td style="font-size:13px;color:#7a8090;padding:4px 0">Link gültig bis</td>
-                      <td style="font-size:13px;color:#0f1117;font-weight:500;text-align:right">
-                        ${new Date(request.expiresAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })} Uhr
-                      </td>
-                    </tr>
                   </table>
                 </td>
               </tr>
@@ -147,7 +141,6 @@ Details:
 - Laufzeit: 60 Minuten
 - Accounts: admin · teacher · student (alle mit demselben Passwort)
 - Passwort: demo1234
-- Link gültig bis: ${new Date(request.expiresAt).toLocaleString("de-DE")}
 
 Falls Sie diese Anfrage nicht gestellt haben, können Sie diese E-Mail ignorieren.
 

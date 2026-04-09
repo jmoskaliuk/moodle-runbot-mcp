@@ -10,7 +10,12 @@
 //   1. Leere moodle-DB droppen (pgsql) bzw. mysql lädt "INSERT" mit DROP-
 //      Klauseln aus dem Dump.
 //   2. zcat | psql/mysql spielt den Dump ein.
-//   3. `mdl_sessions` wird geleert — sonst erben wir Session-Records vom
+//   3. DB-weites URL-Rewrite via admin/tool/replace/cli/replace.php:
+//      Alte wwwroot (aus mdl_config) → neue Instanz-URL. Nötig für
+//      Log-Einträge, Grade-Items und Editor-Inhalte mit absoluten Links.
+//      $CFG->tool_replace_allowdb muss in config.php gesetzt sein
+//      (patchConfigForProduction() setzt das automatisch, bug18/2026-04-09).
+//   4. `mdl_sessions` wird geleert — sonst erben wir Session-Records vom
 //      Seed-Host (anderer wwwroot), und Moodle wirft sporadisch
 //      "Invalid login, session mismatch".
 //
@@ -120,7 +125,59 @@ export async function restoreSnapshot(instance, snapshotFile) {
         await run(`zcat ${snapshotFile} | ` +
             `${env} ${bin} exec -T db mysql -u moodle -pm@0dl3ing moodle`);
     }
-    // 3. Session-Tabelle leeren.
+    // 3. DB-weites URL-Rewrite (bug18, 2026-04-09).
+    //
+    // Moodle speichert absolute URLs in vielen Tabellen: mdl_log,
+    // mdl_logstore_standard_log, mdl_grade_items, mdl_backup_controllers,
+    // atto-Editor-Inhalte in *.intro-Spalten und andere. Nach einem Snapshot-
+    // Restore zeigen diese noch auf den Seed-Host.
+    //
+    // Ablauf:
+    //   a) Alte wwwroot aus mdl_config lesen (authoritative für den Snapshot)
+    //   b) Falls alt ≠ neu: admin/tool/replace/cli/replace.php aufrufen
+    //      (benötigt $CFG->tool_replace_allowdb = true, gesetzt in patchConfigForProduction)
+    //   c) Fehler werden geloggt aber NICHT weitergeworfen — der Restore
+    //      ist auch ohne Rewrite funktional (wwwroot kommt aus config.php).
+    //
+    // Warum OLD_WWWROOT aus der DB lesen statt aus einem separaten Snapshot-
+    // Metadaten-Feld? Weil der DB-Wert die einzige zuverlässige Quelle ist,
+    // die immer mit dem Dump mitkommt — auch bei Snapshots, die ohne den
+    // neuen seed-snapshot.sh-Helper erstellt wurden.
+    try {
+        let oldWwwroot = null;
+        if (instance.db === "pgsql") {
+            const result = await run(`${env} ${bin} exec -T db psql -U moodle -t -c ` +
+                `"SELECT value FROM mdl_config WHERE name='wwwroot';" moodle`).catch(() => "");
+            oldWwwroot = result.trim() || null;
+        }
+        else if (instance.db === "mariadb" || instance.db === "mysql") {
+            const result = await run(`${env} ${bin} exec -T db mysql -u moodle -pm@0dl3ing -N -B -e ` +
+                `"SELECT value FROM mdl_config WHERE name='wwwroot';" moodle`).catch(() => "");
+            oldWwwroot = result.trim() || null;
+        }
+        const newWwwroot = instance.url; // https://{id}.{BASE_DOMAIN} (gesetzt in index.ts)
+        if (oldWwwroot && oldWwwroot !== newWwwroot) {
+            console.error(`[snapshot] URL-Rewrite: "${oldWwwroot}" → "${newWwwroot}" …`);
+            await run(`${env} ${bin} exec -T webserver ` +
+                `php admin/tool/replace/cli/replace.php ` +
+                `--search=${JSON.stringify(oldWwwroot)} ` +
+                `--replace=${JSON.stringify(newWwwroot)}`);
+            console.error(`[snapshot] URL-Rewrite abgeschlossen.`);
+        }
+        else if (!oldWwwroot) {
+            console.error(`[snapshot] WARN: Konnte alte wwwroot nicht aus mdl_config lesen — URL-Rewrite übersprungen.`);
+        }
+        else {
+            console.error(`[snapshot] URL-Rewrite nicht nötig (wwwroot unverändert: ${newWwwroot}).`);
+        }
+    }
+    catch (e) {
+        // Nicht fatal — patchConfigForProduction setzt wwwroot in config.php.
+        // Der Restore funktioniert auch ohne Rewrite, nur Links in alten
+        // Log-Einträgen und Editor-Inhalten könnten auf den Seed-Host zeigen.
+        console.error(`[snapshot] WARN: URL-Rewrite fehlgeschlagen (nicht fatal): ${String(e)}`);
+    }
+    // 4. Session-Tabelle leeren.
     // Der Seed-Host hatte einen anderen `wwwroot`, also enthalten die
     // `mdl_sessions`-Records einen falschen `sid`-Kontext. Moodle kann dadurch
     // beim ersten Login "Invalid login, session mismatch" werfen. Die Tabelle
@@ -138,13 +195,13 @@ export async function restoreSnapshot(instance, snapshotFile) {
             console.error(`[snapshot] WARN: TRUNCATE mdl_sessions failed (mysql): ${String(e)}`);
         });
     }
-    // 4. Caches purgen.
+    // 5. Caches purgen.
     // Nach DB-Restore sind Moodle-interne Caches (mdl_config_plugins,
     // langcache, stringcache) nicht mehr mit dem Container-Filesystem
     // synchron — muss manuell getriggert werden, sonst zeigt das Frontend
     // gelegentlich Plugin-Versionen aus dem Seed-Host.
     await run(`${env} ${bin} exec -T webserver php admin/cli/purge_caches.php`).catch(() => { });
-    // 5. Reminder (nur Log, kein Fehler): moodledata ist NICHT im Snapshot.
+    // 6. Reminder (nur Log, kein Fehler): moodledata ist NICHT im Snapshot.
     // Falls der Seed-Kurs Dateien benötigt, würden sie jetzt fehlen. Siehe
     // Header-Kommentar dieses Files für Details.
     console.error(`[snapshot] restored ${path.basename(snapshotFile)} → ${instance.id}. ` +

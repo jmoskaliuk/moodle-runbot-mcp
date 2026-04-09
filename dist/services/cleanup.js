@@ -40,6 +40,12 @@ async function runCleanup() {
     for (const inst of instances) {
         if (inst.status === 'stopping' || inst.status === 'stopped')
             continue;
+        // task30: Gepinnte Instanzen sind cleanup-immun.
+        // Werden vom `snapshot_build`-Workflow gesetzt oder vom Admin manuell
+        // als Langläufer markiert. Weder maxAge noch inactivity dürfen hier
+        // zuschlagen — sonst räumen wir mitten im pg_dump die Quelle ab.
+        if (inst.pinned)
+            continue;
         // Per-Instanz-Override für maxAge (task26 / feat12: Extension-Codes).
         // Wenn gesetzt, gilt er AB `extendedBy.at` (nicht ab `createdAt`), damit
         // eine nach 58 Min verlängerte Instanz nicht 2 Min später schon wieder

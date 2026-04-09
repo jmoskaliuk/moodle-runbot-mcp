@@ -26,6 +26,7 @@ import {
   registerSnapshotList,
   registerSnapshotCreate,
   registerSnapshotDelete,
+  registerSnapshotBuild,
 } from "./tools/snapshots.js";
 
 import {
@@ -67,6 +68,7 @@ registerInstanceTimeRemaining(server);
 registerSnapshotList(server);
 registerSnapshotCreate(server);
 registerSnapshotDelete(server);
+registerSnapshotBuild(server);
 
 // Config tools
 registerConfigList(server);
