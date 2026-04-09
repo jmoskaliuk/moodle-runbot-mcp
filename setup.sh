@@ -4,14 +4,14 @@
 # Ubuntu 24.04 · einmal ausführen als root oder sudo-User
 #
 # Verwendung:
-#   curl -fsSL https://raw.githubusercontent.com/yourorg/moodle-runbot/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/jmoskaliuk/moodle-runbot-mcp/main/setup.sh | bash
 #   oder: bash setup.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 # ── Konfiguration ─────────────────────────────────────────────────────────────
-DOMAIN="${DOMAIN:-runbot.deinedomain.de}"       # Deine Domain — per Env überschreibbar
-MCP_REPO="${MCP_REPO:-https://github.com/yourorg/moodle-runbot-mcp.git}"
+DOMAIN="${DOMAIN:-demo.eledia.ai}"
+MCP_REPO="${MCP_REPO:-https://github.com/jmoskaliuk/moodle-runbot-mcp.git}"
 WORK_DIR="/opt/runbot"
 APP_DIR="/opt/moodle-runbot-mcp"
 APP_USER="runbot"

@@ -255,7 +255,7 @@ async function runHTTP(): Promise<void> {
           db: config.db as MoodleInstance["db"],
           webPort: port,
           status: "starting",
-          url: BASE_DOMAIN ? `http://${id}.${BASE_DOMAIN}` : `http://localhost:${port}`,
+          url: BASE_DOMAIN ? `https://${id}.${BASE_DOMAIN}` : `http://localhost:${port}`,
           createdAt: new Date().toISOString(),
           lastActivity: new Date().toISOString(),
           composeProject,

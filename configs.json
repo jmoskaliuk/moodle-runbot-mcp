@@ -2,19 +2,26 @@
   {
     "id": "leitnerflow",
     "name": "LeitnerFlow",
-    "category": "Aktivität",
+    "category": "aktivitaet",
     "categoryLabel": "Aktivität",
     "icon": "🃏",
-    "iconBg": "#e8f0fe",   
+    "iconBg": "#e8f0fe",
     "description": "Adaptives Lernkartei-System nach der Leitner-Methode für Moodle",
+    "features": [
+      "5-Box Leitner-System",
+      "Integration mit Question Bank",
+      "Fortschritts-Dashboard",
+      "Gradebook-Integration"
+    ],
+    "db": "pgsql",
     "phpVersion": "8.2",
+    "moodleVersion": "5.0",
     "plugin": {
       "srcPath": "/opt/plugins/mod_eledialeitnerflow",
       "type": "mod",
       "name": "eledialeitnerflow"
     },
     "snapshotId": "leitnerflow-v1",
-    "moodleVersion": "5.0",
     "visible": true
   }
 ]

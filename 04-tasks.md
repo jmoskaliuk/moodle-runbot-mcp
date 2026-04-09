@@ -98,6 +98,41 @@ Bugs behoben: `runFlow()` (nicht definiert, JS-Fehler) entfernt, tote MCP-Direkt
 
 ---
 
+### task10 Bug: instance.url HTTP statt HTTPS
+Status: done
+Feature: feat01, feat03
+
+`index.ts:258` baute `http://` URL trotz HTTPS-nginx. Betraf Demo-E-Mail-URL und
+`restoreSnapshot()` wwwroot-Patch. Fix: `https://` wenn `BASE_DOMAIN` gesetzt.
+
+---
+
+### task11 configs.json Pflichtfelder ergänzen
+Status: done
+Feature: feat04
+
+`features[]` (Portal-Karten) und `db` (Instanz-Erstellung) fehlten.
+Ohne `db` würde `startContainers()` crashen.
+
+---
+
+### task12 setup.sh Placeholder-URLs ersetzen
+Status: done
+
+`yourorg/moodle-runbot-mcp` → `jmoskaliuk/moodle-runbot-mcp`.
+Default-Domain auf `demo.eledia.ai` gesetzt.
+
+---
+
+### task13 GitHub Actions CI/CD Workflow
+Status: done
+
+`.github/workflows/deploy.yml` erstellt: Push auf main → SSH deploy auf VPS
+→ git pull + npm ci + npm run build + systemctl restart + health check.
+Benötigt GitHub Secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
+
+---
+
 ### task09 End-to-End-Test: Demo-Flow
 Status: open
 Feature: feat01, feat02, feat03

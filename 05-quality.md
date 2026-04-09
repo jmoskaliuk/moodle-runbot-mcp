@@ -65,6 +65,35 @@ Nutzer bekommt Fehler-E-Mail: "Demo konnte nicht gestartet werden — bitte noch
 
 ---
 
+### bug04 instance.url war HTTP statt HTTPS
+
+Feature: feat01, feat03
+Status: fixed (task10)
+
+**Description**
+`index.ts` setzte `instance.url = http://{id}.{BASE_DOMAIN}` obwohl nginx nur HTTPS
+serviert. Folge: "Demo bereit"-E-Mail enthielt HTTP-Link (Weiterleitung schlägt fehl),
+und `restoreSnapshot()` überschrieb die korrekte HTTPS-wwwroot mit HTTP → Redirect-Schleifen.
+
+**Fix**
+`https://` wenn `BASE_DOMAIN` gesetzt.
+
+---
+
+### bug05 configs.json fehlten db + features
+
+Feature: feat04
+Status: fixed (task11)
+
+**Description**
+`db`-Feld fehlte → `startContainers()` hätte mit `undefined` gecrasht.
+`features[]` fehlte → Portal-Karten zeigten keine Feature-Liste.
+
+**Fix**
+`db: "pgsql"` und `features[]` in `configs.json` ergänzt.
+
+---
+
 ## 🧪 Tests
 
 ### test01 Verify: config.php nach Patch
