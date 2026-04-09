@@ -492,39 +492,68 @@ footer a:hover{color:var(--ink)}
 </footer>
 
 <!-- MODAL -->
+<!-- Der frühere Direkt-Launch-Flow (progress-steps + result-url + countdown)
+     wurde 2026-04-09 (bug18) entfernt. Dieses Modal folgt jetzt demselben
+     Token-Flow wie das Portal-Formular auf der Startseite: E-Mail eintragen
+     → Bestätigungs-Mail → Klick auf Link → Warteseite → Demo. Das "Demo
+     öffnen" passiert erst auf der Warteseite, nicht hier. -->
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-top">
       <div class="modal-icon" id="mModalIcon" style="background:#eff6ff">🃏</div>
       <div class="modal-titles">
         <div class="modal-name" id="mModalName">LeitnerFlow Demo</div>
-        <div class="modal-sub" id="mSub">Wird gestartet…</div>
+        <div class="modal-sub" id="mSub">Bestätigungslink anfordern</div>
       </div>
       <button class="modal-x" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body">
-      <div id="mProgress">
-        <div class="progress-track"><div class="progress-fill" id="mBar" style="width:0%"></div></div>
-        <div class="steps-list" id="mSteps"></div>
+      <!-- E-Mail-Formular (initial sichtbar) -->
+      <div id="mForm">
+        <p style="font-size:14px;color:#7a8090;margin-bottom:16px;font-weight:300;line-height:1.6">
+          Wir senden Ihnen einen Bestätigungslink — damit ist Ihr persönlicher
+          Login gesichert.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
+          <div>
+            <label for="fName" style="font-size:11px;color:#7a8090;letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
+              Name <span style="color:#7a8090;font-weight:300">(optional)</span>
+            </label>
+            <input id="fName" type="text" autocomplete="name" placeholder="Ihr Name"
+              style="width:100%;padding:10px 14px;border:1px solid #e8eaee;border-radius:8px;font-family:inherit;font-size:14px;color:#0f1117;background:#fafaf8;transition:border-color .15s"
+              onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#e8eaee'">
+          </div>
+          <div>
+            <label for="fEmail" style="font-size:11px;color:#7a8090;letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
+              E-Mail <span style="color:#1a56db;font-size:10px" aria-label="Pflichtfeld">*</span>
+            </label>
+            <input id="fEmail" type="email" autocomplete="email" required aria-required="true" placeholder="ihre@email.de"
+              style="width:100%;padding:10px 14px;border:1px solid #e8eaee;border-radius:8px;font-family:inherit;font-size:14px;color:#0f1117;background:#fafaf8;transition:border-color .15s"
+              onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#e8eaee'"
+              onkeydown="if(event.key==='Enter')submitForm()">
+          </div>
+        </div>
+        <p style="font-size:11px;color:#7a8090;margin-top:10px;line-height:1.5">
+          Ihre E-Mail wird nur für diese Demo verwendet.
+        </p>
       </div>
-      <div class="modal-result" id="mResult">
-        <div class="result-check">✓</div>
-        <div class="result-headline">Ihre Demo ist bereit.</div>
-        <p class="result-note">Melden Sie sich mit admin / demo1234 an.<br>Die Instanz stoppt automatisch nach 60 Minuten.</p>
-        <div class="result-url-box">
-          <div class="result-url-text" id="mUrl">—</div>
-          <button class="result-copy" onclick="copyUrl()">Kopieren</button>
-        </div>
-        <div class="result-credentials">
-          <span>Nutzer: <b>admin</b></span>
-          <span>Passwort: <b>demo1234</b></span>
-        </div>
-        <div class="timer-note">⏱ Läuft noch <b id="timerDisplay">60:00</b></div>
+
+      <!-- Erfolg (nach Submit) -->
+      <div class="modal-result" id="mResult" style="text-align:center">
+        <div class="result-check" style="background:transparent;font-size:44px;color:#1a56db">✉️</div>
+        <div class="result-headline">E-Mail wurde gesendet.</div>
+        <p class="result-note" style="margin-top:10px;line-height:1.6">
+          Prüfen Sie Ihr Postfach und klicken Sie den Bestätigungslink.<br>
+          Danach startet Ihre Demo automatisch.
+        </p>
+        <p class="result-note" style="margin-top:14px;font-size:12px;color:#7a8090">
+          Link ist 24 Stunden gültig · Kein Passwort nötig
+        </p>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn-ghost2" onclick="closeModal()">Schließen</button>
-      <button class="btn-primary2" id="mOpenBtn" onclick="openDemo()" disabled>Demo öffnen →</button>
+      <button class="btn-ghost2" id="mCancelBtn" onclick="closeModal()">Abbrechen</button>
+      <button class="btn-primary2" id="mSubmitBtn" onclick="submitForm()">Bestätigungslink senden →</button>
     </div>
   </div>
 </div>
@@ -644,120 +673,89 @@ function renderChangelog(releases) {
   }).join('');
 }
 
-// ── Demo launch (MCP) ──────────────────────────────────────────────
-const STEPS=[
-  {label:'Moodle-Umgebung vorbereiten'},
-  {label:'Plugin installieren'},
-  {label:'Container starten'},
-  {label:'Datenbank & Demo-Daten einrichten'},
-  {label:'Demo bereit'},
-];
-
-let demoUrl=null, instance=null, countdownInterval=null, countdownSecs=3600;
+// ── Demo-Request-Flow (Token-Flow) ─────────────────────────────────
+// Bis 2026-04-09 hatte diese Seite einen zweiten, parallelen Demo-Start-
+// Pfad: ein Direkt-Launch über MCP `instance_start`, der einen
+// Fortschrittsbalken auf der Seite selbst anzeigte. Der Pfad war in
+// Produktion seit Wochen defekt (hardgecodete `http://localhost:8100`-
+// Fallbacks in `finish()`, undefined `MCP`-Variable in `mcpCall()`).
+// Johannes hat sich für Variante B entschieden: der Direkt-Launch ist
+// komplett raus, die Plugin-Detail-Seite verwendet jetzt denselben
+// `/request-demo → Bestätigungsmail → /confirm → Warteseite → Ready`-
+// Token-Flow wie das Portal-Formular auf der Startseite. Vorteil: ein
+// einziger getesteter Pfad, weniger Wartungslast, kein Fake-Fortschritts-
+// balken mehr. Siehe bug18 in 04-tasks.md.
 
 function startDemo(){
-  if(instance?.status==='running'){window.open(instance.url,'_blank');return}
-  if(instance?.status==='starting') return;
   openModal();
-  launch();
 }
 
 function openModal(){
+  // Initialzustand: Formular sichtbar, Erfolg versteckt, Buttons neutral.
+  document.getElementById('mForm').style.display='block';
   document.getElementById('mResult').classList.remove('show');
-  document.getElementById('mProgress').style.display='block';
-  document.getElementById('mBar').style.width='0%';
-  document.getElementById('mOpenBtn').disabled=true;
-  document.getElementById('mSub').textContent='Wird gestartet…';
-  renderSteps(-1);
-  clearInterval(countdownInterval);
+  document.getElementById('mSub').textContent='Bestätigungslink anfordern';
+  const submitBtn=document.getElementById('mSubmitBtn');
+  submitBtn.disabled=false;
+  submitBtn.textContent='Bestätigungslink senden →';
+  submitBtn.style.display='';
+  const cancelBtn=document.getElementById('mCancelBtn');
+  if(cancelBtn) cancelBtn.textContent='Abbrechen';
+  const err=document.getElementById('fError');
+  if(err) err.remove();
   document.getElementById('overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('fEmail')?.focus(),100);
 }
+
 function closeModal(){document.getElementById('overlay').classList.remove('open')}
 
-function renderSteps(active){
-  document.getElementById('mSteps').innerHTML = STEPS.map((s,i)=>{
-    const cls=i<active?'s-done':i===active?'s-active':'';
-    return `<div class="step-row ${cls}"><div class="step-icon">${i<active?'✓':i+1}</div><span>${s.label}</span></div>`;
-  }).join('');
-}
+async function submitForm(){
+  const emailInput=document.getElementById('fEmail');
+  const emailVal=emailInput.value.trim();
+  const nameVal=document.getElementById('fName').value.trim();
 
-async function launch(){
-  instance={status:'starting'};
-  updateBand();
-  let step=0;
-  const tick=()=>{renderSteps(step);document.getElementById('mBar').style.width=Math.round((step/STEPS.length)*85)+'%';step=Math.min(step+1,STEPS.length-1)};
-  tick();
-  const timer=setInterval(tick,7000);
+  // Einfache E-Mail-Validierung (identisch zum Portal-Formular).
+  if(!emailVal||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)){
+    emailInput.style.borderColor='#b91c1c';
+    emailInput.focus();
+    return;
+  }
+
+  const btn=document.getElementById('mSubmitBtn');
+  btn.disabled=true;
+  btn.textContent='Wird gesendet…';
+
   try{
-    const res = await mcpCall('instance_start',{
-      prId:String(Date.now()).slice(-5),branch:'main',
-      pluginSrcPath:ITEM.pluginSrcPath,pluginType:ITEM.pluginType,
-      pluginName:ITEM.pluginName,moodleVersion:ITEM.moodleVersion,
-      phpVersion:ITEM.phpVersion,db:ITEM.db,
+    const r=await fetch(API+'/request-demo',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:emailVal,name:nameVal||'Demo-Nutzer',configId:ITEM.id})
     });
-    clearInterval(timer);
-    finish(res.url??'http://localhost:8100',res.instanceId);
-  } catch {
-    clearInterval(timer);
-    finish('http://localhost:8100','demo-leitnerflow');
-  }
-}
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.error??('HTTP '+r.status));
 
-function finish(url, instId){
-  demoUrl=url;
-  instance={instanceId:instId,url,status:'running',startedAt:Date.now()};
-  renderSteps(STEPS.length);
-  document.getElementById('mBar').style.width='100%';
-  setTimeout(()=>{
-    document.getElementById('mProgress').style.display='none';
-    document.getElementById('mSub').textContent='Ihre Demo läuft.';
-    document.getElementById('mUrl').textContent=url;
+    // Formular ausblenden, Erfolgsnachricht zeigen.
+    document.getElementById('mForm').style.display='none';
+    document.getElementById('mSub').textContent='E-Mail wurde gesendet';
     document.getElementById('mResult').classList.add('show');
-    document.getElementById('mOpenBtn').disabled=false;
-    startCountdown();
-    updateBand();
-  },500);
-}
+    btn.style.display='none';
+    // „Abbrechen" wird semantisch zu „Schließen", sobald die Mail raus ist.
+    const cancelBtn=document.getElementById('mCancelBtn');
+    if(cancelBtn) cancelBtn.textContent='Schließen';
 
-function openDemo(){if(demoUrl)window.open(demoUrl,'_blank')}
-function copyUrl(){navigator.clipboard.writeText(demoUrl).catch(()=>{});toast('URL kopiert')}
-
-function updateBand(){
-  const btn=document.getElementById('bandBtn');
-  const dot=document.getElementById('bandDot');
-  const txt=document.getElementById('bandStatusText');
-  if(instance?.status==='running'){
-    dot.classList.add('live');txt.textContent='Live';
-    btn.className='demo-btn demo-btn-open';btn.textContent='Demo öffnen →';
+  }catch(e){
     btn.disabled=false;
-  } else if(instance?.status==='starting'){
-    dot.classList.remove('live');txt.textContent='Startet…';
-    btn.className='demo-btn';btn.textContent='Startet…';btn.disabled=true;
-  } else {
-    dot.classList.remove('live');txt.textContent='Bereit';
-    btn.className='demo-btn demo-btn-start';btn.textContent='Demo starten';btn.disabled=false;
+    btn.textContent='Nochmal versuchen';
+    // Fehlermeldung unter dem Formular (erzeugen falls nicht vorhanden).
+    let err=document.getElementById('fError');
+    if(!err){
+      err=document.createElement('p');
+      err.id='fError';
+      err.style.cssText='font-size:12px;color:#b91c1c;margin-top:10px';
+      document.getElementById('mForm').appendChild(err);
+    }
+    err.textContent=e.message||'E-Mail konnte nicht gesendet werden.';
   }
-}
-
-function startCountdown(){
-  countdownSecs=3600;clearInterval(countdownInterval);
-  countdownInterval=setInterval(()=>{
-    countdownSecs--;
-    const m=Math.floor(countdownSecs/60).toString().padStart(2,'0');
-    const s=(countdownSecs%60).toString().padStart(2,'0');
-    const el=document.getElementById('timerDisplay');
-    if(el) el.textContent=`${m}:${s}`;
-    if(countdownSecs<=0){clearInterval(countdownInterval);instance=null;updateBand()}
-  },1000);
-}
-
-async function mcpCall(tool,args){
-  const r=await fetch(MCP,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method:'tools/call',params:{name:tool,arguments:args}})});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const d=await r.json();
-  if(d.error) throw new Error(d.error.message);
-  return JSON.parse(d.result?.content?.[0]?.text??'{}');
 }
 
 function toast(msg){const el=document.createElement('div');el.className='toast';el.textContent=msg;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.remove(),3000)}
