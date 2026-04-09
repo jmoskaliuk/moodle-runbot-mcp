@@ -9,9 +9,12 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.skip-link{position:absolute;top:-100%;left:16px;background:var(--accent);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-size:14px;font-weight:500;text-decoration:none;z-index:9999;transition:top .15s}
+.skip-link:focus{top:0}
 :root{
   /* eLeDia Brand Colors */
-  --ink:#353535;--ink2:#353535;--muted:#8a8a8e;--rule:#e9e9e9;
+  --ink:#353535;--ink2:#353535;--muted:#6b6b6f;--rule:#e9e9e9;
   --bg:#f3f5f8;--white:#fff;
   --accent:#ab1d79;--accent2:#540e3b;   /* Lila — Leitfarbe */
   --accent-pale:#f5e4ef;                /* Pale Lila */
@@ -154,31 +157,49 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .band-feats{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .bf-lbl{font-size:11px;color:rgba(255,255,255,.35);margin-bottom:3px}
 .bf-val{font-size:14px;color:rgba(255,255,255,.8)}
-footer{border-top:1px solid var(--rule);padding:28px clamp(24px,6vw,80px);display:flex;align-items:center;gap:20px;font-size:13px;color:var(--muted);flex-wrap:wrap}
-footer a{color:var(--muted);text-decoration:none}
-footer a:hover{color:var(--ink)}
-.f-logo{font-family:var(--serif);font-size:15px;color:var(--ink);margin-right:auto}
+footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;background:var(--white)}
+.f-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr;gap:48px;max-width:1100px;margin:0 auto 40px}
+@media(max-width:900px){.f-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.f-grid{grid-template-columns:1fr}}
+.f-desc{font-size:13px;color:var(--muted);line-height:1.7}
+.f-desc img{display:block;margin-bottom:16px}
+.f-col-title{font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px}
+.f-links{display:flex;flex-direction:column;gap:9px}
+.f-links a{font-size:13px;color:var(--blue-dark);text-decoration:none;transition:color .15s}
+.f-links a:hover{color:var(--accent)}
+.f-contact{font-size:13px;color:var(--muted);line-height:1.8}
+.f-contact strong{color:var(--ink);display:block;margin-bottom:4px}
+.f-contact a{color:var(--blue-dark);text-decoration:none}
+.f-contact a:hover{color:var(--accent)}
+.f-bottom{max-width:1100px;margin:0 auto;padding-top:24px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:16px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.f-bottom a{color:var(--muted);text-decoration:none}
+.f-bottom a:hover{color:var(--ink)}
 .fade-up{opacity:0;transform:translateY(18px);transition:opacity .5s,transform .5s}
 .fade-up.visible{opacity:1;transform:translateY(0)}
 </style>
 </head>
 <body>
 
-<nav>
-  <a class="nav-logo" href="#">eLeDia<span>.</span></a>
+<a class="skip-link" href="#main-content">Zum Inhalt springen</a>
+
+<nav aria-label="Hauptnavigation">
+  <a class="nav-logo" href="#" aria-label="eLeDia Startseite">
+    <img src="eledia_runbot.png" alt="eLeDia Runbot" height="32" style="display:block">
+  </a>
   <div class="nav-links">
     <a href="#demos" onclick="filterType('plugin')" data-i18n="nav_plugins">Plugins</a>
     <a href="#demos" onclick="filterType('theme')" data-i18n="nav_themes">Themes</a>
     <a href="#demos" onclick="filterType('config')" data-i18n="nav_configs">Konfigurationen</a>
     <a href="#how" data-i18n="nav_how">Wie es funktioniert</a>
     <a href="https://eledia.de/kontakt" class="nav-cta" target="_blank" data-i18n="nav_contact">Kontakt</a>
-    <div class="lang-toggle">
-      <button class="lt-opt active" id="ltDe" onclick="setLang('de')">DE</button>
-      <button class="lt-opt" id="ltEn" onclick="setLang('en')">EN</button>
+    <div class="lang-toggle" role="group" aria-label="Sprache wählen">
+      <button class="lt-opt active" id="ltDe" onclick="setLang('de')" aria-pressed="true">DE</button>
+      <button class="lt-opt" id="ltEn" onclick="setLang('en')" aria-pressed="false">EN</button>
     </div>
   </div>
 </nav>
 
+<main id="main-content">
 <section class="hero">
   <div>
     <div class="eyebrow" data-i18n="hero_eyebrow">Moodle Plugin Demos</div>
@@ -248,7 +269,7 @@ footer a:hover{color:var(--ink)}
         <button class="fbtn" onclick="filter('reporting',this)" data-i18n="filter_report">Reporting</button>
       </div>
     </div>
-    <div class="grid" id="grid"></div>
+    <div class="grid" id="grid" aria-live="polite" aria-atomic="false"></div>
   </div>
 </section>
 
@@ -262,18 +283,60 @@ footer a:hover{color:var(--ink)}
   </div>
 </div>
 
+</main>
+
 <footer>
-  <div class="f-logo">eLeDia</div>
-  <a href="https://eledia.de/impressum/" target="_blank" data-i18n="footer_imprint">Impressum</a>
-  <a href="https://eledia.de/datenschutzerklaerung/" target="_blank" data-i18n="footer_privacy">Datenschutz</a>
+  <div class="f-grid">
+    <div class="f-desc">
+      <img src="eledia_runbot.png" alt="eLeDia Runbot" height="28">
+      <p data-i18n="footer_about">Die eLeDia GmbH ist seit mehr als 20 Jahren Ihr Partner für Moodle und Open Educational Technology in Deutschland. Moodle Premium Partner, Hosting in DE, DSGVO, Training, Support, Contenterstellung.</p>
+    </div>
+    <div>
+      <div class="f-col-title" data-i18n="footer_col_eledia">eLeDia</div>
+      <nav class="f-links" aria-label="eLeDia Links">
+        <a href="https://eledia.de/zertifizierungen/" target="_blank" rel="noopener" data-i18n="footer_cert">Zertifizierungen</a>
+        <a href="https://eledia.academy" target="_blank" rel="noopener">eledia.academy</a>
+        <a href="https://eledia.de/datenschutz-in-moodle/" target="_blank" rel="noopener" data-i18n="footer_dsgvo">Datenschutz in Moodle</a>
+        <a href="https://eledia.de/newsletter/" target="_blank" rel="noopener" data-i18n="footer_newsletter">Newsletter</a>
+        <a href="https://eledia.de/hinweisgebersystem/" target="_blank" rel="noopener" data-i18n="footer_whistleblow">Hinweisgebersystem</a>
+      </nav>
+    </div>
+    <div>
+      <div class="f-col-title" data-i18n="footer_col_legal">Rechtliches</div>
+      <nav class="f-links" aria-label="Rechtliche Links">
+        <a href="https://eledia.de/impressum/" target="_blank" rel="noopener" data-i18n="footer_imprint">Impressum</a>
+        <a href="https://eledia.de/datenschutzerklaerung/" target="_blank" rel="noopener" data-i18n="footer_privacy">Datenschutzerklärung</a>
+        <a href="https://eledia.de/agb/" target="_blank" rel="noopener" data-i18n="footer_agb">Allg. Geschäftsbedingungen</a>
+        <a href="https://eledia.de/kontakt/" target="_blank" rel="noopener" data-i18n="footer_contact_link">Kontakt</a>
+        <a href="https://eledia.de/unternehmen/" target="_blank" rel="noopener" data-i18n="footer_company">Unternehmen</a>
+        <a href="https://eledia.de/jobs/" target="_blank" rel="noopener" data-i18n="footer_jobs">Jobs</a>
+      </nav>
+    </div>
+    <div>
+      <div class="f-col-title" data-i18n="footer_col_contact">So erreichen Sie uns</div>
+      <div class="f-contact">
+        <strong>eLeDia GmbH | eLearning im Dialog</strong>
+        Wilhelmsaue 37<br>
+        10713 Berlin<br><br>
+        <span data-i18n="footer_phone">Telefon</span> <a href="tel:+493050561070">+49 30 50 56 10 -70</a><br>
+        <span data-i18n="footer_fax">Telefax</span> +49 30 50 59 08 60<br>
+        E-Mail: <a href="mailto:info@eledia.de">info@eledia.de</a>
+      </div>
+    </div>
+  </div>
+  <div class="f-bottom">
+    <span>© <span id="fyear"></span> eLeDia GmbH</span>
+    <a href="https://eledia.de/impressum/" target="_blank" rel="noopener" data-i18n="footer_imprint">Impressum</a>
+    <a href="https://eledia.de/datenschutzerklaerung/" target="_blank" rel="noopener" data-i18n="footer_privacy">Datenschutz</a>
+  </div>
 </footer>
 
-<div class="overlay" id="ov" onclick="if(event.target===this)close()">
-  <div class="modal">
+<div class="overlay" id="ov" onclick="if(event.target===this)close()" role="presentation">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
     <div class="m-hdr">
       <div class="m-icon" id="mIcon"></div>
       <div><div class="m-title" id="mTitle"></div><div class="m-sub" id="mSub" data-i18n="modal_preparing">Wird vorbereitet…</div></div>
-      <button class="m-close" onclick="close()">×</button>
+      <button class="m-close" onclick="close()" aria-label="Dialog schließen">×</button>
     </div>
     <div class="m-body">
       <!-- E-Mail Formular — wird zuerst gezeigt -->
@@ -283,19 +346,19 @@ footer a:hover{color:var(--ink)}
         </p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
           <div>
-            <label style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
+            <label for="fName" style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
               <span data-i18n="label_name">Name</span> <span style="color:var(--muted);font-weight:300" data-i18n="label_name_opt">(optional)</span>
             </label>
-            <input id="fName" type="text" data-i18n-placeholder="placeholder_name" placeholder="Ihr Name"
-              style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s"
+            <input id="fName" type="text" autocomplete="name" data-i18n-placeholder="placeholder_name" placeholder="Ihr Name"
+              style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);transition:border-color .15s"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'">
           </div>
           <div>
-            <label style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
-              <span data-i18n="label_email">E-Mail</span> <span style="color:var(--red);font-size:10px">*</span>
+            <label for="fEmail" style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
+              <span data-i18n="label_email">E-Mail</span> <span style="color:var(--accent);font-size:10px" aria-label="Pflichtfeld">*</span>
             </label>
-            <input id="fEmail" type="email" data-i18n-placeholder="placeholder_email" placeholder="ihre@email.de"
-              style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s"
+            <input id="fEmail" type="email" autocomplete="email" required aria-required="true" data-i18n-placeholder="placeholder_email" placeholder="ihre@email.de"
+              style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);transition:border-color .15s"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'"
               onkeydown="if(event.key==='Enter')submitForm()">
           </div>
@@ -350,7 +413,13 @@ const T={
     filter_all:'Alle',filter_learn:'Lernen',filter_admin:'Verwaltung',filter_report:'Reporting',
     band_title:'Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.',
     band_text:'Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.',
-    footer_imprint:'Impressum',footer_privacy:'Datenschutz',
+    footer_imprint:'Impressum',footer_privacy:'Datenschutzerklärung',
+    footer_about:'Die eLeDia GmbH ist seit mehr als 20 Jahren Ihr Partner für Moodle und Open Educational Technology in Deutschland. Moodle Premium Partner, Hosting in DE, DSGVO, Training, Support, Contenterstellung.',
+    footer_col_eledia:'eLeDia',footer_col_legal:'Rechtliches',footer_col_contact:'So erreichen Sie uns',
+    footer_cert:'Zertifizierungen',footer_dsgvo:'Datenschutz in Moodle',footer_newsletter:'Newsletter',
+    footer_whistleblow:'Hinweisgebersystem',footer_agb:'Allg. Geschäftsbedingungen',
+    footer_contact_link:'Kontakt',footer_company:'Unternehmen',footer_jobs:'Jobs',
+    footer_phone:'Telefon',footer_fax:'Telefax',
     modal_preparing:'Wird vorbereitet…',
     form_intro:'Wir senden Ihnen einen Bestätigungslink — damit ist Ihr persönlicher Login gesichert.',
     label_name:'Name',label_name_opt:'(optional)',label_email:'E-Mail',
@@ -387,6 +456,12 @@ const T={
     band_title:'Full Moodle environment.<br>Zero effort on your part.',
     band_text:'Each demo runs in a fully isolated Docker environment on our servers. No data is stored permanently. After 60 minutes the instance is automatically removed.',
     footer_imprint:'Legal notice',footer_privacy:'Privacy policy',
+    footer_about:'eLeDia GmbH has been your partner for Moodle and Open Educational Technology in Germany for more than 20 years. Moodle Premium Partner, Hosting in Germany, GDPR compliance, Training, Support, Content creation.',
+    footer_col_eledia:'eLeDia',footer_col_legal:'Legal',footer_col_contact:'Contact us',
+    footer_cert:'Certifications',footer_dsgvo:'Privacy in Moodle',footer_newsletter:'Newsletter',
+    footer_whistleblow:'Whistleblower system',footer_agb:'Terms & Conditions',
+    footer_contact_link:'Contact',footer_company:'About us',footer_jobs:'Jobs',
+    footer_phone:'Phone',footer_fax:'Fax',
     modal_preparing:'Preparing…',
     form_intro:'We\'ll send you a confirmation link — this secures your personal login.',
     label_name:'Name',label_name_opt:'(optional)',label_email:'E-mail',
@@ -415,7 +490,9 @@ function setLang(l){
   document.querySelectorAll('[data-i18n-html]').forEach(el=>{el.innerHTML=t(el.dataset.i18nHtml);});
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{el.placeholder=t(el.dataset.i18nPlaceholder);});
   document.getElementById('ltDe')?.classList.toggle('active',l==='de');
+  document.getElementById('ltDe')?.setAttribute('aria-pressed',l==='de');
   document.getElementById('ltEn')?.classList.toggle('active',l==='en');
+  document.getElementById('ltEn')?.setAttribute('aria-pressed',l==='en');
   render(activeFilter);
 }
 
@@ -569,8 +646,8 @@ function filterType(type,btn){
 }
 
 function filter(f,btn){
-  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');render(f);
+  document.querySelectorAll('.fbtn').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-pressed','false');});
+  btn.classList.add('active');btn.setAttribute('aria-pressed','true');render(f);
 }
 
 // ── Demo starten ──────────────────────────────────────────────────
@@ -592,12 +669,14 @@ function openModal(){
   document.getElementById('mBtn').disabled=false;
   document.getElementById('mBtn').textContent=t('btn_submit');
   url=null;
+  _lastFocus=document.activeElement;
   document.getElementById('ov').classList.add('open');
-  // Fokus auf E-Mail-Feld
   setTimeout(()=>document.getElementById('fEmail')?.focus(),100);
 }
 
-function close(){document.getElementById('ov').classList.remove('open')}
+let _lastFocus=null;
+function close(){document.getElementById('ov').classList.remove('open');_lastFocus?.focus();}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('ov').classList.contains('open'))close();});
 function openUrl(){if(url)window.open(url,'_blank')}
 
 async function submitForm(){
@@ -652,6 +731,7 @@ const obs=new IntersectionObserver(entries=>{
 // ── Boot ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.fade-up').forEach(el=>obs.observe(el));
+  const fy=document.getElementById('fyear');if(fy)fy.textContent=new Date().getFullYear();
   loadConfigs(); // Configs vom Server laden, dann rendern
 });
 </script>
