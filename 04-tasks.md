@@ -52,6 +52,32 @@ im nächsten Task. Format siehe Quick-Capture oben.)*
 *(Halbgare Feature-Gedanken hier. Sobald konkret genug, wandern sie in
 `01-features.md` als `featXX`-Block.)*
 
+### idea: nginx-Config sauber aufräumen
+
+Der nginx vor dem Node-Backend proxyt `/api/*` mit trailing-slash
+(`proxy_pass http://127.0.0.1:3000/;`) und strippt dadurch den
+`/api/`-Präfix vor dem Forward an Express. Das ist der Grund für die
+sonderbaren Alias-Routen in `src/index.ts` (`/demo-status/:token`
+neben `/api/demo-status/:token`, `/plugininfo/:id` neben
+`/api/plugininfo/:id`, historisch auch `/configs` neben
+`/api/configs`). Wir haben uns bereits zweimal daran geschnitten:
+
+- Plugin-Detail-Seite: Bis 2026-04-09 wurde `loadPluginData()` still
+  mit einer HTML-Antwort statt JSON gefüttert, weil `/api/plugin/:id`
+  nach dem Strip als `/plugin/:id` den HTML-Handler getroffen hat.
+- Warteseite: Bis 2026-04-09 zeigte sie "Ihre Demo-Anfrage ist
+  abgelaufen", weil `/api/demo-status/:token` nach dem Strip auf
+  eine nicht existierende Route lief (3x 404 → Error-State).
+
+Beides wurde mit Aliasen entschärft (commit `bd878b9`), aber die
+eigentliche Ursache sitzt in `/etc/nginx/sites-enabled/runbot.conf`.
+Cleanup-Vorschlag: `proxy_pass http://127.0.0.1:3000;` (ohne
+trailing slash) → nginx reicht den vollständigen Pfad durch, Aliase
+entfallen. Muss ein Wartungsfenster sein, damit wir die Config mit
+`nginx -t` validieren und notfalls auf den Backup zurückfallen können
+(`/tmp/runbot-last-failed-nginx.conf`). Low-risk, aber aktuell nicht
+pressing — die Aliase funktionieren.
+
 ---
 
 ## 🆕 New
