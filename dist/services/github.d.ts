@@ -37,4 +37,18 @@ export declare function fetchPluginData(ownerRepo: string): Promise<GithubPlugin
  * Invalidate the cache for a specific repo (e.g. after a release).
  */
 export declare function invalidateCache(ownerRepo: string): void;
+/**
+ * Versucht, eine Icon-URL für ein Moodle-Plugin auf GitHub zu finden.
+ * Gibt die raw.githubusercontent.com-URL zurück (CDN-gecached, CORS-fähig)
+ * oder `null` wenn keine der üblichen Dateien existiert.
+ *
+ * Achtung: Die Funktion führt 1–4 HEAD-Requests gegen raw.githubusercontent.com
+ * aus; Fehler werden als "nicht vorhanden" interpretiert. Resultat wird 24h
+ * gecacht, Misserfolge ebenfalls (damit wir nicht bei jedem Request neu suchen).
+ *
+ * @param ownerRepo  "owner/repo" String
+ * @param branch     Branch-Name (default: "main"). Für Plugins mit master-Default
+ *                   wird bei 404 automatisch "master" nachgezogen.
+ */
+export declare function resolvePluginIconUrl(ownerRepo: string, branch?: string): Promise<string | null>;
 //# sourceMappingURL=github.d.ts.map

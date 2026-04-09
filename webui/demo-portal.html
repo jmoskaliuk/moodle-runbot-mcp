@@ -26,17 +26,22 @@ html{scroll-behavior:smooth}
   --serif:'Open Sans',sans-serif;--sans:'Open Sans',sans-serif;
 }
 body{background:var(--bg);color:var(--ink2);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
-nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 clamp(24px,8vw,120px);display:flex;align-items:center;gap:32px;height:60px}
-.nav-logo{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--ink);text-decoration:none}
-.nav-logo span{color:var(--accent)}
-.nav-links{display:flex;gap:24px;margin-left:auto}
+nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 clamp(24px,8vw,120px);display:flex;align-items:center;gap:24px;height:64px}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.nav-logo-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--serif);font-weight:700;font-size:15px;letter-spacing:-.5px;box-shadow:0 2px 8px rgba(249,128,18,.25)}
+.nav-logo-text{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.2px;line-height:1}
+.nav-logo-text .lg-dot{color:var(--accent);margin:0 1px}
+.nav-logo-text .lg-sub{color:var(--muted);font-weight:500}
+.nav-links{display:flex;gap:22px;margin-left:auto;align-items:center}
 .nav-links a{font-size:14px;color:var(--muted);text-decoration:none;transition:color .15s}
 .nav-links a:hover{color:var(--ink)}
 .nav-cta{background:var(--ink)!important;color:#fff!important;padding:8px 18px;border-radius:6px;font-weight:500}
-.lang-toggle{display:flex;align-items:center;background:var(--ink);border-radius:20px;padding:3px;gap:0;margin-left:8px}
-.lt-opt{padding:4px 13px;border-radius:16px;border:none;background:transparent;font-size:12px;font-weight:600;color:rgba(255,255,255,.45);cursor:pointer;transition:all .2s;font-family:var(--sans);letter-spacing:.5px;line-height:1.4}
-.lt-opt.active{background:#fff;color:var(--ink)}
-.lt-opt:not(.active):hover{color:rgba(255,255,255,.8)}
+.lang-toggle{display:flex;align-items:center;background:var(--ink);border-radius:22px;padding:4px;gap:2px;margin-left:14px;border:1px solid var(--ink)}
+.lt-opt{padding:6px 14px;border-radius:18px;border:none;background:transparent;font-size:12px;font-weight:700;color:rgba(255,255,255,.55);cursor:pointer;transition:all .2s;font-family:var(--sans);letter-spacing:.8px;line-height:1.4;display:flex;align-items:center;gap:5px}
+.lt-opt .flag{font-size:13px;line-height:1}
+.lt-opt.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.lt-opt:not(.active):hover{color:rgba(255,255,255,.85)}
+@media(max-width:720px){.nav-logo-text .lg-sub{display:none}.nav-links{gap:14px}}
 .wrap{max-width:1100px;margin:0 auto;padding:0 clamp(24px,6vw,80px)}
 .hero{padding:96px clamp(24px,6vw,80px) 80px;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;max-width:1100px;margin:0 auto}
 @media(max-width:768px){.hero{grid-template-columns:1fr;padding:60px 24px 48px}.hero-vis{display:none}}
@@ -175,8 +180,9 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
 <a class="skip-link" href="#main-content">Zum Inhalt springen</a>
 
 <nav aria-label="Hauptnavigation">
-  <a class="nav-logo" href="#" aria-label="eLeDia Startseite">
-    <img src="eledia_runbot.png" alt="eLeDia Runbot" height="32" style="display:block">
+  <a class="nav-logo" href="/" aria-label="eLeDia Runbot Startseite">
+    <span class="nav-logo-mark">eL</span>
+    <span class="nav-logo-text">eLeDia<span class="lg-dot">.</span><span class="lg-sub">runbot</span></span>
   </a>
   <div class="nav-links">
     <a href="#demos" onclick="filterType('plugin')" data-i18n="nav_plugins">Plugins</a>
@@ -184,10 +190,10 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
     <a href="#demos" onclick="filterType('config')" data-i18n="nav_configs">Konfigurationen</a>
     <a href="#how" data-i18n="nav_how">Wie es funktioniert</a>
     <a href="https://eledia.de/kontakt" class="nav-cta" target="_blank" data-i18n="nav_contact">Kontakt</a>
-    <div class="lang-toggle" role="group" aria-label="Sprache wählen">
-      <button class="lt-opt active" id="ltDe" onclick="setLang('de')" aria-pressed="true">DE</button>
-      <button class="lt-opt" id="ltEn" onclick="setLang('en')" aria-pressed="false">EN</button>
-    </div>
+  </div>
+  <div class="lang-toggle" role="group" aria-label="Sprache wählen">
+    <button class="lt-opt active" id="ltDe" onclick="setLang('de')" aria-pressed="true"><span class="flag">🇩🇪</span>DE</button>
+    <button class="lt-opt" id="ltEn" onclick="setLang('en')" aria-pressed="false"><span class="flag">🇬🇧</span>EN</button>
   </div>
 </nav>
 

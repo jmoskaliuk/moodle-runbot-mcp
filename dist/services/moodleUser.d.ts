@@ -1,5 +1,11 @@
 import type { MoodleInstance } from "../types.js";
 /**
+ * Hardcoded Demo-Passwort für alle Nutzer, die via `createDemoUser` angelegt
+ * werden. Wird auch vom `/api/demo-status/:token` Endpoint für die Credentials-
+ * Anzeige in der Warteseite gelesen. Override möglich via Env `DEMO_PASSWORD`.
+ */
+export declare const DEMO_PASSWORD: string;
+/**
  * Erstellt einen Demo-Nutzer in der Moodle-Instanz.
  * Falls die E-Mail schon existiert (aus Snapshot): Passwort + Name aktualisieren.
  *

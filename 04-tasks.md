@@ -13,6 +13,8 @@ Enthält: neue Beobachtungen, Tasks, Klärungsbedarf, aktive Arbeit, Verifikatio
 
 **Code-Review 2026-04-09** — Vollständiger Durchgang durch Services, Tools, Webui, Setup + Deploy ergab 12 neue/reopened Findings (bug02, bug04 partial, bug06–17). Details in `05-quality.md`. Daraus abgeleitete Tasks: task14–task20. Kritische Bundle für HTTPS-Pfad: task14 + task15 (zusammen bearbeiten, da isoliert nicht testbar).
 
+**Feature-Ideen 2026-04-09 (Johannes)** — Nach dem ersten End-to-End-Test kamen diese Wünsche auf: Live-Status auf der Warteseite mit Demo-Start-Button und Credentials (feat09 → task22), besseres Logo + Navigation + Sprachtoggle (task21), Plugin-Icons aus GitHub (feat13 → task23), Multi-User-Demos mit Admin/Teacher/Student (feat10 → task24), Admin-Dashboard für laufende Instanzen (feat11 → task25), Code-basierte Demo-Verlängerung auf 1 Tag (feat12 → task26).
+
 ---
 
 ## ❓ Clarification Needed
@@ -313,6 +315,152 @@ Beim Start von `src/index.ts`:
 3. Container ohne Registry-Eintrag → `docker compose down -v` + `rm -rf /opt/runbot/<id>` + nginx-Config entfernen
 4. `nginx.cleanupAllConfigs()` aufrufen (Funktion existiert bereits, wird nirgends gecallt)
 5. Log-Line mit Anzahl entfernter Waisen
+
+---
+
+### task21 Demo-Portal UI-Polish: Logo, Navigation, Sprachtoggle
+Status: done (2026-04-09)
+Feature: feat01 (Webui)
+
+UI-Verbesserungen am `webui/demo-portal.html` und `webui/plugin-detail.html`:
+
+1. **Logo-Bereich:** Textmarke "eLeDia.runbot" ergänzend zum Bild-Logo. Das Bild allein wird auf kleinen Bildschirmen zu klein erkennbar; Textmarke + Bild = besserer Wiedererkennungswert.
+2. **Navigation:** Mehr Luft zwischen Links, Hover-State deutlicher, Sprachtoggle visuell vom Menü trennen (eigene Sektion rechts, kein Nav-Item).
+3. **DE/EN-Toggle:** Größer, prominenterer Kontrast, Flaggen-Icons (🇩🇪 🇬🇧) davor. Aktuell versteckt in dunkler Pille im Nav.
+4. **Footer-Logo-Größe** angleichen.
+
+---
+
+### task22 Warteseite: Live-Status-Polling + Demo-Start-Button + Credentials
+Status: done (2026-04-09) — Backend + Polling + Credentials-Box + Öffnen-Button deployed. Verifizierung via frischen Demo-Request steht aus.
+Feature: feat09
+
+**Backend (src/index.ts, src/services/tokens.ts, src/types.ts):**
+1. `DemoRequest` um optionales `phase` Feld erweitern.
+2. Während `/confirm/:token` Hintergrund-Handler setzt `request.phase` an den entscheidenden Stellen: `provisioning` → `starting_containers` → `restoring_snapshot` → `creating_user` → `running`.
+3. Neuer Endpoint: `GET /api/demo-status/:token` → liest Token, mapped auf `{status, phase, url, username, password, pluginName}`. Keine Auth (Token ist schon der Auth).
+4. Passwort zentral: Konstante `DEMO_PASSWORD` in `moodleUser.ts` exportieren, im API-Endpoint wiederverwenden.
+
+**Frontend (src/index.ts → buildLoadingPage):**
+5. Token als inline JS-Konstante in die Seite schreiben.
+6. Polling via `setInterval` alle 3s auf `/api/demo-status/:token`.
+7. Phase → Step-Highlighting: echte Status, nicht mehr der Timer-Fake.
+8. Bei `status === 'ready'`:
+   - Credentials-Box einblenden (E-Mail, `demo1234`, "In Zwischenablage kopieren" Button)
+   - "Demo öffnen"-Button (primary, öffnet url im neuen Tab)
+   - `document.title` auf "Ihre Demo ist bereit — eLeDia.runbot" setzen
+9. Bei `status === 'error'`: Fehlerbox mit Link zurück zum Portal.
+
+**Decisions**
+- Polling-Intervall: 3s hart (Env `DEMO_STATUS_POLL_MS` overridebar)
+- Keine WebSockets/SSE — zusätzliche Abhängigkeit, nicht nötig
+- Status-Mapping: Phase ist authoritativ, URL erst wenn `status === "running"` gesetzt
+
+---
+
+### task23 Plugin-Icon aus GitHub Repo holen
+Status: done (2026-04-09) — `resolvePluginIconUrl()` in github.ts, `/api/plugin/:id` liefert `iconUrl`, plugin-detail.html rendert Icon im Preview-Header + Modal. Fallback auf Emoji bei Fehler.
+Feature: feat13
+
+**Konzept:** Viele Moodle-Plugins haben ein `pix/monologo.svg` oder `pix/icon.png` im Default-Branch. Das ist das Standard-Plugin-Icon von Moodle. Wir können das im Portal als echtes Icon statt Emoji verwenden.
+
+**Schritte:**
+1. `src/services/github.ts` → neue Funktion `resolvePluginIconUrl(ownerRepo, defaultBranch)`:
+   - Versucht in dieser Reihenfolge:
+     - `pix/monologo.svg`
+     - `pix/monologo.png`
+     - `pix/icon.svg`
+     - `pix/icon.png`
+   - Via HEAD-Request auf `https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}`
+   - Liefert die erste 200-antwortende URL, sonst `null`
+   - Im `fetchPluginData`-Ergebnis unter `repo.iconUrl` aufnehmen
+2. `plugin-detail.html` + `demo-portal.html` → wenn `iconUrl` vorhanden, `<img>` statt Emoji rendern.
+3. Cachen (über das bestehende 1h-Cache in github.ts).
+
+**Fallstricke:**
+- Rate-Limiting: 4 HEAD-Requests pro Plugin-Detail-Fetch. Bei vielen Plugins: Batch vermeiden, serielle Versuche.
+- raw.githubusercontent.com redirected bei großen Repos → `fetch()` in Node mit `redirect: 'follow'` nutzen.
+- Icons können PNG sein → im Frontend als `<img>` anzeigen, NICHT inline SVG.
+
+---
+
+### task24 Rollenbasierte Demo-Szenarien (Admin/Teacher/Student)
+Status: open (design required)
+Feature: feat10
+
+**Offen:** Design-Entscheidungen vor Implementierung klären.
+
+**Architektur-Optionen:**
+
+**Option A — Drei Users im Snapshot, manueller Login**
+- Snapshot enthält 3 Users (admin/teacher1/student1) mit bekannten Passwörtern
+- Portal zeigt 3 Karten mit Rollen-Namen + Credentials
+- Nutzer loggt sich manuell ein bei Klick auf Karte
+- **Pro:** simpel, keine neuen Moodle-APIs nötig
+- **Contra:** unsmooth, mehrfaches Passwort-Tippen
+
+**Option B — Single-Sign-On via Token-Link**
+- `loginastoken` Moodle-Feature oder `auth_token` Plugin
+- Portal generiert Link `https://<instance>/login/token?token=…&userid=…`
+- Ein Klick → direkt in der Zielrolle eingeloggt
+- **Pro:** smooth, "wow" Faktor
+- **Contra:** braucht Moodle-seitiges Setup (eigenes Auth-Plugin), Security-Review
+
+**Option C — Rollenwechsler im laufenden Moodle (Switch role)**
+- Nutzer loggt sich als Admin ein
+- Moodle hat eingebaute "Switch role to" Funktion (Kurs-Admin-Menü)
+- **Pro:** null Custom-Code
+- **Contra:** Switch role ist nur Ansichts-Simulation, keine echten Teacher/Student-Rechte. Einige Plugins verhalten sich dann trotzdem anders.
+
+**Empfohlen:** Option A für MVP, Option B als Ziel wenn Demo-Traffic rechtfertigt.
+
+**Open Questions für Johannes:**
+- Welche Rollen sollen wählbar sein? Nur Admin/Teacher/Student oder auch Manager, Courseadmin, Non-editing teacher?
+- Gleicher Kurs für alle oder drei separate Kurse?
+- Soll die Rolle pro Plugin-Config gesetzt werden können (z.B. bei LeitnerFlow: nur Admin + Student sinnvoll)?
+
+---
+
+### task25 Admin-Dashboard für laufende Instanzen
+Status: open
+Feature: feat11
+
+**Scope MVP:**
+1. Neue Route `GET /admin` → serve `webui/admin.html` (neue Datei)
+2. `webui/admin.html`: Bearer-Token-Feld, Tabelle aller Instanzen
+3. API-Endpoints (alle mit Admin-Key-Check):
+   - `GET /api/admin/instances` → Liste aus `registry.listInstances()` angereichert mit Request-Info
+   - `POST /api/admin/instances/:id/extend` → ruft `instance_extend` Tool intern auf
+   - `DELETE /api/admin/instances/:id` → ruft cleanup intern auf
+   - `GET /api/admin/instances/:id/logs` → `docker compose logs --tail 50`
+4. Auth-Middleware: prüft `Authorization: Bearer ${ADMIN_API_KEY}`
+5. Minimale UI: Tabelle mit Aktions-Buttons, kein Fancy-Framework
+
+**Non-goals (MVP):**
+- Keine Dark-Mode
+- Keine Instance-Creation von Hand (der Flow bleibt Self-Service)
+- Keine Rollen-Verwaltung für Admins
+
+---
+
+### task26 Code-basierte Demo-Verlängerung
+Status: open
+Feature: feat12
+
+**Scope:**
+1. Env-Variable `EXTEND_CODES` parsen: Format `CODE1:MINUTEN,CODE2:MINUTEN` (z.B. `EDUMA2026:1440,TEST:120`)
+2. Neues Feld in `MoodleInstance`: `extendedBy?: {code: string, addedMinutes: number, at: string}` (nur 1x pro Instanz verwendbar)
+3. Neue Route `POST /api/extend-code` mit Body `{token: string, code: string}`:
+   - Token → Request → instanceId → Instance laden
+   - Code in `EXTEND_CODES` nachschlagen
+   - Wenn gültig: `instance.extendedBy` setzen, `maxAge` individuell auf `createdAt + addedMinutes` anpassen
+   - Antwort: `{ok: true, extendedUntil: "…"}` oder `{error: "..."}`
+4. Frontend (Warteseite + innerhalb der laufenden Demo irgendwo): kleines Eingabefeld "Verlängerungscode"
+5. Cleanup-Scheduler muss individuelle `maxAge` respektieren (nicht mehr global `DEMO_MAX_AGE_MINUTES`)
+
+**Fallstricke:**
+- Cleanup-Scheduler liest aktuell `DEMO_MAX_AGE_MINUTES` global. Für individuelle Max-Age brauchen wir `instance.maxAgeMinutes` als Override im Check.
+- Codes könnten leaken → idealerweise zeitbegrenzt (z.B. EDUMA2026 nur bis 30.04.2026 gültig). Format erweitern: `CODE:MIN:UNTIL_DATE`.
 
 ---
 

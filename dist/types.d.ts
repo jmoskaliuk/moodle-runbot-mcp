@@ -33,6 +33,7 @@ export interface TestRun {
     summary?: string;
     exitCode?: number;
 }
+export type DemoPhase = "waiting" | "provisioning" | "installing_plugin" | "starting_containers" | "restoring_snapshot" | "creating_user" | "running" | "error";
 export interface DemoRequest {
     token: string;
     email: string;
@@ -43,6 +44,8 @@ export interface DemoRequest {
     confirmedAt?: string;
     instanceId?: string;
     status: "pending" | "confirmed" | "started" | "expired";
+    phase?: DemoPhase;
+    phaseError?: string;
 }
 export interface RunbotConfig {
     moodleDockerRepoUrl: string;

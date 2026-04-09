@@ -79,6 +79,21 @@ export async function markStarted(token, instanceId) {
         return;
     tokens[token].status = "started";
     tokens[token].instanceId = instanceId;
+    tokens[token].phase = "running";
+    await save(tokens);
+}
+/**
+ * Setzt die aktuelle Provisioning-Phase eines Demo-Requests.
+ * Wird vom Hintergrund-Handler in /confirm/:token aufgerufen, damit die
+ * Warteseite den echten Status pollen kann (feat09).
+ */
+export async function setPhase(token, phase, errorMessage) {
+    const tokens = await load();
+    if (!tokens[token])
+        return;
+    tokens[token].phase = phase;
+    if (errorMessage !== undefined)
+        tokens[token].phaseError = errorMessage;
     await save(tokens);
 }
 export async function listRequests() {

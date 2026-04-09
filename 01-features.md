@@ -26,7 +26,12 @@ feat04 → Plugin-Konfigurationssystem
 feat05 → Snapshot-System  
 feat06 → Automatisches Aufräumen (Inaktivitäts-Timer)  
 feat07 → Demo-Nutzerverwaltung  
-feat08 → MCP-Tools (CI/Testing-Modus)
+feat08 → MCP-Tools (CI/Testing-Modus)  
+feat09 → Live-Status auf der Warteseite (Polling + Demo-Start-Button + Credentials)  
+feat10 → Rollenbasierte Demo-Szenarien (Admin, Teacher, Student im selben Moodle)  
+feat11 → Admin-Dashboard (alle laufenden Instanzen, löschen/verlängern)  
+feat12 → Code-basierte Demo-Verlängerung (60 Min → 1 Tag)  
+feat13 → Plugin-Metadaten aus GitHub (Icon, Stars, letztes Release)
 
 ---
 
@@ -210,3 +215,140 @@ Transport: stdio (Standard) oder HTTP (`TRANSPORT=http`)
 
 **Non-goals**
 - Nicht für Endnutzer gedacht — nur für CI/AI-Systeme
+
+---
+
+### feat09 Live-Status auf der Warteseite
+
+**Goal**
+Nach Klick auf den Bestätigungslink sieht der Interessent eine Loading-Seite, die
+**echten** Fortschritt zeigt (Polling, nicht nur ein Timer) und sobald die Demo
+bereit ist direkt ohne Umweg über die E-Mail öffnen lässt — mit sichtbaren
+Login-Daten.
+
+**Behavior**
+
+1. Nach `GET /confirm/:token` rendert der Server `buildLoadingPage()` mit dem Token eingebettet als JS-Konstante.
+2. Die Seite pollt alle 3s `GET /api/demo-status/:token` und zeigt die aktuelle Phase ("Container starten", "Demo-Daten laden", …).
+3. Sobald `status === "ready"` blendet sie Credentials-Box ein (E-Mail + Passwort) sowie einen prominenten "Demo öffnen"-Button, der die Instance-URL in neuem Tab öffnet.
+4. Bei `status === "error"` erscheint eine freundliche Fehlermeldung mit "Erneut anfordern"-Link zum Portal.
+5. Die Seite schreibt den aktuellen Status in `document.title`, damit man die Wartezeit im Browser-Tab sieht.
+
+**API-Vertrag** (`GET /api/demo-status/:token`)
+```json
+{
+  "status": "preparing" | "ready" | "error" | "expired",
+  "phase": "provisioning" | "installing_plugin" | "starting_containers" | "restoring_snapshot" | "creating_user" | "running",
+  "url": "https://demo-leitnerflow-abc.demo.eledia.ai",   // nur wenn status === "ready"
+  "username": "ichraum@gmail.com",                        // nur wenn status === "ready"
+  "password": "demo1234",                                 // nur wenn status === "ready"
+  "pluginName": "LeitnerFlow"
+}
+```
+
+**Edge Cases**
+- Token unbekannt: 404 + `{status: "expired"}`
+- Nutzer verlässt die Seite und kommt per E-Mail-Link wieder: Token noch valide → derselbe Ablauf, Seite zeigt den aktuellen Phasenstand.
+- Demo gecrashed: Error-E-Mail fließt über `sendErrorEmail()`, Warteseite zeigt `status=error`.
+
+**Non-goals**
+- Kein WebSocket / SSE (Polling reicht, Kosten/Komplexität niedriger)
+- Kein Auto-Login per Token (das ist feat15 falls gewollt)
+
+**Decisions**
+- Phase wird in `DemoRequest` persistiert (`phase` Feld, optional), damit Restart des Servers keinen Status verliert
+- Polling-Intervall: 3s (konfigurierbar via `DEMO_STATUS_POLL_MS`)
+
+---
+
+### feat10 Rollenbasierte Demo-Szenarien
+
+**Goal**
+Manche Demos zeigen den Mehrwert eines Plugins nur dann, wenn mehrere Rollen
+gleichzeitig sichtbar sind (z.B. "Admin erstellt Kartenset → Teacher weist Kurs
+zu → Student lernt"). Der Interessent kann in einer Instanz zwischen drei
+Testnutzern wechseln, ohne sich jedes Mal neu einzuloggen.
+
+**Behavior** (vorläufig — Architektur offen)
+- Im Snapshot/Seed werden drei Testnutzer angelegt: `admin`, `teacher1`, `student1`
+- Alle drei sind in demselben Demo-Kurs eingeschrieben, mit den passenden Moodle-Rollen
+- Das Demo-Portal zeigt beim Öffnen einen Rollen-Switcher (UI-Overlay) mit drei Karten: "Als Admin einloggen", "Als Lehrender einloggen", "Als Lernende:r einloggen"
+- Die Karten sind Deep-Links in eine Moodle-Login-Page mit vorausgefüllter Login-ID
+
+**Open Questions**
+- **Auto-Login oder manueller Login?** Auto-Login würde Moodle-Plugin/Webservice-Token brauchen. Manueller Login ist sicherer, aber weniger smooth.
+- **Wie stellen wir den Switcher grafisch dar?** Als Overlay auf der Loading-Page, als Karten unter der "Demo öffnen"-Box, oder als Dropdown im laufenden Moodle?
+- **Passwort-Handling:** Bei mehreren Usern brauchen wir eventuell individuelle Passwörter oder dasselbe Passwort für alle Demo-Nutzer in dieser Instanz.
+
+**Non-goals**
+- Keine echten Multi-User-Szenarien mit konkurrenter Nutzung (es bleibt 1 Demo-Instanz für 1 Interessenten)
+- Keine kundendefinierten Rollen
+
+---
+
+### feat11 Admin-Dashboard
+
+**Goal**
+eLeDia-Mitarbeiter können in einer internen Seite alle laufenden Demos sehen,
+manuell verlängern und löschen — ohne SSH auf den Server.
+
+**Behavior**
+- URL: `/admin` (nur mit Admin-Passwort oder Bearer-Token erreichbar)
+- Tabelle: alle Instanzen mit Spalten `id | config | requester | gestartet | verbleibend | Status | Aktionen`
+- Aktionen pro Zeile: "Verlängern" (+1 Std), "Sofort löschen", "Logs anzeigen" (last 50 lines)
+- Refresh-Button (kein Live-Polling im MVP)
+
+**Auth**
+- Bearer-Token über `ADMIN_API_KEY` Env-Variable (gleicher Pattern wie MCP-Key)
+- Login-Form: nur Passwort, keine Nutzer
+
+**Non-goals**
+- Keine Statistiken (Chart-Ansicht, Historie) im MVP
+- Keine Multi-Admin-Verwaltung, kein Audit-Log
+
+---
+
+### feat12 Code-basierte Demo-Verlängerung
+
+**Goal**
+Ein Kunde auf einer Messe bekommt von eLeDia einen Geheimcode ("EDUMA2026"),
+mit dem er seine eigene Demo-Instanz von 60 Min auf 24 Stunden verlängern kann
+— ohne dass eLeDia manuell eingreifen muss.
+
+**Behavior**
+- Auf der Demo-Instanz oder der Warteseite gibt es ein kleines Eingabefeld "Verlängerungscode eingeben"
+- `POST /api/extend-code` mit `{token, code}` → Server checkt `EXTEND_CODES` (ENV: `EXTEND_CODES=EDUMA2026:1440,PRIVATE:60`), akzeptiert + setzt `maxAge` für diese eine Instanz
+- Antwort: "Demo verlängert bis 2026-04-10 16:30"
+
+**Codes**
+- Format: `CODE:MINUTEN` (z.B. `EDUMA2026:1440` = 1 Tag)
+- Codes werden bei Server-Start geladen, nicht aus DB
+- Mehrere Codes möglich (Komma-getrennt)
+
+**Edge Cases**
+- Code existiert nicht: "Code ungültig"
+- Token bereits abgelaufen: "Demo bereits beendet — neue anfordern"
+- Code bereits für diesen Token verwendet: "Du hast diese Demo schon verlängert"
+
+**Non-goals**
+- Keine personalisierten Codes (ein Code gilt für alle Interessenten)
+- Kein Abrechnungsmodell, keine Zahlung
+- Keine Code-Generierungs-UI (Codes werden in Env gesetzt)
+
+---
+
+### feat13 Plugin-Metadaten aus GitHub
+
+**Goal**
+Das Portal zeigt bei jedem Plugin das echte Icon aus dem GitHub-Repo, nicht nur
+ein Emoji. Außerdem Stars, letztes Release und Lizenz — als Vertrauenssignal.
+
+**Behavior**
+- In `configs.json` kann pro Plugin ein `githubRepo: "owner/repo"` stehen
+- Das bestehende `github.ts` liefert bereits Repo-Info + Releases (1h-Cache)
+- Ergänzung: Service versucht das Icon aus `pix/monologo.svg` oder `pix/icon.png` im Default-Branch via `https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}` zu laden (HEAD-Check)
+- Frontend fragt `GET /api/plugin/:id` ab und zeigt falls vorhanden das GitHub-Icon statt des Emojis, sowie Star-Count als Micro-Stat
+
+**Non-goals**
+- Kein Upload/Hosting der Icons auf unserem Server (wir linken direkt auf raw.githubusercontent.com)
+- Keine automatische Synchronisation von Plugin-Versionen mit moodle.org/plugins Directory

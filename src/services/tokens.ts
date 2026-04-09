@@ -6,7 +6,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { randomBytes } from "crypto";
-import type { DemoRequest } from "../types.js";
+import type { DemoRequest, DemoPhase } from "../types.js";
 
 const TOKENS_FILE = process.env.TOKENS_FILE
   ?? path.join(process.env.RUNBOT_WORK_DIR ?? "/opt/runbot", "tokens.json");
@@ -99,6 +99,24 @@ export async function markStarted(token: string, instanceId: string): Promise<vo
   if (!tokens[token]) return;
   tokens[token].status = "started";
   tokens[token].instanceId = instanceId;
+  tokens[token].phase = "running";
+  await save(tokens);
+}
+
+/**
+ * Setzt die aktuelle Provisioning-Phase eines Demo-Requests.
+ * Wird vom Hintergrund-Handler in /confirm/:token aufgerufen, damit die
+ * Warteseite den echten Status pollen kann (feat09).
+ */
+export async function setPhase(
+  token: string,
+  phase: DemoPhase,
+  errorMessage?: string
+): Promise<void> {
+  const tokens = await load();
+  if (!tokens[token]) return;
+  tokens[token].phase = phase;
+  if (errorMessage !== undefined) tokens[token].phaseError = errorMessage;
   await save(tokens);
 }
 

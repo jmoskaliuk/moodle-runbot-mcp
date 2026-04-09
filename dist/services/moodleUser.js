@@ -13,6 +13,12 @@ import { promisify } from "util";
 import fs from "fs/promises";
 import path from "path";
 const execAsync = promisify(exec);
+/**
+ * Hardcoded Demo-Passwort für alle Nutzer, die via `createDemoUser` angelegt
+ * werden. Wird auch vom `/api/demo-status/:token` Endpoint für die Credentials-
+ * Anzeige in der Warteseite gelesen. Override möglich via Env `DEMO_PASSWORD`.
+ */
+export const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo1234";
 function composeBin(instance) {
     return path.join(instance.moodleDockerDir, "bin", "moodle-docker-compose");
 }
@@ -76,7 +82,7 @@ try {
     $email     = '${phpEscape(email)}';
     $firstname = '${phpEscape(firstName)}';
     $lastname  = '${phpEscape(lastName)}';
-    $password  = 'demo1234';
+    $password  = '${phpEscape(DEMO_PASSWORD)}';
 
     // Nutzer mit dieser E-Mail bereits vorhanden? (Snapshot-Fall)
     $existing = $DB->get_record('user', ['email' => $email]);

@@ -40,6 +40,16 @@ export interface TestRun {
 
 // ── Demo-Anfragen ─────────────────────────────────────────────────────────────
 
+export type DemoPhase =
+  | "waiting"              // Token bestätigt, Hintergrund-Job läuft noch nicht
+  | "provisioning"         // moodle-docker + Moodle-Core werden geklont + config.php gepatcht
+  | "installing_plugin"    // Plugin wird ins Moodle-Verzeichnis kopiert
+  | "starting_containers"  // docker compose up + DB-Init
+  | "restoring_snapshot"   // optional: Snapshot wird in die DB importiert
+  | "creating_user"        // Moodle-Nutzer + Kurs-Einschreibung
+  | "running"              // alles fertig
+  | "error";               // irgendwo gecrashed
+
 export interface DemoRequest {
   token:         string;    // Zufälliger Token (URL-safe, 32 Zeichen)
   email:         string;    // E-Mail-Adresse des Interessenten
@@ -50,6 +60,8 @@ export interface DemoRequest {
   confirmedAt?:  string;    // ISO-Timestamp der E-Mail-Bestätigung
   instanceId?:   string;    // Gesetzt sobald Demo gestartet
   status:        "pending" | "confirmed" | "started" | "expired";
+  phase?:        DemoPhase; // aktueller Provisioning-Schritt (für Live-Status auf Warteseite, feat09)
+  phaseError?:   string;    // menschenlesbare Fehlermeldung falls phase === "error"
 }
 
 export interface RunbotConfig {

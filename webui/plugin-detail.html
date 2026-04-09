@@ -24,8 +24,11 @@ nav{
   border-bottom:1px solid var(--rule);display:flex;align-items:center;
   height:58px;padding:0 clamp(20px,5vw,80px);gap:16px;
 }
-.logo{font-family:var(--serif);font-size:20px;color:var(--ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:8px}
-.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.logo{color:var(--ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:10px}
+.logo-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2,#ffa64d));display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--serif);font-weight:700;font-size:15px;letter-spacing:-.5px;box-shadow:0 2px 8px rgba(249,128,18,.25)}
+.logo-text{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.2px;line-height:1}
+.logo-text .lg-dot{color:var(--accent);margin:0 1px}
+.logo-text .lg-sub{color:var(--muted);font-weight:500}
 .btn-ghost{font-size:13px;color:var(--muted);padding:7px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--white);cursor:pointer;font-family:var(--sans);text-decoration:none;transition:all .15s}
 .btn-ghost:hover{border-color:var(--ink);color:var(--ink)}
 
@@ -98,7 +101,8 @@ h1{font-family:var(--serif);font-size:clamp(34px,4vw,50px);font-weight:400;line-
 .pc-url{margin:0 auto;background:rgba(255,255,255,.1);border-radius:4px;padding:3px 12px;font-size:10px;color:rgba(255,255,255,.4);font-family:monospace}
 .pc-body{padding:18px}
 .pc-header{background:#2563eb;border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
-.pc-logo{width:28px;height:28px;background:rgba(255,255,255,.2);border-radius:6px}
+.pc-logo{width:28px;height:28px;background:rgba(255,255,255,.2);border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pc-logo img{width:22px;height:22px;object-fit:contain;filter:brightness(0) invert(1)}
 .pc-title{color:#fff;font-size:13px;font-weight:500}
 .pc-badge{margin-left:auto;background:rgba(255,255,255,.2);color:#fff;font-size:10px;padding:3px 8px;border-radius:10px}
 .pc-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
@@ -240,7 +244,10 @@ footer a:hover{color:var(--ink)}
 <body>
 
 <nav>
-  <a class="logo" href="/">eLeDia <span class="logo-dot"></span></a>
+  <a class="logo" href="/" aria-label="eLeDia Runbot Startseite">
+    <span class="logo-mark">eL</span>
+    <span class="logo-text">eLeDia<span class="lg-dot">.</span><span class="lg-sub">runbot</span></span>
+  </a>
   <a class="btn-ghost" href="/">← Alle Demos</a>
   <a class="btn-ghost" href="https://eledia.de" target="_blank">Kontakt</a>
 </nav>
@@ -319,7 +326,7 @@ footer a:hover{color:var(--ink)}
     </div>
     <div class="pc-body">
       <div class="pc-header">
-        <div class="pc-logo"></div>
+        <div class="pc-logo" id="pcLogo"></div>
         <div class="pc-title">LeitnerFlow — Meine Karten</div>
         <div class="pc-badge">Live</div>
       </div>
@@ -590,6 +597,16 @@ async function loadPluginData() {
     if (d.github) {
       renderReadme(d.github.readme);
       renderChangelog(d.github.releases);
+    }
+    // Plugin-Icon aus dem GitHub-Repo (pix/monologo.svg o.ä.) einsetzen,
+    // falls vom Backend best-effort aufgelöst (feat11/task23).
+    if (d.iconUrl) {
+      const pcLogo = document.getElementById('pcLogo');
+      if (pcLogo) pcLogo.innerHTML = `<img src="${d.iconUrl}" alt="" onerror="this.remove()">`;
+      const mModalIcon = document.getElementById('mModalIcon');
+      if (mModalIcon) {
+        mModalIcon.innerHTML = `<img src="${d.iconUrl}" alt="" style="width:70%;height:70%;object-fit:contain" onerror="this.remove();this.parentElement.textContent='🧩'">`;
+      }
     }
   } catch (e) {
     console.warn('[detail] loadPluginData failed:', e);

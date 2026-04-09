@@ -106,3 +106,65 @@ export async function fetchPluginData(ownerRepo: string): Promise<GithubPluginDa
 export function invalidateCache(ownerRepo: string): void {
   cache.delete(ownerRepo);
 }
+
+// ── Icon resolution (feat11/task23) ──────────────────────────────────────────
+//
+// Moodle-Plugins folgen der Konvention, ihr Icon unter pix/monologo.svg
+// (Moodle 4+) oder pix/icon.svg|png abzulegen. Wir probieren die Varianten
+// in einer sinnvollen Reihenfolge und cachen das Ergebnis, damit wir den
+// GitHub-CDN nicht bei jedem Aufruf polleren.
+
+const ICON_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const iconCache = new Map<string, { url: string | null; fetchedAt: number }>();
+
+const ICON_CANDIDATES = [
+  "pix/monologo.svg",
+  "pix/monologo.png",
+  "pix/icon.svg",
+  "pix/icon.png",
+];
+
+/**
+ * Versucht, eine Icon-URL für ein Moodle-Plugin auf GitHub zu finden.
+ * Gibt die raw.githubusercontent.com-URL zurück (CDN-gecached, CORS-fähig)
+ * oder `null` wenn keine der üblichen Dateien existiert.
+ *
+ * Achtung: Die Funktion führt 1–4 HEAD-Requests gegen raw.githubusercontent.com
+ * aus; Fehler werden als "nicht vorhanden" interpretiert. Resultat wird 24h
+ * gecacht, Misserfolge ebenfalls (damit wir nicht bei jedem Request neu suchen).
+ *
+ * @param ownerRepo  "owner/repo" String
+ * @param branch     Branch-Name (default: "main"). Für Plugins mit master-Default
+ *                   wird bei 404 automatisch "master" nachgezogen.
+ */
+export async function resolvePluginIconUrl(
+  ownerRepo: string,
+  branch = "main"
+): Promise<string | null> {
+  const cacheKey = `${ownerRepo}@${branch}`;
+  const cached = iconCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < ICON_CACHE_TTL_MS) {
+    return cached.url;
+  }
+
+  const branches = [branch];
+  if (branch === "main") branches.push("master");
+
+  for (const br of branches) {
+    for (const candidate of ICON_CANDIDATES) {
+      const url = `https://raw.githubusercontent.com/${ownerRepo}/${br}/${candidate}`;
+      try {
+        const res = await fetch(url, { method: "HEAD" });
+        if (res.ok) {
+          iconCache.set(cacheKey, { url, fetchedAt: Date.now() });
+          return url;
+        }
+      } catch {
+        // Netzwerkfehler → nächste Variante
+      }
+    }
+  }
+
+  iconCache.set(cacheKey, { url: null, fetchedAt: Date.now() });
+  return null;
+}
