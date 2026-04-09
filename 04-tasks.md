@@ -886,23 +886,145 @@ Entdeckt: 2026-04-09 (Johannes)
 ---
 
 ### task36 Moodle-Debug-Anzeige nach Instance-Start deaktivieren
-Status: open
+Status: ✅ done 2026-04-09
 Feature: feat02 (Moodle-Provisioning)
 Entdeckt: 2026-04-09 (Johannes)
 
 **Beobachtung:** Nach dem Start einer frischen Demo-Instanz zeigt Moodle Debug-Messages im Footer/Inline — vermutlich weil moodle-docker standardmäßig auf `$CFG->debug = DEBUG_DEVELOPER` und `$CFG->debugdisplay = true` setzt. Für Produktiv-Demos ist das störend und verunsichert Nutzer.
 
-**Lösung:**
-1. `src/services/docker.ts` → `patchConfigForProduction()` erweitern um zwei zusätzliche Overrides VOR `require_once('/lib/setup.php')`:
-   ```php
-   $CFG->debug        = 0;      // DEBUG_NONE
-   $CFG->debugdisplay = false;  // keine Meldungen inline
-   ```
-2. Alternative: nach dem Setup per `admin/cli/cfg.php --name=debug --set=0` + `--name=debugdisplay --set=0` in der DB. Aber der config.php-Weg ist robuster (überlebt Upgrades, wird immer gelesen).
-3. **Achtung Snapshot-Interaktion:** Existierende Snapshots haben möglicherweise `debug=32767` in der DB. Die config.php-Overrides setzen die `$CFG`-Variable beim Bootstrap auf 0 — überschreiben also die DB-Werte. Das ist der gewünschte Effekt.
-4. Für Entwickler-Workflows (`instance_start` mit einem Dev-Flag) den Debug-Modus wahlweise anlassen: neuer Parameter `debug?: boolean` im `instance_start`-Tool, Default `false`. Wenn `true` → nicht patchen.
+**Implementierung (zwei-schichtig, belt-and-suspenders):**
 
-**Verify:** Frische Demo starten, Login, Kurs öffnen, Aktivität öffnen — keine Debug-Messages mehr sichtbar im Footer oder als Info-Box.
+1. ✅ **Schicht 1 — config.php-Override** (bereits in commit 795b819): `patchConfigForProduction()` in `src/services/docker.ts` schreibt VOR `require_once('/lib/setup.php')`:
+   ```php
+   $CFG->debug        = 0;   // DEBUG_NONE
+   $CFG->debugdisplay = 0;   // keine Meldungen inline
+   ```
+   Das greift für alle Code-Pfade, die aus `$CFG->debug` lesen. Moodle behandelt config.php-Werte als „hardcoded" und überschreibt sie nicht aus der DB.
+
+2. ✅ **Schicht 2 — DB-Reset nach Snapshot-Restore** (neu, diese Session): `src/services/snapshot.ts` `restoreSnapshot()` führt nach dem Dump-Import ein `UPDATE mdl_config SET value='0' WHERE name IN ('debug','debugdisplay','debugstringids','debugsmtp','debugpageinfo','debugvalidators','perfdebug','debugusers','debugsqltrace');` aus.
+   Warum: Einige Moodle-Code-Pfade rufen `get_config('core', 'debug')` direkt statt `$CFG->debug` zu lesen. Wenn der Snapshot vom Seed-Host mit `debug=32767` angelegt wurde, würden diese Stellen weiter Debug-Output zeigen, obwohl config.php `debug=0` sagt. Der DB-Reset im Restore sorgt für Konsistenz.
+   Pgsql und MariaDB/MySQL beide abgedeckt, Caches werden direkt danach gepurged damit die neuen Werte in die Runtime kommen.
+
+3. **Nicht umgesetzt (absichtlich):** `debug?: boolean` Parameter im `instance_start`-Tool für Dev-Workflows. Begründung: Für Debug brauchen Entwickler ohnehin direkten Container-Zugriff, und ein optionaler Debug-Modus pro Instance würde den Code unnötig komplizieren. Wer debuggen will, setzt den Wert manuell via `docker exec … psql …`.
+
+**Verify:** Nach Deploy (GitHub Actions), frische Demo (z.B. `leitnerflow`) starten, Login als Admin/Teacher/Student, Kurs öffnen, Aktivität öffnen. Erwartung: Footer komplett ohne Debug-Messages, keine Stack-Traces, keine „DEBUG:"-Boxen. Wenn doch etwas auftaucht: im Container `docker exec … psql -U moodle -c "SELECT name,value FROM mdl_config WHERE name LIKE '%debug%';" moodle` und verifizieren, dass überall `0` steht.
+
+---
+
+### task37 Konzept: `local_runbotadmin` — In-Moodle Admin-Plugin als Alternative zum externen Snapshot-Build
+Status: open (Konzept, noch nicht implementiert)
+Feature: feat08 (Snapshot-System) + feat09 (Plugin-Katalog) + feat02 (Provisioning)
+Entdeckt: 2026-04-09 (Johannes)
+Priorität: hoch-mittel — strategische Alternative zum fragilen externen `snapshot_build`
+
+**Motivation**
+
+Das aktuelle Snapshot-System (externes `snapshot_build` MCP-Tool + pinned-Flag) löst das Cleanup-Race-Condition-Problem, ist aber konzeptionell umgekehrt gedacht: Der Runbot-Server orchestriert von außen einen Moodle-Provisioning-Flow, wartet blind, versucht Plugin-Installation, dumpt die DB, räumt auf. Jeder Schritt kann fehlschlagen, und der Admin sieht das Ergebnis erst am Ende (wenn überhaupt).
+
+Johannes' Idee: Ein **Moodle-Plugin im Moodle**, das dem Admin eine native GUI für alle Demo-Plattform-Operationen gibt. Der Admin arbeitet in Moodle, wie er es gewohnt ist, und klickt am Ende „Aktuellen Zustand als Snapshot speichern". Alles andere passiert transparent im Backend.
+
+**Architektur**
+
+```
+ ┌──────────────────────── demo.eledia.ai ────────────────────────┐
+ │                                                                 │
+ │  ┌────────────────────┐         ┌──────────────────────────┐  │
+ │  │  Moodle-Instanz    │  HTTPS  │  Runbot-Backend (MCP)    │  │
+ │  │  local_runbotadmin │◄───────►│  /api/internal/*         │  │
+ │  │  Admin-GUI         │  Token  │  exec into DB-Container  │  │
+ │  └────────────────────┘         └──────────────────────────┘  │
+ │         ▲                                                       │
+ │         │                                                       │
+ │    Admin klickt                                                │
+ │    „Snapshot speichern"                                        │
+ └─────────────────────────────────────────────────────────────────┘
+```
+
+Das Plugin `local_runbotadmin` ist Teil jeder Moodle-Instanz (wird bei `provisionInstance()` mit eingespielt). Es kennt seine `instance_id` aus einer env-Variable, die der Runbot-Server beim Start des Containers setzt. Alle Backend-Calls laufen über ein shared-secret Token, das ebenfalls über env injiziert wird.
+
+**Feature-Set**
+
+Tab **„Snapshots"** in der Site-Administration:
+1. Liste aller Snapshots für diesen Plugin-Slug (aus Runbot-Backend gefetcht)
+2. Button **„Aktuellen Zustand als neuen Snapshot speichern"** → Label + Beschreibung-Eingabe → POST `/api/internal/snapshot/create` → Backend führt `pg_dump` im DB-Container aus → Snapshot wird mit Metadaten im Runbot-Storage abgelegt
+3. **Download** pro Snapshot (streamt das `.sql.gz` über den Browser)
+4. **Upload** lokaler Snapshots via drag&drop (für Backup-Restore oder Transfer zwischen Umgebungen)
+5. **Löschen** pro Snapshot mit Bestätigungs-Dialog
+6. **„Als Default-Snapshot setzen"** → schreibt `defaultSnapshot` in die `configs.json` des Plugins
+
+Tab **„Plugin-Management"**:
+1. Installierte Plugins anzeigen (Liste aus `mdl_config_plugins`)
+2. **Plugin aus GitHub-URL installieren** → POST `/api/internal/plugin/install` → Backend klont Repo in den Container, führt `admin/cli/upgrade.php` aus, Browser reloadet
+3. Plugin upgraden (git pull + upgrade.php)
+4. Plugin deinstallieren
+
+Tab **„Plugin-Metadaten"** (für Portal-Einträge):
+1. Formular mit Feldern: Titel, Kurzbeschreibung, Langbeschreibung, GitHub-URL, Icon-URL, Kategorie, Tags
+2. Button **„Aus GitHub auto-fetchen"** → liest README.md (erster Absatz → Beschreibung), Repo-Description (→ Kurzbeschreibung), `pix/icon.svg` oder `pix/icon.png` (→ Icon)
+3. Änderungen schreibt das Backend direkt in `configs.json` und pusht optional nach GitHub
+4. Live-Preview wie der Eintrag im Portal-Grid aussieht
+
+**Vorteile gegenüber dem aktuellen `snapshot_build`**
+
+a) **Keine Timing-Probleme.** Die Instance läuft bereits und wird aktiv vom Admin benutzt — Cleanup-Scheduler ist nie ein Thema, weil jede Admin-Interaktion die `lastActivity` updatet.
+
+b) **Admin sieht das Ergebnis LIVE.** Snapshot wird gemacht aus dem Zustand, den der Admin gerade sieht — keine Blind-Provisionierung mehr, kein Rätseln ob der Seed-Kurs erstellt wurde.
+
+c) **Iterativ.** Wenn ein Snapshot nicht passt, ändert der Admin was, klickt nochmal. Drei Klicks statt drei Deploy-Zyklen.
+
+d) **Debug-freundlich.** Fehler beim Snapshot-Erstellen erscheinen direkt in der Moodle-UI, nicht in einer MCP-Response weit weg.
+
+e) **Kein `pinned`-Hack nötig.** Der pinned-Flag aus task30 kann langfristig wieder raus, weil das Problem nicht mehr existiert.
+
+f) **Plus: Plugin-Metadaten-Pflege wird zum Admin-Task.** Heute muss jemand die `configs.json` per Hand editieren — künftig klickt der Plugin-Autor in der eigenen Demo-Instanz „Metadaten aus GitHub aktualisieren" und fertig.
+
+**Nachteile / offene Fragen**
+
+- Plugin muss zur Base-Installation gehören → ein zusätzlicher `cp -r` Schritt in `docker.ts provisionInstance()`
+- Backend braucht neue `/api/internal/*` Endpoints mit Token-Auth (separater Auth-Pfad neben dem existierenden MCP-API-Key)
+- Upload-Größe: PHP `upload_max_filesize` und `post_max_size` müssen für große Snapshots (>100 MB) hochgesetzt werden — Overrides in `patchConfigForProduction()` oder eine `.htaccess`-Einstellung
+- Download muss streamen statt komplett in den Speicher zu laden → `readfile()` mit chunked output
+- Auth: Wenn das Instance-Token leakt (Log, Screenshot), kann jemand Snapshots auslesen. Mitigation: Token rotiert bei jedem Instance-Start + CORS-Check + Referer-Check
+- Was passiert wenn der Admin einen Snapshot erstellt, während ein anderer Nutzer parallel in der Demo-Instanz klickt? → DB ist konsistent, weil `pg_dump` eine Momentaufnahme macht, aber es sollte einen Hinweis geben
+
+**Implementierungs-Schritte (grobe Schätzung)**
+
+1. Plugin-Skeleton `local_runbotadmin` anlegen — ein `lang/`, `version.php`, `db/access.php`, `classes/output/renderer.php`, `settings.php` ~ 2h
+2. Backend: `/api/internal/snapshot/create` + `/list` + `/delete` + `/download` + `/upload` mit Token-Auth ~ 4h
+3. Moodle-seitige HTTP-Calls via `curl` aus `lib/moodlelib.php`-Functions, Response-Rendering ~ 3h
+4. Plugin-Management-Tab (GitHub-URL-Install) — Backend-Endpoint + moodle-CLI-Integration ~ 3h
+5. Plugin-Metadaten-Tab mit GitHub-Auto-Fetch und configs.json-Writeback ~ 3h
+6. CSS/UX-Feinschliff nach eLeDia-Designsystem ~ 2h
+7. Dokumentation + Testlauf ~ 1h
+
+**Gesamt:** ~18h konservativ, ~12h wenn's gut läuft.
+
+**Vergleich Aufwand/Nutzen**
+
+| Aspekt | `snapshot_build` (heute) | `local_runbotadmin` (Konzept) |
+|---|---|---|
+| LoC | ~400 TS | ~800 PHP + ~200 TS |
+| Onboarding für Nicht-Dev | ❌ MCP-Tool-Call nötig | ✅ Login + Klick |
+| Iteration | ❌ Provisionierung neu | ✅ Live-Editing |
+| Fehlerdiagnose | ❌ Logs auf VPS | ✅ UI-Feedback |
+| Plugin-Metadaten-Pflege | ❌ configs.json editieren | ✅ GUI |
+| Upload lokaler Snapshots | ❌ scp + MCP-Call | ✅ Drag&Drop |
+
+**Empfehlung**
+
+Parallel zur Task-Queue (task31–task36) als größere Investition einplanen. Nicht als Ersatz für `snapshot_build` ab Tag 1 — beide Wege können koexistieren, das Plugin wird schrittweise zur primären UX für Snapshot-Erzeugung. `snapshot_build` bleibt als CLI-/CI-Fallback im MCP.
+
+**Abhängigkeiten**
+
+- Erfordert ein shared-secret Token-System auf dem Backend (gibt's schon als MCP-API-Key — wiederverwendbar?)
+- Braucht Netzwerk-Policy: Moodle-Container muss `demo.eledia.ai/api/internal/*` erreichen können (intern via `host.docker.internal` oder direkt über extern-IP)
+- Plugin muss eLeDia-Branding nutzen → Skill `eledia-moodle-ux` als Referenz
+
+**Verify (wenn implementiert):**
+- Admin startet `leitnerflow` Demo, loggt sich ein, geht zu Site-Admin → Runbot → Snapshots → „Neuen Snapshot speichern" → Label „test-manual", Beschreibung „Konzept-Test"
+- Erwartung: Erfolgsmeldung, Snapshot taucht im Listing auf, in `/var/lib/moodle-runbot/snapshots/` liegt neue `.sql.gz` + `.json`
+- Zweiter Test: `instance_start` mit dem neuen Snapshot → Instance hochfahren, prüfen ob Zustand korrekt restauriert
+- Dritter Test: Upload eines lokalen Snapshots via Browser → muss in Liste auftauchen und nutzbar sein
 
 ---
 

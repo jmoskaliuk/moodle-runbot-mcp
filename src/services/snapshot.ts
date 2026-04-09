@@ -265,7 +265,41 @@ export async function restoreSnapshot(
     });
   }
 
-  // 5. Caches purgen.
+  // 5. Debug-Anzeige belt-and-suspenders (task36, 2026-04-09).
+  //
+  // `patchConfigForProduction()` setzt $CFG->debug=0 und $CFG->debugdisplay=0
+  // in der config.php. Das sollte laut Moodle-Bootstrap-Logik reichen, weil
+  // config.php-Werte als "hardcoded" gelten und die DB-Werte überschreiben.
+  //
+  // Aber: Johannes hat beobachtet, dass frische Demo-Instanzen trotzdem
+  // Debug-Messages im Footer anzeigen. Vermutung: Der Snapshot wurde auf
+  // einem Seed-Host mit `debug=DEBUG_DEVELOPER` (32767) in mdl_config
+  // erstellt, und einzelne Moodle-Code-Pfade lesen den Wert direkt aus
+  // `get_config('core', 'debug')` statt aus $CFG->debug.
+  //
+  // Lösung: Nach dem Restore den Wert in der DB auf 0 setzen. Das ist ein
+  // Nullop wenn er ohnehin schon 0 war, und sorgt sonst für Konsistenz.
+  // purge_caches im nächsten Schritt lädt die neuen Werte in die Runtime.
+  const debugSqlPg =
+    `UPDATE mdl_config SET value='0' WHERE name IN ('debug','debugdisplay','debugstringids','debugsmtp','debugpageinfo','debugvalidators','perfdebug','debugusers','debugsqltrace');`;
+  const debugSqlMy = debugSqlPg; // Syntax identisch
+  if (instance.db === "pgsql") {
+    await run(
+      `${env} ${bin} exec -T db ` +
+      `psql -U moodle -c "${debugSqlPg}" moodle`
+    ).catch((e) => {
+      console.error(`[snapshot] WARN: debug-reset failed (pgsql, task36): ${String(e)}`);
+    });
+  } else if (instance.db === "mariadb" || instance.db === "mysql") {
+    await run(
+      `${env} ${bin} exec -T db ` +
+      `mysql -u moodle -pm@0dl3ing -e "${debugSqlMy}" moodle`
+    ).catch((e) => {
+      console.error(`[snapshot] WARN: debug-reset failed (mysql, task36): ${String(e)}`);
+    });
+  }
+
+  // 6. Caches purgen.
   // Nach DB-Restore sind Moodle-interne Caches (mdl_config_plugins,
   // langcache, stringcache) nicht mehr mit dem Container-Filesystem
   // synchron — muss manuell getriggert werden, sonst zeigt das Frontend
@@ -274,7 +308,7 @@ export async function restoreSnapshot(
     `${env} ${bin} exec -T webserver php admin/cli/purge_caches.php`
   ).catch(() => {});
 
-  // 6. Reminder (nur Log, kein Fehler): moodledata ist NICHT im Snapshot.
+  // 7. Reminder (nur Log, kein Fehler): moodledata ist NICHT im Snapshot.
   // Falls der Seed-Kurs Dateien benötigt, würden sie jetzt fehlen. Siehe
   // Header-Kommentar dieses Files für Details.
   console.error(
