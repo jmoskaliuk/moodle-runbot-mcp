@@ -107,8 +107,11 @@ server {
     catch (e) {
         // Nicht fatal — Instanz läuft trotzdem, nur ohne Subdomain.
         // Versuchen, die kaputte Config wieder zu entfernen, damit nginx nicht
-        // beim nächsten Reload crasht.
+        // beim nächsten Reload crasht. Vorher Backup zum Debuggen schreiben.
         console.error(`[nginx] Failed to register ${instanceId}:`, e);
+        const debugBackup = `/tmp/runbot-last-failed-nginx.conf`;
+        await fs.copyFile(confPath, debugBackup).catch(() => { });
+        console.error(`[nginx] Debug-Backup der kaputten Config: ${debugBackup}`);
         await fs.unlink(confPath).catch(() => { });
     }
 }
