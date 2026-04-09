@@ -413,7 +413,7 @@ const T={
     label_name:'Name',label_name_opt:'(optional)',label_email:'E-Mail',
     placeholder_name:'Ihr Name',placeholder_email:'ihre@email.de',
     form_note:'Ihre E-Mail wird nur für diese Demo verwendet.',
-    btn_cancel:'Abbrechen',btn_submit:'Bestätigungslink senden →',
+    btn_cancel:'Abbrechen',btn_close:'Schließen',btn_submit:'Bestätigungslink senden →',
     btn_retry:'Erneut versuchen',btn_sending:'Wird gesendet…',
     result_title:'E-Mail wurde gesendet.',
     result_text:'Prüfen Sie Ihr Postfach und klicken Sie den Bestätigungslink.<br>Danach startet Ihre Demo automatisch.',
@@ -455,7 +455,7 @@ const T={
     label_name:'Name',label_name_opt:'(optional)',label_email:'E-mail',
     placeholder_name:'Your name',placeholder_email:'your@email.com',
     form_note:'Your email is only used for this demo.',
-    btn_cancel:'Cancel',btn_submit:'Send confirmation link →',
+    btn_cancel:'Cancel',btn_close:'Close',btn_submit:'Send confirmation link →',
     btn_retry:'Try again',btn_sending:'Sending…',
     result_title:'Email sent.',
     result_text:'Check your inbox and click the confirmation link.<br>Your demo will start automatically.',
@@ -695,6 +695,9 @@ async function submitForm(){
     document.getElementById('mSub').textContent=t('modal_email_sent');
     document.getElementById('mRes').classList.add('show');
     btn.style.display='none';
+    // "Abbrechen" → "Schließen" sobald E-Mail gesendet
+    const cancelBtn=document.querySelector('.btn-o');
+    if(cancelBtn) cancelBtn.textContent=t('btn_close');
 
   }catch(e){
     btn.disabled=false;
