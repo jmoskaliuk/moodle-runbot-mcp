@@ -147,9 +147,11 @@ Vollständigen Flow einmal auf dem Server durchspielen:
 ---
 
 ### task14 nginx HTTPS + Wildcard-Cert verwenden (Bundle mit task15)
-Status: in-progress
+Status: deployed, awaiting manual verify
 Feature: feat03
 Bugs: bug02
+
+**Deploy 2026-04-09:** Commit `770dd46` via GitHub Actions Run #20 (41s) erfolgreich auf VPS deployed. Health-Check auf `localhost:3000/health` grün. Code ist auf `/opt/moodle-runbot-mcp`, Service `moodle-runbot` neugestartet.
 
 `src/services/nginx.ts` generiert aktuell nur einen `listen 80`-Block. Umstellen auf:
 1. HTTP-Block (Port 80) → `return 301 https://$host$request_uri;` (nur für ACME-Challenges Passthrough, Rest redirect)
@@ -167,9 +169,11 @@ Wildcard-Cert selbst bleibt manuell (DNS-01-Challenge erfordert interaktive DNS-
 ---
 
 ### task15 docker.ts: $CFG->wwwroot + sslproxy patchen (Bundle mit task14)
-Status: in-progress
+Status: deployed, awaiting manual verify
 Feature: feat02, feat03
 Bugs: bug06, bug14
+
+**Deploy 2026-04-09:** Commit `770dd46`. `patchConfigForProduction()` schreibt Override-Block VOR `require_once('/lib/setup.php')`. Verifizierung erfordert echte Demo-Provisionierung (siehe "Verify After Deploy" Abschnitt).
 
 `src/services/docker.ts` → `provisionInstance()` patcht `config.php` nach dem Template-Copy:
 1. `composeEnv()` setzt `MOODLE_DOCKER_WEB_HOST = ${instance.id}.${BASE_DOMAIN}` (für Werkzeuge wie Behat, die den Host direkt lesen).
@@ -188,7 +192,7 @@ Approach gewählt weil: sauberer als Regex-basiertes Port-Block-Entfernen, robus
 ---
 
 ### task16 tools/instances.ts: instanceUrl() auf https
-Status: open
+Status: deployed
 Feature: feat03
 Bugs: bug09
 
@@ -210,26 +214,91 @@ Bugs: bug07, bug08, bug12
 ---
 
 ### task18 demo-portal.html: Hero-Stat + globales close() beheben
-Status: open
+Status: partial (bug11 fixed, bug10 offen)
 Feature: feat01 (Webui)
 Bugs: bug10, bug11
 
-1. `statPlugins` → `statActive` (ID-Mismatch).
-2. Hardcoded `6` → `configs.length`.
-3. `function close()` → `closeModal()`.
+1. `statPlugins` → `statActive` (ID-Mismatch). — offen
+2. Hardcoded `6` → `configs.length`. — offen
+3. `function close()` → `closeModal()`. — **fixed 2026-04-09** (Hotfix nach User-Report)
 
 ---
 
 ### task19 Snapshot leitnerflow-v1 auf VPS erstellen
-Status: open
+Status: runbook ready (requires VPS access)
 Feature: feat01, feat05
 Bugs: bug13
 
-1. Manuell auf VPS: eine Instanz mit leitnerflow starten, Demo-Daten anlegen (Beispiel-Kurs "demo", Testnutzer, ein paar Karten-Decks)
-2. `snapshot_create` MCP-Tool aufrufen → `/opt/snapshots/leitnerflow-v1.sql.gz` + `.json`
-3. `configs.json` → `snapshotId: "leitnerflow-v1"`
-4. Demo-Flow testen: neue Anfrage → Snapshot wird restauriert → Demo startet in < 90s
-5. Loading-Page 5 Schritte passen dann zur Realität.
+**Voraussetzung:** task14/15 müssen verified sein, sonst läuft die Seed-Instanz nicht über HTTPS und das könnte die Moodle-URLs im Snapshot verschmutzen.
+
+**Runbook (auf VPS ausführen):**
+
+```bash
+# 1) Seed-Instanz über HTTP-API starten (NICHT über request-demo, sonst Token-Dance)
+curl -sX POST http://localhost:3000/mcp/call \
+  -H "Authorization: Bearer $MCP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"instance_start","arguments":{"configId":"leitnerflow","owner":"seed@eledia.ai"}}' \
+  | jq .
+# Warten bis status=running (ca. 90-180s bei leerem Cache)
+```
+
+```bash
+# 2) Demo-Daten anlegen: Kurs "demo-leitnerflow", Testnutzer, 2-3 befüllte Kartensets
+#    Manuell über Browser auf https://<instance-id>.demo.eledia.ai als admin:
+#    - Site administration → Courses → Add new course "Demo LeitnerFlow"
+#    - LeitnerFlow-Aktivität hinzufügen, mit 10-15 Beispielkarten vorbefüllen
+#    - Testnutzer "demo1" / "Demo-Password123!" anlegen, in Kurs einschreiben
+#    - Einmal "Karten lernen" durchlaufen damit Attempt-History existiert
+```
+
+```bash
+# 3) Snapshot erstellen (MCP-Tool)
+INSTANCE_ID="demo-seed-xxxxxx"  # aus Schritt 1
+curl -sX POST http://localhost:3000/mcp/call \
+  -H "Authorization: Bearer $MCP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"snapshot_create\",\"arguments\":{\"instanceId\":\"$INSTANCE_ID\",\"snapshotId\":\"leitnerflow-v1\",\"description\":\"LeitnerFlow Demo mit Beispielkurs und -karten\"}}" \
+  | jq .
+
+# 4) Snapshot verifizieren
+ls -lah /opt/snapshots/leitnerflow-v1*
+# Erwartung: leitnerflow-v1.sql.gz (~2-5 MB) + leitnerflow-v1.json (Metadaten)
+
+curl -sX POST http://localhost:3000/mcp/call \
+  -H "Authorization: Bearer $MCP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"snapshot_list","arguments":{}}' \
+  | jq .
+```
+
+```bash
+# 5) Seed-Instanz kann jetzt gestoppt werden
+curl -sX POST http://localhost:3000/mcp/call \
+  -H "Authorization: Bearer $MCP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"instance_stop\",\"arguments\":{\"instanceId\":\"$INSTANCE_ID\"}}"
+```
+
+**6) configs.json anpassen (im Repo, nicht auf VPS):**
+
+In `configs.json` den `leitnerflow`-Eintrag ändern:
+```diff
+-  "snapshotId": null,
++  "snapshotId": "leitnerflow-v1",
+```
+Commit + Push → GitHub Actions deployed auf VPS.
+
+**7) End-to-End-Test:**
+- Über https://demo.eledia.ai eine Demo für LeitnerFlow anfordern
+- E-Mail klicken → Ladeseite
+- Zeit bis "Demo bereit" messen; Ziel: < 90s (statt ~3min bei Neuprovisionierung)
+- In der fertigen Demo prüfen ob Seed-Kurs "Demo LeitnerFlow" vorhanden ist
+- Loading-Page-Schritte 3/5 ("Kurs vorbereiten...") passt dann inhaltlich
+
+**Fallstricke:**
+- Snapshot enthält die `$CFG->wwwroot` der Seed-Instanz. Wenn `wwwroot` als Absolut-String in Moodle-Logs/Sessions/Events gelandet ist, muss `snapshot_restore()` die URL umschreiben. Prüfen ob `src/services/snapshot.ts` das macht — falls nicht, neuer Bug.
+- Dateien in `moodledata/` werden im Snapshot NICHT mitgenommen (nur DB). Das ist ok für LeitnerFlow, aber falls der Seed-Kurs Bilder enthält, werden die fehlen. Entweder keine Bilder verwenden oder `moodledata` mitsnapshoten (eigener Task).
 
 ---
 
@@ -249,8 +318,7 @@ Beim Start von `src/index.ts`:
 
 ## 🔧 In Progress
 
-- task14 nginx HTTPS + Wildcard-Cert (Bundle mit task15)
-- task15 docker.ts wwwroot/sslproxy patch (Bundle mit task14)
+- task19 leitnerflow-v1 Snapshot auf VPS erstellen (Runbook s.u.)
 
 *(Tasks die gerade aktiv bearbeitet werden)*
 
@@ -258,15 +326,63 @@ Beim Start von `src/index.ts`:
 
 ## 🔎 Verify After Deploy
 
-- [ ] HTTPS-Subdomain erreichbar nach nginx-Fix (task14, feat03)
-      Test: `curl -I https://demo-xxx.demo.eledia.ai` → 200 OK oder Moodle-Redirect
-- [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash
-- [ ] `$CFG->wwwroot` zeigt auf `https://{id}.demo.eledia.ai` ohne Port-Suffix (task15, feat02)
-      Test: `docker exec runbot-demo-xxx_webserver cat /var/www/html/config.php | grep wwwroot`
-- [ ] `$CFG->sslproxy = true` in config.php (task15)
-- [ ] Moodle-interne Links kommen als `https://` (kein Mixed-Content im Browser)
-- [ ] MCP `instance_status` liefert `https://` URL konsistent mit E-Mail (task16)
-- [ ] plugin-detail.html "Demo starten" öffnet Modal, crasht nicht (task17)
+### task14 + task15 + task16 — manueller Check auf VPS
+
+SSH auf VPS (`178.104.171.153`) und die folgenden Schritte durchgehen. Reihenfolge wichtig, denn Cert muss existieren bevor nginx-Config eine Chance hat.
+
+**1. Wildcard-Cert-Präsenz**
+```bash
+ls -la /etc/letsencrypt/live/demo.eledia.ai/
+# Erwartung: fullchain.pem und privkey.pem vorhanden
+# Falls fehlend → siehe setup.sh Schritt 12 für DNS-01 Anleitung
+openssl x509 -in /etc/letsencrypt/live/demo.eledia.ai/fullchain.pem -noout -text \
+  | grep -A1 "Subject Alternative Name"
+# Erwartung: DNS:*.demo.eledia.ai, DNS:demo.eledia.ai
+```
+
+**2. DNS-Wildcard-Eintrag**
+```bash
+dig +short test-xxx.demo.eledia.ai
+# Erwartung: 178.104.171.153 (nur wenn A-Wildcard *.demo.eledia.ai existiert)
+```
+
+**3. MCP-Service läuft mit neuem Code**
+```bash
+systemctl status moodle-runbot | head -5
+curl -sf http://localhost:3000/health
+cd /opt/moodle-runbot-mcp && git log -1 --format='%h %s'
+# Erwartung: 770dd46 fix: nginx HTTPS + wildcard cert awareness...
+```
+
+**4. End-to-End Demo-Provisionierung (eigentlicher Funktionstest)**
+
+Eine Demo über die öffentliche Seite https://demo.eledia.ai anfordern mit einer echten Mail-Adresse. Dann auf VPS:
+```bash
+# nginx-Config für die neue Instanz (ID aus Logs nehmen)
+INSTANCE=demo-xxxxxx
+cat /etc/nginx/sites-enabled/runbot-$INSTANCE.conf
+# Erwartung: listen 443 ssl http2; + ssl_certificate ...; + X-Forwarded-Proto https;
+
+# Moodle config.php enthält Override-Block
+docker exec runbot-${INSTANCE}_webserver cat /var/www/html/config.php \
+  | grep -E "wwwroot|sslproxy"
+# Erwartung:
+#   $CFG->wwwroot  = 'https://demo-xxxxxx.demo.eledia.ai';
+#   $CFG->sslproxy = true;
+
+# HTTPS extern erreichbar
+curl -I https://$INSTANCE.demo.eledia.ai
+# Erwartung: HTTP/2 200 oder 303 auf /login/index.php
+```
+
+**5. Browser-Smoke-Test**
+https://demo-xxxxxx.demo.eledia.ai aufrufen, einloggen, DevTools → Network: alle Requests müssen `https://` sein (kein Mixed-Content-Warning).
+
+### Weitere offene Verify-Items
+
+- [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash (muss manuell durch Cert-Rename simuliert werden)
+- [ ] MCP `instance_status` liefert `https://` URL konsistent mit E-Mail (task16) — in Punkt 4 mit abgedeckt
+- [ ] plugin-detail.html "Demo starten" öffnet Modal, crasht nicht (task17 — noch nicht deployed)
 
 ---
 

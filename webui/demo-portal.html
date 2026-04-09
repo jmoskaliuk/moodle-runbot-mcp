@@ -319,12 +319,12 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
   </div>
 </footer>
 
-<div class="overlay" id="ov" onclick="if(event.target===this)close()" role="presentation">
+<div class="overlay" id="ov" onclick="if(event.target===this)closeModal()" role="presentation">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
     <div class="m-hdr">
       <div class="m-icon" id="mIcon"></div>
       <div><div class="m-title" id="mTitle"></div><div class="m-sub" id="mSub" data-i18n="modal_preparing">Wird vorbereitet…</div></div>
-      <button class="m-close" onclick="close()" aria-label="Dialog schließen">×</button>
+      <button class="m-close" onclick="closeModal()" aria-label="Dialog schließen">×</button>
     </div>
     <div class="m-body">
       <!-- E-Mail Formular — wird zuerst gezeigt -->
@@ -372,7 +372,7 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
       </div>
     </div>
     <div class="m-foot">
-      <button class="btn-o" onclick="close()" data-i18n="btn_cancel">Abbrechen</button>
+      <button class="btn-o" onclick="closeModal()" data-i18n="btn_cancel">Abbrechen</button>
       <button class="btn-f" id="mBtn" onclick="submitForm()" data-i18n="btn_submit">Bestätigungslink senden →</button>
     </div>
   </div>
@@ -663,8 +663,8 @@ function openModal(){
 }
 
 let _lastFocus=null;
-function close(){document.getElementById('ov').classList.remove('open');_lastFocus?.focus();}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('ov').classList.contains('open'))close();});
+function closeModal(){document.getElementById('ov').classList.remove('open');_lastFocus?.focus();}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('ov').classList.contains('open'))closeModal();});
 function openUrl(){if(url)window.open(url,'_blank')}
 
 async function submitForm(){

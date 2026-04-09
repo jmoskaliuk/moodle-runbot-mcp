@@ -200,14 +200,21 @@ task18: ID konsistent auf `statActive` bringen, Hardcoded-6 durch `configs.lengt
 ### bug11 demo-portal.html: globales `function close()`
 
 Feature: feat01 (Webui)
-Status: open (task18)
+Status: fixed (hotfix 2026-04-09)
 Entdeckt: Code-Review 2026-04-09
+Behoben: Hotfix 2026-04-09 nach User-Report "Schließen-Button reagiert nicht"
 
 **Description**
-`webui/demo-portal.html` deklariert ein globales `function close()`, das `window.close` schattet. Kann Browser-Interaktionen oder Libraries brechen.
+`webui/demo-portal.html` deklarierte ein globales `function close()`. In inline-HTML-Event-Handlern (`onclick="close()"`) wird die Scope-Chain `element → document → window` durchlaufen, und `document.close()` existiert als Method (zum Schließen von `document.open()`-Streams). Daher wurde statt der globalen Function immer `document.close()` aufgerufen — ein effektiver No-Op. Modal liess sich nicht mehr schließen, weder per X-Icon noch per Schließen-Button noch per Overlay-Click noch per Escape.
+
+**Repro**
+1. https://demo.eledia.ai öffnen
+2. "Jetzt starten" auf einer Plugin-Karte
+3. E-Mail eintragen, "Bestätigungslink senden"
+4. Im "E-Mail wurde gesendet" State: X, "Schließen" oder Klick neben das Modal → nichts passiert
 
 **Fix**
-task18: Umbenennen in `closeModal()`.
+`function close()` → `function closeModal()`, alle `onclick="close()"` und das Escape-Key-Handler entsprechend umgestellt. Deployed in Commit TBD.
 
 ---
 
@@ -288,6 +295,26 @@ Wenn der Node-Prozess während einer Provisionierung abstürzt, bleiben Docker-C
 
 **Fix**
 task20: Beim Server-Start `docker ps --filter "name=runbot-"` gegen `registry.json` abgleichen und Waisen entfernen. Zusätzlich `nginx.cleanupAllConfigs()` aufrufen — die Funktion existiert bereits, wird aber nirgends gecallt.
+
+---
+
+### bug18 Snapshot-Restore macht kein DB-weites URL-Rewrite
+
+Feature: feat05
+Status: open (task21, noch anzulegen)
+Entdeckt: 2026-04-09 beim Schreiben des task19-Runbooks
+
+**Description**
+`restoreSnapshot()` in `src/services/snapshot.ts:163-180` setzt nach dem Einspielen zwar `wwwroot` via `admin/cli/cfg.php`, macht aber kein Search-Replace auf die DB-Inhalte. Moodle speichert absolute URLs in diversen Tabellen (`mdl_log`, `mdl_logstore_standard_log`, `mdl_events_*`, `mdl_grade_items`, `mdl_backup_controllers`, atto-editor-Inhalte mit eingebetteten Bildern in `mdl_*.intro`-Feldern). Nach einem Snapshot-Restore können diese URLs noch auf die Seed-Instanz zeigen.
+
+Für den konkreten `leitnerflow-v1`-Snapshot ist das wahrscheinlich unkritisch, solange die Seed-Daten clean sind (keine eingebetteten Bilder, kein Log-Verlauf der matter). Aber für zukünftige Snapshots mit echten Kursen wird das relevant.
+
+**Fix-Optionen**
+1. Moodle-eigenes `admin/tool/replace/cli/replace.php --search=<oldurl> --replace=<newurl>` aufrufen. Achtung: das Tool muss explizit aktiviert werden und mutiert auch Pfade/Backup-Blobs — kann langsam sein (mehrere Sekunden pro GB).
+2. Manuell `sed` auf dem entpackten SQL-Dump während Restore: schneller, aber fragil bei binären BLOB-Spalten.
+3. Seeds so designen dass sie keine absoluten URLs enthalten (= Regel für task19-Seed-Erstellung).
+
+Ergänzend: `wwwroot` sollte wie oben dokumentiert via `config.php`-Override gesetzt werden statt via `admin/cli/cfg.php`, weil unser `patchConfigForProduction()` den DB-Wert ohnehin überschreibt. Der cfg.php-Call in snapshot.ts ist faktisch tote Code-Zeile — kann entfernt werden.
 
 ---
 
