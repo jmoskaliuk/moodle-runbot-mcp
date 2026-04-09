@@ -45,6 +45,40 @@ Für größere Features lieber direkt in `01-features.md` als `featXX`-Block
 *(Neue Bug-Beobachtungen hier reinkippen — Claude sortiert und priorisiert
 im nächsten Task. Format siehe Quick-Capture oben.)*
 
+### bug18 Plugin-Detail: „Demo starten"-Flow zeigt `http://localhost:8100`
+Status: open
+Entdeckt: 2026-04-09 (Johannes)
+Betroffen: `webui/plugin-detail.html` Zeilen 699 + 702 (`launch()` → `finish()`)
+Repro: Auf der Plugin-Detail-Seite den „Demo starten"-Button drücken. Statt
+einer echten `https://demo-<id>.demo.eledia.ai`-URL erscheint im Result-
+Panel `http://localhost:8100` als Demo-Link. Öffnet natürlich nicht.
+
+Root cause: Die Funktion hat zwei hardgecodete Fallbacks auf
+`http://localhost:8100`:
+1. `finish(res.url ?? 'http://localhost:8100', res.instanceId)` — wenn
+   die MCP-`instance_start`-Response kein `url`-Feld mitliefert.
+2. Catch-Branch: `finish('http://localhost:8100', 'demo-leitnerflow')`
+   — bei jedem Fehler im MCP-Call. Verschluckt dabei den echten Fehler.
+
+Das ist der alte Direkt-Launch-Pfad aus den Anfangstagen, der neben
+dem eigentlichen `/request-demo → /confirm → /api/demo-status`-Token-
+Flow noch existiert. In Dev (ohne `BASE_DOMAIN`) stimmt die URL
+zufällig — in Produktion nie.
+
+Fix-Optionen (beim Aufgreifen entscheiden):
+- A) Den Direkt-Launch-Pfad reparieren: Fallback auf `res.url` sauber
+  erzwingen (Error werfen wenn fehlt) und Catch den echten Fehler
+  anzeigen statt einer Fake-URL.
+- B) Den Direkt-Launch-Pfad ganz entfernen und den „Demo starten"-
+  Button stattdessen auf den Token-Flow umlenken (genauso wie der
+  Demo-Request auf der Portal-Startseite), damit es nur noch **einen**
+  Demo-Start-Pfad gibt.
+
+Empfehlung: Variante B — zwei parallele Flows sind unnötige Wartungslast
+und der Token-Flow ist bereits der getestete Produktions-Pfad. Aber das
+ist eine Design-Entscheidung von Johannes, darum zunächst als Bug
+aufgenommen, nicht sofort umgesetzt.
+
 ---
 
 ## 💡 Ideen
