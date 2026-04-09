@@ -81,11 +81,12 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .plugins-sec{padding:80px 0}
 .plugins-hdr{margin-bottom:40px}
 .plugins-hdr-top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:24px}
-.type-filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:20px;border-bottom:1px solid var(--rule);margin-bottom:16px}
+.filter-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:20px;border-bottom:1px solid var(--rule);margin-bottom:16px}
+.type-filters{display:flex;gap:4px;flex-wrap:wrap}
 .tbtn{font-size:13px;font-weight:500;padding:8px 18px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans)}
 .tbtn:hover{color:var(--ink);background:var(--bg)}
 .tbtn.active{background:var(--ink);color:#fff}
-.filters{display:flex;gap:8px;flex-wrap:wrap}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .fbtn{font-size:12px;padding:6px 14px;border-radius:20px;border:1px solid var(--rule);background:var(--white);color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans)}
 .fbtn:hover{border-color:var(--ink);color:var(--ink)}
 .fbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -148,15 +149,6 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .btn-f{padding:10px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
 .btn-f:hover{background:var(--accent2)}
 .btn-f:disabled{background:var(--rule);color:var(--muted);cursor:not-allowed}
-.band{background:var(--ink);padding:64px clamp(24px,6vw,80px);display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
-@media(max-width:768px){.band{grid-template-columns:1fr}}
-.band-img{display:flex;align-items:center;justify-content:center}
-.band-img img{width:100%;max-width:460px;display:block;border-radius:14px;opacity:.92}
-.band-title{font-family:var(--serif);font-size:28px;font-weight:300;color:#fff;line-height:1.35;letter-spacing:-.2px;margin-bottom:14px}
-.band-text{font-size:15px;color:rgba(255,255,255,.5);line-height:1.7;font-weight:300}
-.band-feats{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.bf-lbl{font-size:11px;color:rgba(255,255,255,.35);margin-bottom:3px}
-.bf-val{font-size:14px;color:rgba(255,255,255,.8)}
 footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;background:var(--white)}
 .f-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr;gap:48px;max-width:1100px;margin:0 auto 40px}
 @media(max-width:900px){.f-grid{grid-template-columns:1fr 1fr}}
@@ -255,33 +247,26 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
           <p class="sec-lead" data-i18n="plugins_lead">Plugins, Themes und Konfigurationen für Moodle 5.x — alle Open Source.</p>
         </div>
       </div>
-      <div class="type-filters">
-        <button class="tbtn active" id="tbAll"    onclick="filterType('all',  this)" data-i18n="type_all">Alle</button>
-        <button class="tbtn"        id="tbPlugin" onclick="filterType('plugin',this)" data-i18n="type_plugins">Plugins</button>
-        <button class="tbtn"        id="tbTheme"  onclick="filterType('theme', this)" data-i18n="type_themes">Themes</button>
-        <button class="tbtn"        id="tbConfig" onclick="filterType('config',this)" data-i18n="type_configs">Konfigurationen</button>
-        <button class="tbtn"        id="tbMoodle" onclick="filterType('vanilla',this)" data-i18n="type_moodle">Moodle Versionen</button>
-      </div>
-      <div id="catFilters" class="filters">
-        <button class="fbtn active" onclick="filter('all',this)" data-i18n="filter_all">Alle</button>
-        <button class="fbtn" onclick="filter('lernen',this)" data-i18n="filter_learn">Lernen</button>
-        <button class="fbtn" onclick="filter('verwaltung',this)" data-i18n="filter_admin">Verwaltung</button>
-        <button class="fbtn" onclick="filter('reporting',this)" data-i18n="filter_report">Reporting</button>
+      <div class="filter-row">
+        <div class="type-filters">
+          <button class="tbtn active" id="tbAll"    onclick="filterType('all',  this)" data-i18n="type_all">Alle</button>
+          <button class="tbtn"        id="tbPlugin" onclick="filterType('plugin',this)" data-i18n="type_plugins">Plugins</button>
+          <button class="tbtn"        id="tbTheme"  onclick="filterType('theme', this)" data-i18n="type_themes">Themes</button>
+          <button class="tbtn"        id="tbConfig" onclick="filterType('config',this)" data-i18n="type_configs">Konfigurationen</button>
+          <button class="tbtn"        id="tbMoodle" onclick="filterType('vanilla',this)" data-i18n="type_moodle">Moodle Versionen</button>
+        </div>
+        <div id="catFilters" class="filters">
+          <button class="fbtn active" onclick="filter('all',this)" data-i18n="filter_all">Alle</button>
+          <button class="fbtn" onclick="filter('lernen',this)" data-i18n="filter_learn">Lernen</button>
+          <button class="fbtn" onclick="filter('verwaltung',this)" data-i18n="filter_admin">Verwaltung</button>
+          <button class="fbtn" onclick="filter('reporting',this)" data-i18n="filter_report">Reporting</button>
+        </div>
       </div>
     </div>
     <div class="grid" id="grid" aria-live="polite" aria-atomic="false"></div>
   </div>
 </section>
 
-<div class="band">
-  <div>
-    <h2 class="band-title" data-i18n-html="band_title">Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.</h2>
-    <p class="band-text" data-i18n="band_text">Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.</p>
-  </div>
-  <div class="band-img">
-    <img src="teaser.png" alt="eLeDia Demo Platform – kollaborative Datenvisualisierung">
-  </div>
-</div>
 
 </main>
 
@@ -327,7 +312,10 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
   <div class="f-bottom">
     <span>© <span id="fyear"></span> eLeDia GmbH</span>
     <a href="https://eledia.de/impressum/" target="_blank" rel="noopener" data-i18n="footer_imprint">Impressum</a>
+    <a href="https://eledia.de/kontakt/" target="_blank" rel="noopener" data-i18n="footer_contact_link">Kontakt</a>
     <a href="https://eledia.de/datenschutzerklaerung/" target="_blank" rel="noopener" data-i18n="footer_privacy">Datenschutz</a>
+    <a href="https://eledia.de/newsletter/" target="_blank" rel="noopener" data-i18n="footer_newsletter">Newsletter</a>
+    <a href="https://eledia.de/zertifizierungen/" target="_blank" rel="noopener" data-i18n="footer_cert">Zertifizierung</a>
   </div>
 </footer>
 
