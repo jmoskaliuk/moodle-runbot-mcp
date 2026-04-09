@@ -79,12 +79,11 @@ Demo-Kurs shortname: `"demo"`. `03-dev-doc.md` und `01-features.md` aktualisiert
 ---
 
 ### task07 Fehler-E-Mail bei fehlgeschlagenem Demo-Start
-Status: open
+Status: done
 Feature: feat01
 
-Aktuell: Silent Fail wenn Demo-Start in `setImmediate` fehlschlägt.
-Nutzer bekommt keine Rückmeldung.
-→ `email.sendErrorEmail()` implementieren und in Fehler-Handler einbauen.
+`sendErrorEmail()` in `email.ts` implementiert (gleiches Design wie Bestätigungs-E-Mail).
+In `index.ts` catch-Block eingebaut — non-fatal (eigener try/catch für E-Mail-Versand).
 
 ---
 

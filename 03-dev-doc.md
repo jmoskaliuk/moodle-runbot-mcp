@@ -112,7 +112,7 @@ Zwei HTTP-Endpoints in `src/index.ts` orchestrieren den vollständigen Flow.
 12. `email.sendDemoReadyEmail()` → Benachrichtigung an Interessenten
 
 **Constraints**
-- Silent Fail bei Demo-Start-Fehler (kein Fehler-Feedback an Nutzer — TODO: Fehler-E-Mail)
+- Bei Demo-Start-Fehler: `email.sendErrorEmail()` wird aufgerufen (non-fatal, eigener catch)
 
 ---
 

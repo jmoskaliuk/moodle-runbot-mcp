@@ -300,6 +300,10 @@ async function runHTTP(): Promise<void> {
 
       } catch (e) {
         console.error("[confirm] Demo-Start fehlgeschlagen:", e);
+        // Nutzer über Fehler informieren
+        await email.sendErrorEmail(request, config.name).catch((mailErr) => {
+          console.error("[confirm] Fehler-E-Mail konnte nicht gesendet werden:", mailErr);
+        });
       }
     });
   });

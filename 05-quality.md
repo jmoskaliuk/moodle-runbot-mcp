@@ -47,7 +47,7 @@ HTTP→HTTPS-Redirect (301) + HTTPS-Server-Block mit SSL-Certs aus `CERT_DIR`.
 ### bug03 Demo-Start-Fehler ohne Nutzer-Feedback
 
 Feature: feat01
-Status: open
+Status: fixed (task07)
 
 **Description**
 Wenn `setImmediate`-Handler in `GET /confirm/:token` fehlschlägt (z.B. Docker nicht erreichbar, Port erschöpft), bekommt der Nutzer nur die Loading-Page zu sehen — aber nie eine Weiterleitung oder Fehler-E-Mail. Nutzer wartet unendlich lang.

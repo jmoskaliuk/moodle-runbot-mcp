@@ -51,7 +51,7 @@ Ein Interessent kann ohne manuellen Eingriff von eLeDia eine funktionierende Moo
 **Edge Cases**
 - Token abgelaufen (24h): Fehlermeldung mit Link zurück zum Portal
 - Instanz bereits gestartet + läuft noch: direkt weiterleiten, keine neue Instanz
-- Demo-Start schlägt fehl: Fehler wird geloggt, keine E-Mail (Silent Fail → TODO: Fehler-E-Mail)
+- Demo-Start schlägt fehl: Nutzer bekommt Fehler-E-Mail mit "Erneut versuchen"-Link zum Portal
 - Ungültige E-Mail: sofortige Validierungsfehlermeldung
 
 **Non-goals**
