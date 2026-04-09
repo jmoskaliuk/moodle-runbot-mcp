@@ -322,15 +322,15 @@ Bugs: bug09
 ---
 
 ### task17 plugin-detail.html: MCP-Variable + Demo-Flow-Integration
-Status: **mostly done 2026-04-09** (Punkte 1–3 done via commit `4aa961d`, Punkt 4 → task21-Nachzügler, Punkt 5 → task27)
+Status: **done 2026-04-09** (Punkte 1–3, 5 alle fertig; Punkt 4 → task21-Nachzügler, rein kosmetisch)
 Feature: feat01 (Webui)
 Bugs: bug07, bug08, bug12
 
 1. `fetch(MCP, ...)` → `fetch(\`${API}/api/request-demo\`, ...)` (MCP war undefined) — **done** (`mcpCall()` komplett raus)
 2. `startDemo()` umbauen: darf nicht `instance_start` direkt aufrufen. Stattdessen dasselbe Modal wie demo-portal.html öffnen, POST auf `/api/request-demo`, "Bitte prüfen Sie Ihr Postfach" anzeigen. — **done**
-3. `heroTitle` ↔ `heroDesc` Copy-Paste beheben. — **done** (im gleichen Zug mitbereinigt)
+3. `heroTitle` ↔ `heroDesc` Copy-Paste beheben. — **done 2026-04-09** (`plugin-detail.html` um Zeile 596 — heroTitle=cfg.name, heroDesc=cfg.description; zuvor heroTitle=cfg.description und heroDesc=leer).
 4. Hardcoded deutsche Strings auf `data-i18n` umstellen. — verschoben auf task21-Nachzügler (reine Copy-Arbeit, nicht blockierend)
-5. Plugin-Detail-Seite in demo-portal.html verlinken (Details-Button auf Karten). — **noch offen**. Beim Live-Verify aufgefallen: Die Plugin-Cards im Portal haben aktuell KEINEN Details-Link auf `/plugin/:id`. Die Detail-Seite ist derzeit nur über den Direkt-URL `/api/plugin/leitnerflow` erreichbar (nginx strippt `/api/` → Express-Handler `/plugin/:id` → sendFile). Korrektur verschoben auf einen schlanken Nachfolge-Task task27.
+5. Plugin-Detail-Seite in demo-portal.html verlinken (Details-Button auf Karten). — **done 2026-04-09** via task27.
 
 ---
 
@@ -721,24 +721,41 @@ sudo journalctl -u moodle-runbot -n 20 --no-pager | grep extend-codes
 
 ---
 
+### task28 Ready-Page + Bestätigungs-E-Mail UX-Feinschliff
+Status: **done 2026-04-09**
+Feature: feat01 (Webui, E-Mail)
+Entdeckt: Johannes beim E2E-Test nach task19-Snapshot-Rollout
+
+**1. Spacing in der Creds-Box (Ready-State der Loading-Page)**
+Die letzte Account-Zeile (Teilnehmer/in) klebte ohne Abstand an der Passwort-Zeile. Ursache: Das CSS `.cred-row:last-child{margin-bottom:0}` traf nicht nur die Passwort-Zeile (korrekt: hat kein Nachbar), sondern auch die letzte Account-Zeile innerhalb des `#cred-accounts`-Wrapper-Divs (falsch: davor folgt noch eine Passwort-Zeile). Fix: Selektor auf `.creds > .cred-row:last-child` eingeengt, so dass nur direkte Kinder von `.creds` ihren Bottom-Margin verlieren. Die dynamisch in `#cred-accounts` gerenderten Zeilen behalten ihren 8px-Abstand. Zusätzlich `.cred-label min-width` von 80 → 96 px erhöht, damit „Teilnehmer/in:" nicht die Input-Zeile staucht.
+
+**2. Wording: Rolle teacher → „Trainer/in", student → „Teilnehmer/in"**
+Im `ACCOUNT_LABELS`-Dictionary in `src/index.ts` (Ready-Page-Inline-Script) angepasst. Die Moodle-Rollen selbst (`teacher`, `student`) bleiben unverändert — nur die deutsche Anzeige-Beschriftung auf der Ready-Page. Grund: zielt auf Erwachsenenbildung (eLeDia-Zielgruppe) statt auf Schul-Terminologie.
+
+**3. „Link gültig bis ..." aus der Bestätigungs-E-Mail entfernt**
+Die `/request-demo`-Bestätigungs-E-Mail (`src/services/email.ts`) zeigte eine Zeile „Link gültig bis 10.04.26, 19:15 Uhr". Das ist irreführend: der Link markiert den Token-Ablauf, nicht die Demo-Lebenszeit. Wer den Link 20 Stunden später klickt, bekommt trotzdem eine frische Demo mit voller Laufzeit — die Zeile suggerierte das Gegenteil. Ersatzlos entfernt in HTML- und Plain-Text-Variante. `request.expiresAt` bleibt im Token-Modell, wird aber nicht mehr dem Nutzer kommuniziert.
+
+---
+
 ### task27 Details-Link im Demo-Portal auf Plugin-Detail-Seite
-Status: open
+Status: **done 2026-04-09**
 Feature: feat01 (Webui)
 
 Beim Live-Verify von task17/bug18 am 2026-04-09 gemerkt: Die Plugin-Karten im `demo-portal.html`-Grid haben keinen „Details"-Link, der auf die Plugin-Detail-Seite führt. Die Detail-Seite ist aktuell nur über den Direkt-URL `/api/plugin/:id` erreichbar — und das ist ein nginx-Strip-Artefakt, keine offizielle Route (Express selbst hört auf `/plugin/:id`, was aber nicht durch nginx kommt, weil nginx nur `/api/*` proxyt).
 
-**Scope:**
-1. In `webui/demo-portal.html` in der Plugin-Card-Render-Funktion einen Link „Mehr erfahren" hinzufügen, der auf `/api/plugin/${p.id}` zeigt. Der `/api/`-Präfix ist hier unumgänglich, solange die nginx-Config nicht aufgeräumt ist (siehe Idee „nginx-Config sauber aufräumen").
-2. Alternativ (sauberer): nginx aufräumen und dann nur noch `/plugin/:id` verwenden. Siehe idea-Block unter 💡 Ideen.
-3. CSS: Der Details-Link sollte sich klar vom „Demo starten"-CTA unterscheiden (sekundär, weniger prominent).
+**Umgesetzt 2026-04-09 in `webui/demo-portal.html`:**
+1. Neue CSS-Klasse `.card-details` (Zeile 111-113): `margin-left:auto`, sekundär-gemuted, Hover färbt auf Accent, `focus-visible` mit Outline für Tastaturnutzer.
+2. Das alte `margin-left:auto` auf `.dbtn` entfernt — das Layout fließt jetzt `pill → card-details (auto-push) → dbtn`, d.h. sowohl der Details-Link als auch der Demo-Button werden nach rechts geschoben und bleiben visuell gruppiert.
+3. Neue i18n-Keys: DE `btn_details:'Mehr erfahren →'`, EN `btn_details:'Learn more →'` in beiden Wörterbüchern.
+4. Render-Template ergänzt: `<a class="card-details" href="/api/plugin/${p.id}" aria-label="${t('btn_details')} — ${p.name}">${t('btn_details')}</a>` zwischen pill und Demo-Button.
 
-Sehr klein, kann in einem Zug mit den nächsten Portal-Polish-Tasks erledigt werden.
+Der `/api/`-Präfix bleibt solange die nginx-Config nicht aufgeräumt ist. Der strukturelle nginx-Cleanup ist als Idee eingetragen, nicht Teil von task27.
 
 ---
 
 ## 🔧 In Progress
 
-- task19 leitnerflow-v1 Snapshot auf VPS erstellen (Runbook s.u.)
+*(derzeit keine — task19 fertig, task17+task27 fertig)*
 
 *(Tasks die gerade aktiv bearbeitet werden)*
 

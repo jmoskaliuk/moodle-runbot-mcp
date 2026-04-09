@@ -108,12 +108,15 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .p-meta-i{font-size:11px;color:var(--muted)}
 .p-meta-i strong{color:var(--ink2)}
 .card-bot{padding:16px 26px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:10px;background:var(--bg)}
+.card-details{margin-left:auto;font-size:13px;color:var(--muted);text-decoration:none;padding:6px 2px;font-weight:400;transition:color .15s;white-space:nowrap}
+.card-details:hover{color:var(--accent)}
+.card-details:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;white-space:nowrap}
 .pill::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
 .pill-ready{color:var(--muted);background:var(--rule)}
 .pill-running{color:var(--green);background:rgba(58,173,170,.15)}
 .pill-starting{color:var(--amber);background:rgba(249,128,18,.15)}
-.dbtn{margin-left:auto;padding:10px 20px;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;border:none;white-space:nowrap}
+.dbtn{padding:10px 20px;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;border:none;white-space:nowrap}
 .dbtn-p{background:var(--accent);color:#fff}
 .dbtn-p:hover{background:var(--accent2)}
 .dbtn-s{background:transparent;color:var(--accent);border:1px solid rgba(171,29,121,.3)}
@@ -403,6 +406,7 @@ const T={
     modal_sub:'Kurz anmelden — dann geht\'s los.',modal_email_sent:'Bitte prüfen Sie Ihr Postfach.',
     pill_ready:'Bereit',pill_live:'Live',pill_starting:'Startet…',
     btn_open:'Demo öffnen →',btn_starting:'Wird gestartet…',btn_start:'Demo starten',
+    btn_details:'Mehr erfahren →',
     demo_data:'✓ Demo-Daten',fresh_install:'Frische Installation',
     loading:'Konfigurationen werden geladen…',no_plugins:'Keine Plugins in dieser Kategorie.',
     err_email:'E-Mail konnte nicht gesendet werden.',
@@ -445,6 +449,7 @@ const T={
     modal_sub:'Sign in briefly — then you\'re good to go.',modal_email_sent:'Please check your inbox.',
     pill_ready:'Ready',pill_live:'Live',pill_starting:'Starting…',
     btn_open:'Open demo →',btn_starting:'Starting…',btn_start:'Start demo',
+    btn_details:'Learn more →',
     demo_data:'✓ Demo data',fresh_install:'Fresh installation',
     loading:'Loading configurations…',no_plugins:'No plugins in this category.',
     err_email:'Could not send email.',
@@ -588,6 +593,7 @@ function render(f='all'){
       </div>
       <div class="card-bot">
         ${pill}
+        <a class="card-details" href="/api/plugin/${p.id}" aria-label="${t('btn_details')} — ${p.name}">${t('btn_details')}</a>
         <button class="${bc}" onclick="start('${p.id}')" ${bd}>${bl}</button>
       </div>
     </div>`;

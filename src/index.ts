@@ -635,8 +635,13 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   .creds h3{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:400;color:#0f1117;margin-bottom:6px}
   .creds-hint{font-size:12px;color:#7a8090;line-height:1.5;margin:0 0 12px;font-weight:300}
   .cred-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
-  .cred-row:last-child{margin-bottom:0}
-  .cred-label{color:#7a8090;min-width:80px}
+  /* Nur die allerletzte Zeile innerhalb der Creds-Box (das ist die Passwort-
+     Zeile) darf den Bottom-Margin verlieren. Ein naives :last-child greift
+     sonst auch auf die letzte Account-Zeile (Teilnehmer/in) innerhalb von
+     #cred-accounts und klebt sie an die Passwort-Zeile — genau der Fehler
+     den Johannes 2026-04-09 im Screenshot markiert hat. */
+  .creds > .cred-row:last-child{margin-bottom:0}
+  .cred-label{color:#7a8090;min-width:96px}
   .cred-val{font-family:'SF Mono','Menlo',monospace;background:#fff;border:1px solid #e8eaee;border-radius:6px;padding:5px 10px;flex:1;color:#0f1117;font-size:12px;word-break:break-all}
   .copy-btn{background:#fff;border:1px solid #e8eaee;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;color:#7a8090;transition:all .2s;font-family:inherit}
   .copy-btn:hover{border-color:#1a56db;color:#1a56db}
@@ -770,8 +775,8 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
       : ['admin', 'teacher', 'student'];
     const ACCOUNT_LABELS = {
       admin:   'Admin',
-      teacher: 'Lehrkraft',
-      student: 'Schüler:in',
+      teacher: 'Trainer/in',
+      student: 'Teilnehmer/in',
     };
     const accountsBox = document.getElementById('cred-accounts');
     accountsBox.innerHTML = '';

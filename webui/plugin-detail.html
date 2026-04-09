@@ -593,10 +593,13 @@ async function loadPluginData() {
       document.title = `${cfg.name} — eLeDia Demo`;
       const heroName = document.getElementById('heroName');
       if (heroName) heroName.textContent = cfg.name;
+      // bug12 fix (2026-04-09): heroTitle war cfg.description und heroDesc
+      // war leer — das ist vertauscht. cfg.name als h1 (groß, prominent),
+      // cfg.description als Fließtext darunter. Konsistent mit dem Portal.
       const heroTitle = document.getElementById('heroTitle');
-      if (heroTitle) heroTitle.textContent = cfg.description ?? '';
+      if (heroTitle) heroTitle.textContent = cfg.name;
       const heroDesc = document.getElementById('heroDesc');
-      if (heroDesc) heroDesc.textContent = '';  // title already covers this
+      if (heroDesc) heroDesc.textContent = cfg.description ?? '';
       const bandName = document.getElementById('bandPluginName');
       if (bandName) bandName.textContent = cfg.name;
       const chips = document.getElementById('heroChips');

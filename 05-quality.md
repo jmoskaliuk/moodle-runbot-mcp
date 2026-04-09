@@ -104,7 +104,7 @@ Status: fixed (task11)
 ### bug06 docker.ts: $CFG->wwwroot falsch, kein sslproxy
 
 Feature: feat02, feat03
-Status: open (task15)
+Status: **fixed 2026-04-09** (task15)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
@@ -124,14 +124,19 @@ Folge:
 - `$CFG->sslproxy = true;`
 
 **Fix**
-task15: `provisionInstance()` hängt nach dem Template-Copy einen Override-Block vor `require_once('/lib/setup.php')` ein. `composeEnv()` setzt zusätzlich `MOODLE_DOCKER_WEB_HOST` für Werkzeuge wie Behat, die den Host direkt lesen.
+task15: `provisionInstance()` ruft jetzt `patchConfigForProduction()` auf, das nach dem Template-Copy einen Override-Block vor `require_once('/lib/setup.php')` einhängt:
+```php
+$CFG->wwwroot  = 'https://demo-xxx.demo.eledia.ai';
+$CFG->sslproxy = true;
+```
+`composeEnv()` setzt zusätzlich `MOODLE_DOCKER_WEB_HOST` für Werkzeuge wie Behat, die den Host direkt lesen. Verifiziert 2026-04-09 via frischer Demo-Start ohne Mixed-Content-Warnung und korrektem HTTPS-Redirect.
 
 ---
 
 ### bug07 plugin-detail.html: undefined MCP-Variable
 
 Feature: feat01 (Webui)
-Status: open (task17)
+Status: **fixed 2026-04-09** (task17)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
@@ -141,14 +146,14 @@ Entdeckt: Code-Review 2026-04-09
 `fetch(\`${API}/api/request-demo\`, ...)` — konsistent mit demo-portal.html.
 
 **Fix**
-task17: Wie demo-portal.html → `API` benutzen, `startDemo()` muss zusätzlich den kompletten request-demo-Flow aufrufen, nicht `instance_start` direkt.
+task17: Der gesamte Direkt-Launch-Pfad (`mcpCall()` + `finish()` + Progress-Balken) wurde aus `plugin-detail.html` entfernt. `startDemo()` öffnet jetzt nur noch das Modal (`openModal()`), `submitForm()` postet auf `${API}/request-demo` — identisch zum Portal-Formular. Kein `MCP`-Symbol mehr im Code.
 
 ---
 
 ### bug08 plugin-detail.html: startDemo umgeht E-Mail-Flow
 
 Feature: feat01 (Webui)
-Status: open (task17)
+Status: **fixed 2026-04-09** (task17)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
@@ -158,14 +163,14 @@ Entdeckt: Code-Review 2026-04-09
 Die Detailseite öffnet dasselbe Modal wie demo-portal.html und postet auf `/api/request-demo`.
 
 **Fix**
-task17: Modal aus demo-portal.html extrahieren oder duplizieren, plugin-detail.html um den Flow erweitern.
+task17: Das Modal wurde aus `demo-portal.html` nach `plugin-detail.html` dupliziert und der Token-Flow aktiviert: `POST /api/request-demo` → Bestätigungs-E-Mail → `/confirm/:token` → Loading-Page → Demo-bereit-Mail. Keine Detail-seitigen Instanzen mehr ohne E-Mail-Bestätigung, keine Umgehung des Rate-Limits.
 
 ---
 
 ### bug09 tools/instances.ts: instanceUrl() ist http
 
 Feature: feat03
-Status: open (task16)
+Status: **fixed 2026-04-09** (task16)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
@@ -179,7 +184,7 @@ function instanceUrl(instance: MoodleInstance): string {
 `index.ts:292` baut dagegen `https://`. MCP-Clients (instance_start/status/list) bekommen eine andere URL als Demo-Flow-Nutzer.
 
 **Fix**
-task16: `http://` → `https://` wenn `BASE_DOMAIN` gesetzt.
+task16: `instanceUrl()` liefert jetzt `https://${instance.id}.${BASE_DOMAIN}` wenn `BASE_DOMAIN` gesetzt ist, sonst weiterhin `http://localhost:${webPort}` (lokaler Dev-Modus ohne TLS). Damit sind `index.ts` und `tools/instances.ts` konsistent. Verifiziert 2026-04-09 im aktuellen Code.
 
 ---
 
@@ -221,28 +226,28 @@ Behoben: Hotfix 2026-04-09 nach User-Report "Schließen-Button reagiert nicht"
 ### bug12 plugin-detail.html: Hero-Title/Desc Copy-Paste
 
 Feature: feat01 (Webui)
-Status: open (task17)
+Status: **fixed 2026-04-09** (task17)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
 `loadPluginData()` setzt `heroTitle.textContent = cfg.description` und `heroDesc.textContent = ''`. Der Titel sollte der Plugin-Name (oder ein Marketing-Headline) sein, die Description gehört darunter.
 
 **Fix**
-task17: `heroTitle = cfg.name`, `heroDesc = cfg.description`.
+task17: `heroTitle = cfg.name`, `heroDesc = cfg.description`. Umgesetzt in `webui/plugin-detail.html` um Zeile 596. `heroName` (Breadcrumb-Span) bleibt ebenfalls `cfg.name` — damit ist die Bread­crumb-Navi konsistent mit der H1.
 
 ---
 
 ### bug13 configs.json snapshotId null → 3–5 Min Fresh-Install
 
 Feature: feat01, feat05
-Status: open (task19)
+Status: **fixed 2026-04-09** (task19)
 Entdeckt: Code-Review 2026-04-09
 
 **Description**
 `configs.json` → `leitnerflow.snapshotId = null`. Jeder Demo-Start läuft durch `install_database.php` (3–5 Min frisch). Die Loading-Page animiert aber 5 Schritte à 10s (~50s) und die Bestätigungs-E-Mail verspricht "1–2 Minuten".
 
 **Fix**
-task19: Snapshot `leitnerflow-v1` auf VPS bauen, in configs.json referenzieren.
+task19: Snapshot `leitnerflow-v1.sql.gz` (224.7 KB) liegt auf dem VPS unter `/opt/snapshots/`, erstellt via `scripts/seed-snapshot.sh create-snapshot` aus einer frisch provisionierten Seed-Instanz. `configs.json` → `leitnerflow.snapshotId = "leitnerflow-v1"`. Cold-Start via `instance_start(snapshotId=...)` spielt den Dump per `zcat | psql` in ~5 Sekunden statt ~3 Minuten ein. E2E-Verifikation durch Johannes parallel zu diesem Commit.
 
 ---
 
@@ -377,7 +382,7 @@ Result: pending
 ### test03 End-to-End Demo-Flow
 
 Feature: feat01
-Result: pending
+Result: **passed 2026-04-09** (Johannes, E2E aus Snapshot `leitnerflow-v1`)
 
 **Steps**
 1. `POST /request-demo` mit gültiger E-Mail + configId
@@ -390,3 +395,6 @@ Result: pending
 
 **Expected**
 Kompletter Flow ohne manuellen Eingriff, Demo startet in < 90 Sekunden.
+
+**Ergebnis 2026-04-09**
+Flow komplett durchgelaufen. Cold-Start aus Snapshot nur wenige Sekunden statt 3–5 Min. Alle drei Accounts (admin/teacher/student) funktionieren. Kleinerer UI-Befund in der Creds-Box (Spacing + Wording) → siehe task28.
