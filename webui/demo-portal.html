@@ -30,6 +30,8 @@ nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-
 .nav-links a{font-size:14px;color:var(--muted);text-decoration:none;transition:color .15s}
 .nav-links a:hover{color:var(--ink)}
 .nav-cta{background:var(--ink)!important;color:#fff!important;padding:8px 18px;border-radius:6px;font-weight:500}
+.lang-toggle{padding:5px 12px;border-radius:6px;border:1px solid var(--rule);background:transparent;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans);letter-spacing:.5px}
+.lang-toggle:hover{border-color:var(--accent);color:var(--accent)}
 .wrap{max-width:1100px;margin:0 auto;padding:0 clamp(24px,6vw,80px)}
 .hero{padding:96px clamp(24px,6vw,80px) 80px;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;max-width:1100px;margin:0 auto}
 @media(max-width:768px){.hero{grid-template-columns:1fr;padding:60px 24px 48px}.hero-vis{display:none}}
@@ -158,22 +160,23 @@ footer a:hover{color:var(--ink)}
   <a class="nav-logo" href="#">eLeDia<span>.</span></a>
   <div class="nav-links">
     <a href="#plugins">Plugins</a>
-    <a href="#how">Wie es funktioniert</a>
+    <a href="#how" data-i18n="nav_how">Wie es funktioniert</a>
     <a href="https://project52.eledia.ai" target="_blank">Project52</a>
-    <a href="https://eledia.de" class="nav-cta" target="_blank">Kontakt</a>
+    <a href="https://eledia.de" class="nav-cta" target="_blank" data-i18n="nav_contact">Kontakt</a>
+    <button class="lang-toggle" id="langBtn" onclick="toggleLang()">EN</button>
   </div>
 </nav>
 
 <section class="hero">
   <div>
-    <div class="eyebrow">Moodle Plugin Demos</div>
-    <h1 class="hero-h1">Plugins <em>erleben</em>,<br>bevor Sie entscheiden.</h1>
-    <p class="hero-lead">Starten Sie in Sekunden eine vollständige Moodle-Instanz mit dem Plugin Ihrer Wahl — vorkonfiguriert, mit echten Beispieldaten, ohne Installation.</p>
-    <a class="hero-cta" href="#plugins">Alle Plugins ansehen</a>
+    <div class="eyebrow" data-i18n="hero_eyebrow">Moodle Plugin Demos</div>
+    <h1 class="hero-h1" data-i18n-html="hero_h1">Plugins <em>erleben</em>,<br>bevor Sie entscheiden.</h1>
+    <p class="hero-lead" data-i18n="hero_lead">Starten Sie in Sekunden eine vollständige Moodle-Instanz mit dem Plugin Ihrer Wahl — vorkonfiguriert, mit echten Beispieldaten, ohne Installation.</p>
+    <a class="hero-cta" href="#plugins" data-i18n="hero_cta">Alle Plugins ansehen</a>
     <div class="hero-stats">
-      <div><div class="stat-val">6</div><div class="stat-lbl">Plugins verfügbar</div></div>
-      <div><div class="stat-val" id="statActive">—</div><div class="stat-lbl">Demos aktiv</div></div>
-      <div><div class="stat-val">~45s</div><div class="stat-lbl">Startzeit</div></div>
+      <div><div class="stat-val">6</div><div class="stat-lbl" data-i18n="stat_plugins">Plugins verfügbar</div></div>
+      <div><div class="stat-val" id="statActive">—</div><div class="stat-lbl" data-i18n="stat_active">Demos aktiv</div></div>
+      <div><div class="stat-val">~45s</div><div class="stat-lbl" data-i18n="stat_start">Startzeit</div></div>
     </div>
   </div>
   <div class="hero-vis">
@@ -185,23 +188,23 @@ footer a:hover{color:var(--ink)}
 
 <section class="how" id="how">
   <div class="wrap">
-    <div class="eyebrow">So funktioniert es</div>
-    <h2 class="sec-title">Eine Demo in drei Schritten.</h2>
+    <div class="eyebrow" data-i18n="how_eyebrow">So funktioniert es</div>
+    <h2 class="sec-title" data-i18n="how_title">Eine Demo in drei Schritten.</h2>
     <div class="steps">
       <div class="step fade-up">
         <div class="step-n">01</div>
-        <div class="step-t">Plugin wählen</div>
-        <div class="step-d">Wählen Sie das Plugin, das Sie interessiert. Jede Demo kommt mit sinnvollen Beispieldaten und einem vorkonfigurierten Kurs.</div>
+        <div class="step-t" data-i18n="step1_t">Plugin wählen</div>
+        <div class="step-d" data-i18n="step1_d">Wählen Sie das Plugin, das Sie interessiert. Jede Demo kommt mit sinnvollen Beispieldaten und einem vorkonfigurierten Kurs.</div>
       </div>
       <div class="step fade-up" style="transition-delay:.1s">
         <div class="step-n">02</div>
-        <div class="step-t">Demo starten</div>
-        <div class="step-d">Ein Klick genügt. Wir starten eine isolierte Moodle-Instanz exklusiv für Sie — dauert typischerweise 30–60 Sekunden.</div>
+        <div class="step-t" data-i18n="step2_t">Demo starten</div>
+        <div class="step-d" data-i18n="step2_d">Ein Klick genügt. Wir starten eine isolierte Moodle-Instanz exklusiv für Sie — dauert typischerweise 30–60 Sekunden.</div>
       </div>
       <div class="step fade-up" style="transition-delay:.2s">
         <div class="step-n">03</div>
-        <div class="step-t">Frei erkunden</div>
-        <div class="step-d">Ihre persönliche Demo läuft 60 Minuten. Danach wird sie automatisch gelöscht. Keine Registrierung, keine Daten.</div>
+        <div class="step-t" data-i18n="step3_t">Frei erkunden</div>
+        <div class="step-d" data-i18n="step3_d">Ihre persönliche Demo läuft 60 Minuten. Danach wird sie automatisch gelöscht. Keine Registrierung, keine Daten.</div>
       </div>
     </div>
   </div>
@@ -213,15 +216,15 @@ footer a:hover{color:var(--ink)}
   <div class="wrap">
     <div class="plugins-hdr">
       <div>
-        <div class="eyebrow">Verfügbare Plugins</div>
-        <h2 class="sec-title">Was möchten Sie testen?</h2>
-        <p class="sec-lead">Alle Plugins sind für Moodle 5.x entwickelt und Open Source.</p>
+        <div class="eyebrow" data-i18n="plugins_eyebrow">Verfügbare Plugins</div>
+        <h2 class="sec-title" data-i18n="plugins_title">Was möchten Sie testen?</h2>
+        <p class="sec-lead" data-i18n="plugins_lead">Alle Plugins sind für Moodle 5.x entwickelt und Open Source.</p>
       </div>
       <div class="filters">
-        <button class="fbtn active" onclick="filter('all',this)">Alle</button>
-        <button class="fbtn" onclick="filter('lernen',this)">Lernen</button>
-        <button class="fbtn" onclick="filter('verwaltung',this)">Verwaltung</button>
-        <button class="fbtn" onclick="filter('reporting',this)">Reporting</button>
+        <button class="fbtn active" onclick="filter('all',this)" data-i18n="filter_all">Alle</button>
+        <button class="fbtn" onclick="filter('lernen',this)" data-i18n="filter_learn">Lernen</button>
+        <button class="fbtn" onclick="filter('verwaltung',this)" data-i18n="filter_admin">Verwaltung</button>
+        <button class="fbtn" onclick="filter('reporting',this)" data-i18n="filter_report">Reporting</button>
       </div>
     </div>
     <div class="grid" id="grid"></div>
@@ -230,8 +233,8 @@ footer a:hover{color:var(--ink)}
 
 <div class="band">
   <div>
-    <h2 class="band-title">Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.</h2>
-    <p class="band-text">Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.</p>
+    <h2 class="band-title" data-i18n-html="band_title">Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.</h2>
+    <p class="band-text" data-i18n="band_text">Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.</p>
   </div>
   <div class="band-img">
     <img src="teaser.png" alt="eLeDia Demo Platform – kollaborative Datenvisualisierung">
@@ -241,43 +244,43 @@ footer a:hover{color:var(--ink)}
 <footer>
   <div class="f-logo">eLeDia</div>
   <a href="https://project52.eledia.ai" target="_blank">Project52</a>
-  <a href="#">Impressum</a>
-  <a href="#">Datenschutz</a>
+  <a href="#" data-i18n="footer_imprint">Impressum</a>
+  <a href="#" data-i18n="footer_privacy">Datenschutz</a>
 </footer>
 
 <div class="overlay" id="ov" onclick="if(event.target===this)close()">
   <div class="modal">
     <div class="m-hdr">
       <div class="m-icon" id="mIcon"></div>
-      <div><div class="m-title" id="mTitle"></div><div class="m-sub" id="mSub">Wird vorbereitet…</div></div>
+      <div><div class="m-title" id="mTitle"></div><div class="m-sub" id="mSub" data-i18n="modal_preparing">Wird vorbereitet…</div></div>
       <button class="m-close" onclick="close()">×</button>
     </div>
     <div class="m-body">
       <!-- E-Mail Formular — wird zuerst gezeigt -->
       <div id="mForm">
-        <p style="font-size:14px;color:var(--muted);margin-bottom:16px;font-weight:300">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:16px;font-weight:300" data-i18n="form_intro">
           Wir senden Ihnen einen Bestätigungslink — damit ist Ihr persönlicher Login gesichert.
         </p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
           <div>
             <label style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
-              Name <span style="color:var(--muted);font-weight:300">(optional)</span>
+              <span data-i18n="label_name">Name</span> <span style="color:var(--muted);font-weight:300" data-i18n="label_name_opt">(optional)</span>
             </label>
-            <input id="fName" type="text" placeholder="Ihr Name"
+            <input id="fName" type="text" data-i18n-placeholder="placeholder_name" placeholder="Ihr Name"
               style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'">
           </div>
           <div>
             <label style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
-              E-Mail <span style="color:var(--red);font-size:10px">*</span>
+              <span data-i18n="label_email">E-Mail</span> <span style="color:var(--red);font-size:10px">*</span>
             </label>
-            <input id="fEmail" type="email" placeholder="ihre@email.de"
+            <input id="fEmail" type="email" data-i18n-placeholder="placeholder_email" placeholder="ihre@email.de"
               style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'"
               onkeydown="if(event.key==='Enter')submitForm()">
           </div>
         </div>
-        <p style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">
+        <p style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5" data-i18n="form_note">
           Ihre E-Mail wird nur für diese Demo verwendet.
         </p>
       </div>
@@ -289,23 +292,112 @@ footer a:hover{color:var(--ink)}
       </div>
       <div class="m-result" id="mRes">
         <div class="r-check">✉️</div>
-        <p style="font-size:15px;color:var(--ink);margin-bottom:8px;font-weight:500">E-Mail wurde gesendet.</p>
-        <p style="font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+        <p style="font-size:15px;color:var(--ink);margin-bottom:8px;font-weight:500" data-i18n="result_title">E-Mail wurde gesendet.</p>
+        <p style="font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:12px" data-i18n-html="result_text">
           Prüfen Sie Ihr Postfach und klicken Sie den Bestätigungslink.<br>
           Danach startet Ihre Demo automatisch.
         </p>
-        <p class="r-note">Link ist 24 Stunden gültig · Kein Passwort nötig</p>
+        <p class="r-note" data-i18n="result_note">Link ist 24 Stunden gültig · Kein Passwort nötig</p>
       </div>
     </div>
     <div class="m-foot">
-      <button class="btn-o" onclick="close()">Abbrechen</button>
-      <button class="btn-f" id="mBtn" onclick="submitForm()">Bestätigungslink senden →</button>
+      <button class="btn-o" onclick="close()" data-i18n="btn_cancel">Abbrechen</button>
+      <button class="btn-f" id="mBtn" onclick="submitForm()" data-i18n="btn_submit">Bestätigungslink senden →</button>
     </div>
   </div>
 </div>
 
 <script>
-// API-Basis relativ zur aktuellen Domain — funktioniert auf demo.eledia.ai und lokal
+// ── i18n ──────────────────────────────────────────────────────────
+let lang='de';
+
+const T={
+  de:{
+    nav_how:'Wie es funktioniert',nav_contact:'Kontakt',
+    hero_eyebrow:'Moodle Plugin Demos',
+    hero_h1:'Plugins <em>erleben</em>,<br>bevor Sie entscheiden.',
+    hero_lead:'Starten Sie in Sekunden eine vollständige Moodle-Instanz mit dem Plugin Ihrer Wahl — vorkonfiguriert, mit echten Beispieldaten, ohne Installation.',
+    hero_cta:'Alle Plugins ansehen',
+    stat_plugins:'Plugins verfügbar',stat_active:'Demos aktiv',stat_start:'Startzeit',
+    how_eyebrow:'So funktioniert es',how_title:'Eine Demo in drei Schritten.',
+    step1_t:'Plugin wählen',step1_d:'Wählen Sie das Plugin, das Sie interessiert. Jede Demo kommt mit sinnvollen Beispieldaten und einem vorkonfigurierten Kurs.',
+    step2_t:'Demo starten',step2_d:'Ein Klick genügt. Wir starten eine isolierte Moodle-Instanz exklusiv für Sie — dauert typischerweise 30–60 Sekunden.',
+    step3_t:'Frei erkunden',step3_d:'Ihre persönliche Demo läuft 60 Minuten. Danach wird sie automatisch gelöscht. Keine Registrierung, keine Daten.',
+    plugins_eyebrow:'Verfügbare Plugins',plugins_title:'Was möchten Sie testen?',
+    plugins_lead:'Alle Plugins sind für Moodle 5.x entwickelt und Open Source.',
+    filter_all:'Alle',filter_learn:'Lernen',filter_admin:'Verwaltung',filter_report:'Reporting',
+    band_title:'Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.',
+    band_text:'Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.',
+    footer_imprint:'Impressum',footer_privacy:'Datenschutz',
+    modal_preparing:'Wird vorbereitet…',
+    form_intro:'Wir senden Ihnen einen Bestätigungslink — damit ist Ihr persönlicher Login gesichert.',
+    label_name:'Name',label_name_opt:'(optional)',label_email:'E-Mail',
+    placeholder_name:'Ihr Name',placeholder_email:'ihre@email.de',
+    form_note:'Ihre E-Mail wird nur für diese Demo verwendet.',
+    btn_cancel:'Abbrechen',btn_submit:'Bestätigungslink senden →',
+    btn_retry:'Erneut versuchen',btn_sending:'Wird gesendet…',
+    result_title:'E-Mail wurde gesendet.',
+    result_text:'Prüfen Sie Ihr Postfach und klicken Sie den Bestätigungslink.<br>Danach startet Ihre Demo automatisch.',
+    result_note:'Link ist 24 Stunden gültig · Kein Passwort nötig',
+    modal_sub:'Kurz anmelden — dann geht\'s los.',modal_email_sent:'Bitte prüfen Sie Ihr Postfach.',
+    pill_ready:'Bereit',pill_live:'Live',pill_starting:'Startet…',
+    btn_open:'Demo öffnen →',btn_starting:'Wird gestartet…',btn_start:'Demo starten',
+    demo_data:'✓ Demo-Daten',fresh_install:'Frische Installation',
+    loading:'Konfigurationen werden geladen…',no_plugins:'Keine Plugins in dieser Kategorie.',
+    err_email:'E-Mail konnte nicht gesendet werden.',
+  },
+  en:{
+    nav_how:'How it works',nav_contact:'Contact',
+    hero_eyebrow:'Moodle Plugin Demos',
+    hero_h1:'Experience plugins <em>before</em><br>you decide.',
+    hero_lead:'Launch a full Moodle instance in seconds with the plugin of your choice — pre-configured, with real sample data, no installation required.',
+    hero_cta:'View all plugins',
+    stat_plugins:'Plugins available',stat_active:'Active demos',stat_start:'Start time',
+    how_eyebrow:'How it works',how_title:'A demo in three steps.',
+    step1_t:'Choose a plugin',step1_d:'Select the plugin you\'re interested in. Each demo comes with meaningful sample data and a pre-configured course.',
+    step2_t:'Start the demo',step2_d:'One click is all it takes. We spin up an isolated Moodle instance exclusively for you — typically takes 30–60 seconds.',
+    step3_t:'Explore freely',step3_d:'Your personal demo runs for 60 minutes, then it\'s automatically deleted. No registration, no data retained.',
+    plugins_eyebrow:'Available plugins',plugins_title:'What would you like to try?',
+    plugins_lead:'All plugins are developed for Moodle 5.x and are open source.',
+    filter_all:'All',filter_learn:'Learning',filter_admin:'Administration',filter_report:'Reporting',
+    band_title:'Full Moodle environment.<br>Zero effort on your part.',
+    band_text:'Each demo runs in a fully isolated Docker environment on our servers. No data is stored permanently. After 60 minutes the instance is automatically removed.',
+    footer_imprint:'Legal notice',footer_privacy:'Privacy policy',
+    modal_preparing:'Preparing…',
+    form_intro:'We\'ll send you a confirmation link — this secures your personal login.',
+    label_name:'Name',label_name_opt:'(optional)',label_email:'E-mail',
+    placeholder_name:'Your name',placeholder_email:'your@email.com',
+    form_note:'Your email is only used for this demo.',
+    btn_cancel:'Cancel',btn_submit:'Send confirmation link →',
+    btn_retry:'Try again',btn_sending:'Sending…',
+    result_title:'Email sent.',
+    result_text:'Check your inbox and click the confirmation link.<br>Your demo will start automatically.',
+    result_note:'Link valid for 24 hours · No password required',
+    modal_sub:'Sign in briefly — then you\'re good to go.',modal_email_sent:'Please check your inbox.',
+    pill_ready:'Ready',pill_live:'Live',pill_starting:'Starting…',
+    btn_open:'Open demo →',btn_starting:'Starting…',btn_start:'Start demo',
+    demo_data:'✓ Demo data',fresh_install:'Fresh installation',
+    loading:'Loading configurations…',no_plugins:'No plugins in this category.',
+    err_email:'Could not send email.',
+  }
+};
+
+function t(k){return T[lang][k]??k;}
+
+function setLang(l){
+  lang=l;
+  document.documentElement.lang=l;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+  document.querySelectorAll('[data-i18n-html]').forEach(el=>{el.innerHTML=t(el.dataset.i18nHtml);});
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{el.placeholder=t(el.dataset.i18nPlaceholder);});
+  const btn=document.getElementById('langBtn');
+  if(btn) btn.textContent=l==='de'?'EN':'DE';
+  render(activeFilter);
+}
+
+function toggleLang(){setLang(lang==='de'?'en':'de');}
+
+// ── API ───────────────────────────────────────────────────────────
 const API=window.location.origin+'/api';
 const CONFIGS_URL=API+'/configs';
 
@@ -321,7 +413,7 @@ async function loadConfigs(){
   // Ladezustand
   document.getElementById('grid').innerHTML=`
     <div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);font-size:14px">
-      Konfigurationen werden geladen…
+      ${t('loading')}
     </div>`;
   try{
     const r=await fetch(CONFIGS_URL);
@@ -372,20 +464,20 @@ function render(f='all'){
   const visible=P.filter(p=>f==='all'||p.category===f);
 
   if(!visible.length){
-    g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);font-size:14px">Keine Plugins in dieser Kategorie.</div>`;
+    g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);font-size:14px">${t('no_plugins')}</div>`;
     return;
   }
 
   g.innerHTML=visible.map(p=>{
     const i=inst[p.id];
     const pill=i
-      ?`<span class="pill pill-${i.status}">${i.status==='running'?'Live':'Startet…'}</span>`
-      :`<span class="pill pill-ready">Bereit</span>`;
-    const bl=i?.status==='running'?'Demo öffnen →':i?'Wird gestartet…':'Demo starten';
+      ?`<span class="pill pill-${i.status}">${i.status==='running'?t('pill_live'):t('pill_starting')}</span>`
+      :`<span class="pill pill-ready">${t('pill_ready')}</span>`;
+    const bl=i?.status==='running'?t('btn_open'):i?t('btn_starting'):t('btn_start');
     const bc=i?.status==='running'?'dbtn dbtn-s':'dbtn dbtn-p';
     const bd=i&&i.status!=='running'?'disabled':'';
     // snapshotId zeigt ob Demo-Daten vorhanden sind
-    const hasDemoData=p.snapshotId?'✓ Demo-Daten':'Frische Installation';
+    const hasDemoData=p.snapshotId?t('demo_data'):t('fresh_install');
     return`<div class="card fade-up">
       <div class="card-top">
         <div class="p-icon" style="background:${p.iconBg}">${p.icon}</div>
@@ -425,12 +517,12 @@ function openModal(){
   document.getElementById('mIcon').textContent=cur.icon;
   document.getElementById('mIcon').style.background=cur.iconBg;
   document.getElementById('mTitle').textContent=cur.name+' Demo';
-  document.getElementById('mSub').textContent='Kurz anmelden — dann geht\'s los.';
+  document.getElementById('mSub').textContent=t('modal_sub');
   document.getElementById('mRes').classList.remove('show');
   document.getElementById('mForm').style.display='block';
   document.getElementById('mProg').style.display='none';
   document.getElementById('mBtn').disabled=false;
-  document.getElementById('mBtn').textContent='Bestätigungslink senden →';
+  document.getElementById('mBtn').textContent=t('btn_submit');
   url=null;
   document.getElementById('ov').classList.add('open');
   // Fokus auf E-Mail-Feld
@@ -452,7 +544,7 @@ async function submitForm(){
 
   const btn=document.getElementById('mBtn');
   btn.disabled=true;
-  btn.textContent='Wird gesendet…';
+  btn.textContent=t('btn_sending');
 
   try{
     const r=await fetch(API+'/request-demo',{
@@ -465,13 +557,13 @@ async function submitForm(){
 
     // Formular ausblenden, Erfolg zeigen
     document.getElementById('mForm').style.display='none';
-    document.getElementById('mSub').textContent='Bitte prüfen Sie Ihr Postfach.';
+    document.getElementById('mSub').textContent=t('modal_email_sent');
     document.getElementById('mRes').classList.add('show');
     btn.style.display='none';
 
   }catch(e){
     btn.disabled=false;
-    btn.textContent='Erneut versuchen';
+    btn.textContent=t('btn_retry');
     // Fehlermeldung unter dem Formular
     let err=document.getElementById('fError');
     if(!err){
@@ -480,7 +572,7 @@ async function submitForm(){
       err.style.cssText='font-size:12px;color:var(--red);margin-top:8px';
       document.getElementById('mForm').appendChild(err);
     }
-    err.textContent=e.message||'E-Mail konnte nicht gesendet werden.';
+    err.textContent=e.message||t('err_email');
   }
 }
 
