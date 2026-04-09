@@ -9,78 +9,133 @@ const TOKENS_FILE = process.env.TOKENS_FILE
     ?? path.join(process.env.RUNBOT_WORK_DIR ?? "/opt/runbot", "tokens.json");
 const TOKEN_TTL_HOURS = parseInt(process.env.TOKEN_TTL_HOURS ?? "24");
 // ── Storage ───────────────────────────────────────────────────────────────────
-async function load() {
+//
+// WICHTIG: Alle Zugriffe auf tokens.json MÜSSEN über `withLock()` serialisiert
+// werden. Wir hatten einen Bug, bei dem concurrent load/save die Datei
+// zerschossen haben — half-written JSON → Parse-Fehler in load() → alle
+// Tokens wurden durch einen nachfolgenden save() mit `{}` ausgelöscht.
+//
+// Zusätzliche Absicherungen:
+//   1. Atomarer Write (temp file + rename) — rename() ist POSIX-atomar
+//   2. load() unterscheidet ENOENT (leere Datei, {}) vs. Parse-Fehler (throw)
+//   3. Mutex per Promise-Chain — alle DB-Operationen warten aufeinander
+let mutex = Promise.resolve();
+function withLock(fn) {
+    const next = mutex.then(fn, fn); // catch + then — Fehler brechen die Kette nicht
+    mutex = next.catch(() => { }); // Mutex darf nie rejecten, sonst blockiert alles
+    return next;
+}
+async function loadRaw() {
+    let raw;
     try {
-        const raw = await fs.readFile(TOKENS_FILE, "utf-8");
+        raw = await fs.readFile(TOKENS_FILE, "utf-8");
+    }
+    catch (e) {
+        // Datei existiert nicht → leerer State ist OK
+        if (e instanceof Error && "code" in e && e.code === "ENOENT") {
+            return {};
+        }
+        throw e;
+    }
+    // Leere Datei → leerer State (kein Parse)
+    if (raw.trim().length === 0)
+        return {};
+    try {
         return JSON.parse(raw);
     }
-    catch {
-        return {};
+    catch (parseErr) {
+        // Parse-Fehler ist ein ERNSTES Problem: halb-geschriebene Datei.
+        // NICHT silently {} zurückgeben — das würde beim nächsten save() alle
+        // Tokens auslöschen. Stattdessen: loud throw, Caller muss entscheiden.
+        console.error(`[tokens] FEHLER: ${TOKENS_FILE} ist korrupt — JSON.parse failed:`, parseErr);
+        throw new Error(`tokens.json corrupt: ${String(parseErr)}`);
     }
 }
-async function save(tokens) {
+async function saveRaw(tokens) {
     await fs.mkdir(path.dirname(TOKENS_FILE), { recursive: true });
-    await fs.writeFile(TOKENS_FILE, JSON.stringify(tokens, null, 2), "utf-8");
+    // Atomares Write: erst in temp file schreiben, dann umbenennen.
+    // rename() ist POSIX-atomar — Reader sehen entweder den alten oder den
+    // neuen Inhalt, nie eine halb-geschriebene Datei.
+    const tmp = `${TOKENS_FILE}.tmp.${process.pid}`;
+    await fs.writeFile(tmp, JSON.stringify(tokens, null, 2), "utf-8");
+    await fs.rename(tmp, TOKENS_FILE);
+}
+async function load() {
+    return withLock(() => loadRaw());
+}
+async function save(tokens) {
+    return withLock(() => saveRaw(tokens));
+}
+/**
+ * Read-modify-write in einem einzigen Lock-Abschnitt. Verhindert
+ * Lost-Updates bei concurrent setPhase/markStarted/confirmRequest.
+ */
+async function update(fn) {
+    return withLock(async () => {
+        const tokens = await loadRaw();
+        const result = await fn(tokens);
+        await saveRaw(tokens);
+        return result;
+    });
 }
 // ── Public API ────────────────────────────────────────────────────────────────
 export function generateToken() {
     return randomBytes(24).toString("base64url"); // URL-sicher, 32 Zeichen
 }
 export async function createRequest(email, name, configId) {
-    const tokens = await load();
-    // Prüfen ob E-Mail + Config bereits eine pending/confirmed Anfrage hat
-    const existing = Object.values(tokens).find(t => t.email.toLowerCase() === email.toLowerCase()
-        && t.configId === configId
-        && (t.status === "pending" || t.status === "confirmed")
-        && new Date(t.expiresAt) > new Date());
-    if (existing)
-        return existing; // Gleiche E-Mail nicht zweimal schicken
-    const token = generateToken();
-    const now = new Date();
-    const expires = new Date(now.getTime() + TOKEN_TTL_HOURS * 60 * 60 * 1000);
-    const request = {
-        token,
-        email: email.toLowerCase().trim(),
-        name: name.trim() || "Demo-Nutzer",
-        configId,
-        requestedAt: now.toISOString(),
-        expiresAt: expires.toISOString(),
-        status: "pending",
-    };
-    tokens[token] = request;
-    await save(tokens);
-    return request;
+    return update(tokens => {
+        // Prüfen ob E-Mail + Config bereits eine pending/confirmed Anfrage hat
+        const existing = Object.values(tokens).find(t => t.email.toLowerCase() === email.toLowerCase()
+            && t.configId === configId
+            && (t.status === "pending" || t.status === "confirmed")
+            && new Date(t.expiresAt) > new Date());
+        if (existing)
+            return existing; // Gleiche E-Mail nicht zweimal schicken
+        const token = generateToken();
+        const now = new Date();
+        const expires = new Date(now.getTime() + TOKEN_TTL_HOURS * 60 * 60 * 1000);
+        const request = {
+            token,
+            email: email.toLowerCase().trim(),
+            name: name.trim() || "Demo-Nutzer",
+            configId,
+            requestedAt: now.toISOString(),
+            expiresAt: expires.toISOString(),
+            status: "pending",
+        };
+        tokens[token] = request;
+        return request;
+    });
 }
 export async function getRequest(token) {
     const tokens = await load();
     return tokens[token];
 }
 export async function confirmRequest(token) {
-    const tokens = await load();
-    const req = tokens[token];
-    if (!req)
-        return null;
-    if (req.status !== "pending")
-        return req; // schon bestätigt
-    if (new Date(req.expiresAt) < new Date()) {
-        req.status = "expired";
-        await save(tokens);
-        return null;
-    }
-    req.status = "confirmed";
-    req.confirmedAt = new Date().toISOString();
-    tokens[token] = req;
-    await save(tokens);
-    return req;
+    return update(tokens => {
+        const req = tokens[token];
+        if (!req)
+            return null;
+        if (req.status !== "pending")
+            return req; // schon bestätigt
+        if (new Date(req.expiresAt) < new Date()) {
+            req.status = "expired";
+            return null;
+        }
+        req.status = "confirmed";
+        req.confirmedAt = new Date().toISOString();
+        tokens[token] = req;
+        return req;
+    });
 }
 export async function markStarted(token, instanceId) {
-    const tokens = await load();
-    if (!tokens[token])
-        return;
-    tokens[token].status = "started";
-    tokens[token].instanceId = instanceId;
-    tokens[token].phase = "running";
-    await save(tokens);
+    await update(tokens => {
+        if (!tokens[token])
+            return;
+        tokens[token].status = "started";
+        tokens[token].instanceId = instanceId;
+        tokens[token].phase = "running";
+    });
 }
 /**
  * Setzt die aktuelle Provisioning-Phase eines Demo-Requests.
@@ -88,13 +143,15 @@ export async function markStarted(token, instanceId) {
  * Warteseite den echten Status pollen kann (feat09).
  */
 export async function setPhase(token, phase, errorMessage) {
-    const tokens = await load();
-    if (!tokens[token])
-        return;
-    tokens[token].phase = phase;
-    if (errorMessage !== undefined)
-        tokens[token].phaseError = errorMessage;
-    await save(tokens);
+    await update(tokens => {
+        if (!tokens[token]) {
+            console.error(`[tokens] setPhase: Token ${token.slice(0, 6)}… nicht gefunden`);
+            return;
+        }
+        tokens[token].phase = phase;
+        if (errorMessage !== undefined)
+            tokens[token].phaseError = errorMessage;
+    });
 }
 export async function listRequests() {
     const tokens = await load();
@@ -103,17 +160,16 @@ export async function listRequests() {
 }
 // Expired tokens aufräumen (älter als 7 Tage)
 export async function cleanupExpired() {
-    const tokens = await load();
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    let removed = 0;
-    for (const [key, req] of Object.entries(tokens)) {
-        if (new Date(req.requestedAt) < cutoff) {
-            delete tokens[key];
-            removed++;
+    return update(tokens => {
+        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        let removed = 0;
+        for (const [key, req] of Object.entries(tokens)) {
+            if (new Date(req.requestedAt) < cutoff) {
+                delete tokens[key];
+                removed++;
+            }
         }
-    }
-    if (removed > 0)
-        await save(tokens);
-    return removed;
+        return removed;
+    });
 }
 //# sourceMappingURL=tokens.js.map

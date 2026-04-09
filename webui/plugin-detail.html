@@ -24,11 +24,8 @@ nav{
   border-bottom:1px solid var(--rule);display:flex;align-items:center;
   height:58px;padding:0 clamp(20px,5vw,80px);gap:16px;
 }
-.logo{color:var(--ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:10px}
-.logo-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2,#ffa64d));display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--serif);font-weight:700;font-size:15px;letter-spacing:-.5px;box-shadow:0 2px 8px rgba(249,128,18,.25)}
-.logo-text{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.2px;line-height:1}
-.logo-text .lg-dot{color:var(--accent);margin:0 1px}
-.logo-text .lg-sub{color:var(--muted);font-weight:500}
+.logo{color:var(--ink);text-decoration:none;margin-right:auto;display:flex;align-items:center}
+.logo img{height:36px;width:auto;display:block}
 .btn-ghost{font-size:13px;color:var(--muted);padding:7px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--white);cursor:pointer;font-family:var(--sans);text-decoration:none;transition:all .15s}
 .btn-ghost:hover{border-color:var(--ink);color:var(--ink)}
 
@@ -245,8 +242,7 @@ footer a:hover{color:var(--ink)}
 
 <nav>
   <a class="logo" href="/" aria-label="eLeDia Runbot Startseite">
-    <span class="logo-mark">eL</span>
-    <span class="logo-text">eLeDia<span class="lg-dot">.</span><span class="lg-sub">runbot</span></span>
+    <img src="/eledia_runbot.png" alt="eLeDia Runbot">
   </a>
   <a class="btn-ghost" href="/">← Alle Demos</a>
   <a class="btn-ghost" href="https://eledia.de" target="_blank">Kontakt</a>

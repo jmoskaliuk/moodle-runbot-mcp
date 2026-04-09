@@ -26,12 +26,9 @@ html{scroll-behavior:smooth}
   --serif:'Open Sans',sans-serif;--sans:'Open Sans',sans-serif;
 }
 body{background:var(--bg);color:var(--ink2);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
-nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 clamp(24px,8vw,120px);display:flex;align-items:center;gap:24px;height:64px}
-.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
-.nav-logo-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--serif);font-weight:700;font-size:15px;letter-spacing:-.5px;box-shadow:0 2px 8px rgba(249,128,18,.25)}
-.nav-logo-text{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.2px;line-height:1}
-.nav-logo-text .lg-dot{color:var(--accent);margin:0 1px}
-.nav-logo-text .lg-sub{color:var(--muted);font-weight:500}
+nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 clamp(24px,8vw,120px);display:flex;align-items:center;gap:24px;height:68px}
+.nav-logo{display:flex;align-items:center;text-decoration:none}
+.nav-logo img{height:38px;width:auto;display:block}
 .nav-links{display:flex;gap:22px;margin-left:auto;align-items:center}
 .nav-links a{font-size:14px;color:var(--muted);text-decoration:none;transition:color .15s}
 .nav-links a:hover{color:var(--ink)}
@@ -41,7 +38,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-
 .lt-opt .flag{font-size:13px;line-height:1}
 .lt-opt.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.15)}
 .lt-opt:not(.active):hover{color:rgba(255,255,255,.85)}
-@media(max-width:720px){.nav-logo-text .lg-sub{display:none}.nav-links{gap:14px}}
+@media(max-width:720px){.nav-logo img{height:32px}.nav-links{gap:14px}}
 .wrap{max-width:1100px;margin:0 auto;padding:0 clamp(24px,6vw,80px)}
 .hero{padding:96px clamp(24px,6vw,80px) 80px;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;max-width:1100px;margin:0 auto}
 @media(max-width:768px){.hero{grid-template-columns:1fr;padding:60px 24px 48px}.hero-vis{display:none}}
@@ -155,19 +152,19 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .btn-f:hover{background:var(--accent2)}
 .btn-f:disabled{background:var(--rule);color:var(--muted);cursor:not-allowed}
 footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;background:var(--white)}
-.f-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr;gap:48px;max-width:1100px;margin:0 auto 40px}
-@media(max-width:900px){.f-grid{grid-template-columns:1fr 1fr}}
+.f-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:56px;max-width:1100px;margin:0 auto 40px;align-items:start}
+@media(max-width:900px){.f-grid{grid-template-columns:1fr 1fr;gap:40px}}
 @media(max-width:560px){.f-grid{grid-template-columns:1fr}}
 .f-desc{font-size:13px;color:var(--muted);line-height:1.7}
-.f-desc img{display:block;margin-bottom:16px}
+.f-desc img{display:block;margin-bottom:16px;height:32px;width:auto}
 .f-col-title{font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px}
-.f-links{display:flex;flex-direction:column;gap:9px}
-.f-links a{font-size:13px;color:var(--blue-dark);text-decoration:none;transition:color .15s}
-.f-links a:hover{color:var(--accent)}
 .f-contact{font-size:13px;color:var(--muted);line-height:1.8}
 .f-contact strong{color:var(--ink);display:block;margin-bottom:4px}
 .f-contact a{color:var(--blue-dark);text-decoration:none}
 .f-contact a:hover{color:var(--accent)}
+.f-partner{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.f-partner img{max-width:180px;width:100%;height:auto;display:block}
+.f-partner-label{font-size:11px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;font-weight:500}
 .f-bottom{max-width:1100px;margin:0 auto;padding-top:24px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:16px;font-size:12px;color:var(--muted);flex-wrap:wrap}
 .f-bottom a{color:var(--muted);text-decoration:none}
 .f-bottom a:hover{color:var(--ink)}
@@ -181,8 +178,7 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
 
 <nav aria-label="Hauptnavigation">
   <a class="nav-logo" href="/" aria-label="eLeDia Runbot Startseite">
-    <span class="nav-logo-mark">eL</span>
-    <span class="nav-logo-text">eLeDia<span class="lg-dot">.</span><span class="lg-sub">runbot</span></span>
+    <img src="eledia_runbot.png" alt="eLeDia Runbot">
   </a>
   <div class="nav-links">
     <a href="#demos" onclick="filterType('plugin')" data-i18n="nav_plugins">Plugins</a>
@@ -279,29 +275,8 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
 <footer>
   <div class="f-grid">
     <div class="f-desc">
-      <img src="eledia_runbot.png" alt="eLeDia Runbot" height="28">
+      <img src="eledia_runbot.png" alt="eLeDia Runbot">
       <p data-i18n="footer_about">Die eLeDia GmbH ist seit mehr als 20 Jahren Ihr Partner für Moodle und Open Educational Technology in Deutschland. Moodle Premium Partner, Hosting in DE, DSGVO, Training, Support, Contenterstellung.</p>
-    </div>
-    <div>
-      <div class="f-col-title" data-i18n="footer_col_eledia">eLeDia</div>
-      <nav class="f-links" aria-label="eLeDia Links">
-        <a href="https://eledia.de/zertifizierungen/" target="_blank" rel="noopener" data-i18n="footer_cert">Zertifizierungen</a>
-        <a href="https://eledia.academy" target="_blank" rel="noopener">eledia.academy</a>
-        <a href="https://eledia.de/datenschutz-in-moodle/" target="_blank" rel="noopener" data-i18n="footer_dsgvo">Datenschutz in Moodle</a>
-        <a href="https://eledia.de/newsletter/" target="_blank" rel="noopener" data-i18n="footer_newsletter">Newsletter</a>
-        <a href="https://eledia.de/hinweisgebersystem/" target="_blank" rel="noopener" data-i18n="footer_whistleblow">Hinweisgebersystem</a>
-      </nav>
-    </div>
-    <div>
-      <div class="f-col-title" data-i18n="footer_col_legal">Rechtliches</div>
-      <nav class="f-links" aria-label="Rechtliche Links">
-        <a href="https://eledia.de/impressum/" target="_blank" rel="noopener" data-i18n="footer_imprint">Impressum</a>
-        <a href="https://eledia.de/datenschutzerklaerung/" target="_blank" rel="noopener" data-i18n="footer_privacy">Datenschutzerklärung</a>
-        <a href="https://eledia.de/agb/" target="_blank" rel="noopener" data-i18n="footer_agb">Allg. Geschäftsbedingungen</a>
-        <a href="https://eledia.de/kontakt/" target="_blank" rel="noopener" data-i18n="footer_contact_link">Kontakt</a>
-        <a href="https://eledia.de/unternehmen/" target="_blank" rel="noopener" data-i18n="footer_company">Unternehmen</a>
-        <a href="https://eledia.de/jobs/" target="_blank" rel="noopener" data-i18n="footer_jobs">Jobs</a>
-      </nav>
     </div>
     <div>
       <div class="f-col-title" data-i18n="footer_col_contact">So erreichen Sie uns</div>
@@ -314,14 +289,15 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
         E-Mail: <a href="mailto:info@eledia.de">info@eledia.de</a>
       </div>
     </div>
+    <div class="f-partner">
+      <div class="f-partner-label" data-i18n="footer_partner_label">Moodle Premium Partner</div>
+      <img src="moodle-partner.png" alt="Moodle Premium Certified Services Provider">
+    </div>
   </div>
   <div class="f-bottom">
     <span>© <span id="fyear"></span> eLeDia GmbH</span>
     <a href="https://eledia.de/impressum/" target="_blank" rel="noopener" data-i18n="footer_imprint">Impressum</a>
-    <a href="https://eledia.de/kontakt/" target="_blank" rel="noopener" data-i18n="footer_contact_link">Kontakt</a>
     <a href="https://eledia.de/datenschutzerklaerung/" target="_blank" rel="noopener" data-i18n="footer_privacy">Datenschutz</a>
-    <a href="https://eledia.de/newsletter/" target="_blank" rel="noopener" data-i18n="footer_newsletter">Newsletter</a>
-    <a href="https://eledia.de/zertifizierungen/" target="_blank" rel="noopener" data-i18n="footer_cert">Zertifizierung</a>
   </div>
 </footer>
 

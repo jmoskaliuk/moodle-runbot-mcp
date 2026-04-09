@@ -265,23 +265,36 @@ Login-Daten.
 
 **Goal**
 Manche Demos zeigen den Mehrwert eines Plugins nur dann, wenn mehrere Rollen
-gleichzeitig sichtbar sind (z.B. "Admin erstellt Kartenset → Teacher weist Kurs
-zu → Student lernt"). Der Interessent kann in einer Instanz zwischen drei
-Testnutzern wechseln, ohne sich jedes Mal neu einzuloggen.
+sichtbar sind (z.B. "Admin erstellt Kartenset → Teacher weist Kurs zu → Student
+lernt"). Der Interessent kann in derselben Instanz zwischen drei Testnutzern
+wechseln, ohne dass wir individuelle Accounts aus seiner E-Mail bauen müssen.
 
-**Behavior** (vorläufig — Architektur offen)
-- Im Snapshot/Seed werden drei Testnutzer angelegt: `admin`, `teacher1`, `student1`
-- Alle drei sind in demselben Demo-Kurs eingeschrieben, mit den passenden Moodle-Rollen
-- Das Demo-Portal zeigt beim Öffnen einen Rollen-Switcher (UI-Overlay) mit drei Karten: "Als Admin einloggen", "Als Lehrender einloggen", "Als Lernende:r einloggen"
-- Die Karten sind Deep-Links in eine Moodle-Login-Page mit vorausgefüllter Login-ID
+**Entscheidung (2026-04-09, Johannes)**
+- Es gibt **kein** dynamisches User-Create mehr aus der E-Mail-Adresse des
+  Interessenten. Die E-Mail taucht nirgends als Moodle-Username auf.
+- Stattdessen liefert der Snapshot selbst die drei Accounts mit.
+- Ob ein Plugin-Snapshot den Multi-User-Modus nutzt, wird im Config-Eintrag
+  pro Plugin via Flag `multiUser: true` markiert (Default: `true` für alle
+  neuen Snapshots).
 
-**Open Questions**
-- **Auto-Login oder manueller Login?** Auto-Login würde Moodle-Plugin/Webservice-Token brauchen. Manueller Login ist sicherer, aber weniger smooth.
-- **Wie stellen wir den Switcher grafisch dar?** Als Overlay auf der Loading-Page, als Karten unter der "Demo öffnen"-Box, oder als Dropdown im laufenden Moodle?
-- **Passwort-Handling:** Bei mehreren Usern brauchen wir eventuell individuelle Passwörter oder dasselbe Passwort für alle Demo-Nutzer in dieser Instanz.
+**Behavior**
+- Im Snapshot sind drei Accounts vordefiniert: `admin`, `teacher`, `student`
+- Alle drei teilen dasselbe Passwort (`DEMO_PASSWORD`, default `demo1234`)
+- Alle drei sind in denselben Demo-Kurs eingeschrieben, mit den passenden
+  Moodle-Rollen
+- Die Warteseite zeigt im "Ready"-Zustand eine Creds-Box mit genau einem
+  Info-Block: `Accounts: admin · teacher · student / Passwort: demo1234`
+- Die "Demo bereit"-E-Mail enthält dieselbe Info — Login-Feld zeigt die drei
+  Account-Namen, nicht die E-Mail-Adresse
+- Kein Auto-Login, kein Rollen-Switcher in Phase 1 — der Nutzer loggt sich
+  manuell mit dem Account ein, den er sehen will, und nutzt ggf. Moodles
+  eigenes "Login as" für schnelleres Wechseln
 
 **Non-goals**
+- Kein grafischer Rollen-Switcher im Portal (Phase 2)
+- Kein Auto-Login via Webservice-Token (Phase 2)
 - Keine echten Multi-User-Szenarien mit konkurrenter Nutzung (es bleibt 1 Demo-Instanz für 1 Interessenten)
+- Keine individuellen Passwörter pro Rolle
 - Keine kundendefinierten Rollen
 
 ---
@@ -292,48 +305,73 @@ Testnutzern wechseln, ohne sich jedes Mal neu einzuloggen.
 eLeDia-Mitarbeiter können in einer internen Seite alle laufenden Demos sehen,
 manuell verlängern und löschen — ohne SSH auf den Server.
 
+**Entscheidung (2026-04-09, Johannes)**
+- **Auth:** HTTP Basic Auth reicht für den MVP — die Daten sind nicht kritisch
+  (Demo-Instanzen, keine Kundendaten). Passwort via `ADMIN_PASSWORD` Env-Variable.
+- **GitHub OAuth / SSO** wird erst in Phase 2 eingebaut, wenn das Dashboard
+  mehr Funktionen bekommt (Statistiken, Audit-Log, Multi-User-Verwaltung).
+
 **Behavior**
-- URL: `/admin` (nur mit Admin-Passwort oder Bearer-Token erreichbar)
+- URL: `/admin` (nur mit HTTP Basic Auth erreichbar)
 - Tabelle: alle Instanzen mit Spalten `id | config | requester | gestartet | verbleibend | Status | Aktionen`
 - Aktionen pro Zeile: "Verlängern" (+1 Std), "Sofort löschen", "Logs anzeigen" (last 50 lines)
 - Refresh-Button (kein Live-Polling im MVP)
+- Zweite Tabelle: alle aktiven Demo-Tokens (aus `tokens.json`) mit Status + Ablaufzeit
 
 **Auth**
-- Bearer-Token über `ADMIN_API_KEY` Env-Variable (gleicher Pattern wie MCP-Key)
-- Login-Form: nur Passwort, keine Nutzer
+- HTTP Basic Auth via Express-Middleware
+- Username: fest auf `admin`
+- Passwort: aus `ADMIN_PASSWORD` Env-Variable (Pflicht — Server startet nicht ohne)
+- Browser merkt sich die Credentials für die Session; Logout via "neues Browser-Fenster"
 
 **Non-goals**
+- Kein GitHub OAuth im MVP (Phase 2)
 - Keine Statistiken (Chart-Ansicht, Historie) im MVP
-- Keine Multi-Admin-Verwaltung, kein Audit-Log
+- Keine Multi-Admin-Verwaltung, kein Audit-Log, kein 2FA
+- Keine CSRF-Tokens für Actions (Same-Origin + Basic Auth reicht für interne Tools)
 
 ---
 
 ### feat12 Code-basierte Demo-Verlängerung
 
 **Goal**
-Ein Kunde auf einer Messe bekommt von eLeDia einen Geheimcode ("EDUMA2026"),
-mit dem er seine eigene Demo-Instanz von 60 Min auf 24 Stunden verlängern kann
-— ohne dass eLeDia manuell eingreifen muss.
+Ein Kunde auf einer Messe oder in einer Schulung bekommt von eLeDia einen
+vorher generierten Code ("EDUMA2026"), mit dem er seine eigene Demo-Instanz
+von 60 Min auf 24 Stunden verlängern kann — ohne dass eLeDia manuell
+eingreifen muss.
+
+**Entscheidung (2026-04-09, Johannes)**
+- Codes werden **pre-generated** (vom Admin, nicht vom Nutzer selbst).
+- Distribution ist **manuell**: per E-Mail, auf der Messe ausgedruckt, im
+  Schulungsraum auf dem Whiteboard. Kein Self-Service-Formular im MVP.
+- **Alle Codes haben dieselbe Laufzeit: 1 Tag (1440 Min)**. Pro-Code-TTL
+  kann später kommen, aber für den MVP einheitlich.
+- Codes liegen in einer simplen Config-Datei (`/opt/runbot/extend-codes.json`
+  oder via `EXTEND_CODES` Env), nicht in einer DB.
 
 **Behavior**
 - Auf der Demo-Instanz oder der Warteseite gibt es ein kleines Eingabefeld "Verlängerungscode eingeben"
-- `POST /api/extend-code` mit `{token, code}` → Server checkt `EXTEND_CODES` (ENV: `EXTEND_CODES=EDUMA2026:1440,PRIVATE:60`), akzeptiert + setzt `maxAge` für diese eine Instanz
+- `POST /api/extend-code` mit `{token, code}` → Server checkt `EXTEND_CODES`, akzeptiert + setzt neue `expiresAt` für diese Instanz
 - Antwort: "Demo verlängert bis 2026-04-10 16:30"
 
 **Codes**
-- Format: `CODE:MINUTEN` (z.B. `EDUMA2026:1440` = 1 Tag)
-- Codes werden bei Server-Start geladen, nicht aus DB
-- Mehrere Codes möglich (Komma-getrennt)
+- Format im Env: `EXTEND_CODES=EDUMA2026,PRIVATE,TRAIN01` (Komma-getrennt, nur Code-Namen)
+- TTL global: 1440 Min (1 Tag) für alle Codes im MVP
+- Generierung manuell durch Admin (z.B. per `openssl rand -hex 4` + Eintrag in Env)
 
 **Edge Cases**
 - Code existiert nicht: "Code ungültig"
 - Token bereits abgelaufen: "Demo bereits beendet — neue anfordern"
 - Code bereits für diesen Token verwendet: "Du hast diese Demo schon verlängert"
+- Ein Code darf von mehreren Interessenten genutzt werden (es ist ein "Messe-Code"),
+  aber pro Token nur einmal
 
 **Non-goals**
-- Keine personalisierten Codes (ein Code gilt für alle Interessenten)
+- Keine personalisierten Codes (ein Code gilt für mehrere Interessenten gleichzeitig)
+- Keine pro-Code-TTL im MVP — alles 1 Tag
 - Kein Abrechnungsmodell, keine Zahlung
-- Keine Code-Generierungs-UI (Codes werden in Env gesetzt)
+- Keine Code-Generierungs-UI im Admin-Dashboard (Phase 2)
+- Kein Self-Service "Code beantragen"-Formular für Interessenten
 
 ---
 

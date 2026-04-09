@@ -309,16 +309,16 @@ moodle-runbot-mcp/
      e. docker compose up -d
      f. pg_restore aus leitnerflow-v1.sql.gz
      g. wwwroot + dataroot in Moodle anpassen
-     h. Moodle-Nutzer anlegen: email=kunde@firma.de, pw=demo1234
-     i. Kurs-Einschreibung ("demo"-Kurs)
-     j. /etc/nginx/conf.d/demo-leitnerflow-f3a9bc.conf schreiben
-     k. systemctl reload nginx
-     l. tokens.json: { status: "started", instanceId: "..." }
-     m. "Demo bereit"-E-Mail senden
+     h. (kein User-Create) — Snapshot enthält admin/teacher/student
+        mit identischem Passwort (DEMO_PASSWORD, default demo1234)
+     i. /etc/nginx/conf.d/demo-leitnerflow-f3a9bc.conf schreiben
+     j. systemctl reload nginx
+     k. tokens.json: { status: "started", instanceId: "..." }
+     l. "Demo bereit"-E-Mail senden
 
 7. Kunde empfängt zweite E-Mail
    → Link zu demo-leitnerflow-f3a9bc.demo.eledia.ai
-   → Login: ihre@email.de / demo1234
+   → Accounts: admin · teacher · student (Passwort für alle: demo1234)
 
 8. Kunde nutzt Demo (60 Minuten)
    → Jede Anfrage an die Subdomain: POST /ping/:instanceId

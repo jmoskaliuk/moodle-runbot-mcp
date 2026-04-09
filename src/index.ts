@@ -37,7 +37,6 @@ import * as tokens from "./services/tokens.js";
 import * as email from "./services/email.js";
 import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
-import * as moodleUser from "./services/moodleUser.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
 import { getInstance, saveInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
@@ -297,13 +296,12 @@ async function runHTTP(): Promise<void> {
           await snapshotSvc.restoreSnapshot(instance, snap.file);
         }
 
-        // Kunden-Nutzer anlegen
-        await tokens.setPhase(token, "creating_user");
-        const nameParts = request.name.split(" ");
-        const firstName = nameParts[0];
-        const lastName  = nameParts.slice(1).join(" ") || "Demo";
-        await moodleUser.createDemoUser(instance, request.email, firstName, lastName);
-        await moodleUser.enrollUserInDemoCourse(instance, request.email);
+        // Keine Nutzer-Anlage mehr — der Snapshot enthält bereits die drei
+        // vordefinierten Accounts (admin, teacher, student) mit identischem
+        // Passwort (DEMO_PASSWORD). Der Interessent loggt sich direkt mit
+        // einem dieser Accounts ein. Entscheidung Johannes, 2026-04-09:
+        // Login ≠ E-Mail — die E-Mail-Adresse sollte nirgends als
+        // Moodle-Username auftauchen.
 
         instance.status = "running";
         instance.lastActivity = new Date().toISOString();
@@ -331,9 +329,19 @@ async function runHTTP(): Promise<void> {
   // Token ist Auth — keine zusätzliche Authentifizierung nötig.
   app.get("/api/demo-status/:token", async (req, res) => {
     const { token } = req.params;
-    const request = await tokens.getRequest(token);
+    let request;
+    try {
+      request = await tokens.getRequest(token);
+    } catch (e) {
+      // Korruption / IO-Fehler: NIE 404 schicken (würde die Warteseite
+      // fälschlich als "abgelaufen" anzeigen). Stattdessen 503 + Retry.
+      console.error(`[api/demo-status] getRequest failed for ${token.slice(0,6)}…:`, e);
+      res.status(503).json({ status: "preparing", phase: "waiting", pluginName: "", retry: true });
+      return;
+    }
 
     if (!request) {
+      console.error(`[api/demo-status] Token ${token.slice(0,6)}… nicht in tokens.json gefunden`);
       res.status(404).json({ status: "expired", phase: "error" });
       return;
     }
@@ -348,7 +356,10 @@ async function runHTTP(): Promise<void> {
     if (phase === "running") status = "ready";
     else if (phase === "error") status = "error";
 
-    // URL, username, password nur wenn wirklich ready
+    // URL + Accounts nur wenn wirklich ready.
+    // username ist KEINE E-Mail mehr — der Snapshot hat drei Accounts
+    // (admin/teacher/student) mit identischem Passwort (DEMO_PASSWORD).
+    // Die Warteseite zeigt alle drei an, das Frontend löst es selbst.
     let url: string | undefined;
     if (status === "ready" && request.instanceId) {
       const inst = await getInstance(request.instanceId);
@@ -362,7 +373,7 @@ async function runHTTP(): Promise<void> {
       error: request.phaseError,
       ...(status === "ready" && url ? {
         url,
-        username: request.email,
+        accounts: ["admin", "teacher", "student"],
         password: DEMO_PASSWORD,
       } : {}),
     });
@@ -438,8 +449,10 @@ async function runStdio(): Promise<void> {
 //
 // Wartet auf den Live-Status via /api/demo-status/:token (feat09/task22).
 // Phase-Mapping: waiting|provisioning → s0, installing_plugin → s1,
-// starting_containers → s2, restoring_snapshot → s3, creating_user → s4,
+// starting_containers → s2, restoring_snapshot → s3,
 // running → alles done + Credentials-Box + "Demo öffnen" Button.
+// Hinweis: Der frühere creating_user-Step entfällt seit 2026-04-09 — die drei
+// Snapshot-Accounts (admin/teacher/student) kommen schon mit dem Snapshot.
 
 function buildLoadingPage(firstName: string, pluginName: string, token: string): string {
   return `<!DOCTYPE html>
@@ -453,8 +466,8 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:#fafaf8;font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#2d3142;padding:24px}
   .card{background:#fff;border:1px solid #e8eaee;border-radius:16px;padding:48px;text-align:center;width:min(520px,100%);box-shadow:0 4px 24px rgba(0,0,0,.06)}
-  .logo{font-family:'Fraunces',Georgia,serif;font-size:20px;color:#0f1117;margin-bottom:36px}
-  .logo span{color:#1a56db}
+  .logo{margin-bottom:32px;display:flex;justify-content:center}
+  .logo img{height:40px;width:auto}
   .spinner{width:48px;height:48px;border:3px solid #e8eaee;border-top-color:#1a56db;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 28px}
   .spinner.hidden{display:none}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -472,7 +485,8 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   .note{font-size:12px;color:#7a8090;margin-top:24px}
   .creds{display:none;text-align:left;background:#fafaf8;border:1px solid #e8eaee;border-radius:10px;padding:18px 20px;margin-top:20px}
   .creds.show{display:block}
-  .creds h3{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:400;color:#0f1117;margin-bottom:12px}
+  .creds h3{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:400;color:#0f1117;margin-bottom:6px}
+  .creds-hint{font-size:12px;color:#7a8090;line-height:1.5;margin:0 0 12px;font-weight:300}
   .cred-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
   .cred-row:last-child{margin-bottom:0}
   .cred-label{color:#7a8090;min-width:80px}
@@ -490,7 +504,7 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
 </head>
 <body>
 <div class="card">
-  <div class="logo">eLeDia<span>.</span>runbot</div>
+  <div class="logo"><img src="/eledia_runbot.png" alt="eLeDia Runbot"></div>
   <div class="spinner" id="spinner"></div>
   <div class="check" id="check">✓</div>
   <h1 id="headline">${firstName}, Ihre Demo<br>wird gestartet.</h1>
@@ -500,13 +514,13 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     <div class="step" id="s1"><div class="step-dot">2</div><span>Plugin installieren</span></div>
     <div class="step" id="s2"><div class="step-dot">3</div><span>Container starten</span></div>
     <div class="step" id="s3"><div class="step-dot">4</div><span>Demo-Daten laden</span></div>
-    <div class="step" id="s4"><div class="step-dot">5</div><span>Ihren Nutzer anlegen</span></div>
   </div>
   <div class="creds" id="creds">
     <h3>Ihre Zugangsdaten</h3>
+    <p class="creds-hint">Sie können sich mit einem dieser drei Accounts einloggen — alle teilen dasselbe Passwort.</p>
     <div class="cred-row">
-      <span class="cred-label">Benutzer:</span>
-      <span class="cred-val" id="cred-user"></span>
+      <span class="cred-label">Accounts:</span>
+      <span class="cred-val" id="cred-user">admin · teacher · student</span>
       <button class="copy-btn" data-copy="cred-user">Kopieren</button>
     </div>
     <div class="cred-row">
@@ -521,16 +535,19 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
 </div>
 <script>
   const TOKEN = ${JSON.stringify(token)};
-  const STEP_COUNT = 5;
+  const STEP_COUNT = 4;
   // DemoPhase → step index
+  // creating_user mapt auf 3 (Demo-Daten laden), weil seit 2026-04-09
+  // kein expliziter User-Create-Step mehr existiert — der Snapshot bringt
+  // admin/teacher/student schon mit. Alte In-Flight-Tokens bleiben kompatibel.
   const PHASE_TO_STEP = {
     waiting: 0,
     provisioning: 0,
     installing_plugin: 1,
     starting_containers: 2,
     restoring_snapshot: 3,
-    creating_user: 4,
-    running: 5
+    creating_user: 3,
+    running: 4
   };
 
   function setActiveStep(idx) {
@@ -568,7 +585,12 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     document.getElementById('headline').innerHTML = 'Ihre Demo<br>ist bereit!';
     document.getElementById('subtext').innerHTML = 'Ihre <strong>' + (data.pluginName || '${pluginName}') + '</strong>-Instanz läuft.<br>Klicken Sie unten auf <strong>"Demo öffnen"</strong>, um zu starten.';
     markAllDone();
-    if (data.username) document.getElementById('cred-user').textContent = data.username;
+    // Accounts-Liste: aus data.accounts (neu) oder statisch fallback.
+    // Der Snapshot enthält drei vordefinierte Accounts mit identischem Passwort.
+    const accounts = Array.isArray(data.accounts) && data.accounts.length
+      ? data.accounts.join(' · ')
+      : 'admin · teacher · student';
+    document.getElementById('cred-user').textContent = accounts;
     if (data.password) document.getElementById('cred-pw').textContent = data.password;
     document.getElementById('creds').classList.add('show');
     const btn = document.getElementById('open-btn');
@@ -589,13 +611,25 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     document.getElementById('note').innerHTML = '<a href="/">Zurück zum Portal</a>';
   }
 
+  // Tolerant gegen transient-Fehler: wir zeigen "abgelaufen" erst nach
+  // 3 aufeinanderfolgenden 404s. Grund: beim ersten Poll direkt nach
+  // Seitenladung kann das Backend noch mit dem Write des Tokens beschäftigt
+  // sein — ein einzelnes 404 ist KEIN sicheres Signal für "abgelaufen".
+  let consecutive404 = 0;
+  const MAX_404 = 3;
+
   async function poll() {
     try {
       const res = await fetch('/api/demo-status/' + TOKEN, { cache: 'no-store' });
       if (res.status === 404) {
-        showError('Ihre Demo-Anfrage ist abgelaufen. Bitte starten Sie einen neuen Versuch.');
-        return false;
+        consecutive404++;
+        if (consecutive404 >= MAX_404) {
+          showError('Ihre Demo-Anfrage ist abgelaufen. Bitte starten Sie einen neuen Versuch.');
+          return false;
+        }
+        return true; // nochmal versuchen
       }
+      consecutive404 = 0;
       if (!res.ok) return true; // transient, weiter pollen
       const data = await res.json();
 
@@ -636,15 +670,16 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     });
   });
 
-  // Erst-Poll + Interval
-  (async () => {
+  // Erst-Poll nach kurzer Delay (gibt dem Backend-setPhase Zeit zu schreiben),
+  // dann alle 3s.
+  setTimeout(async () => {
     const keep = await poll();
     if (!keep) return;
     const handle = setInterval(async () => {
       const keepPolling = await poll();
       if (!keepPolling) clearInterval(handle);
     }, 3000);
-  })();
+  }, 1500);
 </script>
 </body>
 </html>`;

@@ -102,11 +102,11 @@ export async function sendConfirmationEmail(
                       <td style="font-size:13px;color:#0f1117;font-weight:500;text-align:right">60 Minuten</td>
                     </tr>
                     <tr>
-                      <td style="font-size:13px;color:#7a8090;padding:4px 0">Login</td>
-                      <td style="font-size:13px;color:#0f1117;font-weight:500;text-align:right">${request.email}</td>
+                      <td style="font-size:13px;color:#7a8090;padding:4px 0">Accounts</td>
+                      <td style="font-size:13px;color:#0f1117;font-weight:500;text-align:right">admin · teacher · student</td>
                     </tr>
                     <tr>
-                      <td style="font-size:13px;color:#7a8090;padding:4px 0">Passwort</td>
+                      <td style="font-size:13px;color:#7a8090;padding:4px 0">Passwort (für alle)</td>
                       <td style="font-size:13px;color:#0f1117;font-weight:500;text-align:right">demo1234</td>
                     </tr>
                     <tr>
@@ -157,7 +157,7 @@ Demo starten: ${confirmUrl}
 Details:
 - Plugin: ${pluginName}
 - Laufzeit: 60 Minuten
-- Login: ${request.email}
+- Accounts: admin · teacher · student (alle mit demselben Passwort)
 - Passwort: demo1234
 - Link gültig bis: ${new Date(request.expiresAt).toLocaleString("de-DE")}
 
@@ -222,8 +222,10 @@ export async function sendDemoReadyEmail(
               </tr>
             </table>
             <p style="font-size:13px;color:#7a8090;line-height:1.6;margin:0">
-              Login: <strong style="color:#2d3142">${request.email}</strong> ·
-              Passwort: <strong style="color:#2d3142">demo1234</strong><br>
+              Accounts: <strong style="color:#2d3142">admin</strong> ·
+              <strong style="color:#2d3142">teacher</strong> ·
+              <strong style="color:#2d3142">student</strong><br>
+              Passwort (für alle): <strong style="color:#2d3142">demo1234</strong><br>
               Die Demo wird nach 60 Minuten automatisch gelöscht.
             </p>
           </td>
@@ -250,7 +252,7 @@ export async function sendDemoReadyEmail(
     to:      `"${request.name}" <${request.email}>`,
     subject: `Ihre ${pluginName} Demo läuft — jetzt erkunden`,
     html,
-    text: `Ihre ${pluginName} Demo ist bereit:\n${demoUrl}\n\nLogin: ${request.email} / demo1234\nLäuft 60 Minuten.`,
+    text: `Ihre ${pluginName} Demo ist bereit:\n${demoUrl}\n\nAccounts: admin · teacher · student (Passwort für alle: demo1234)\nLäuft 60 Minuten.`,
   });
 }
 

@@ -385,39 +385,35 @@ Feature: feat13
 ---
 
 ### task24 Rollenbasierte Demo-Szenarien (Admin/Teacher/Student)
-Status: open (design required)
+Status: in progress (Snapshot-Fix erforderlich)
 Feature: feat10
 
-**Offen:** Design-Entscheidungen vor Implementierung klären.
+**Entscheidung (2026-04-09, Johannes):** Option A — Drei vordefinierte
+Accounts im Snapshot, manueller Login, identisches Passwort. Kein Auto-Login,
+kein Rollen-Switcher im MVP. Die E-Mail-Adresse des Interessenten taucht
+nirgends als Moodle-Username auf.
 
-**Architektur-Optionen:**
+**Scope:**
+1. `src/index.ts` — `createDemoUser` + `enrollUserInDemoCourse` Calls entfernt ✓
+2. `src/index.ts` — `/api/demo-status/:token` sendet `accounts: ["admin","teacher","student"]` statt `username: request.email` ✓
+3. `buildLoadingPage` — Creds-Box zeigt `admin · teacher · student` + statisches Passwort-Label ✓
+4. `sendConfirmationEmail` + `sendDemoReadyEmail` — Login-Zeile ersetzt durch Accounts-Zeile ✓
+5. **Snapshots überarbeiten:** Alle bestehenden Snapshots (leitnerflow-v1, etc.) müssen die drei Accounts enthalten.
+   - `admin` (Site-Administrator, Passwort `demo1234`)
+   - `teacher` (Teacher im Demo-Kurs, Passwort `demo1234`)
+   - `student` (Student im Demo-Kurs, Passwort `demo1234`)
+   - Alle drei sind im Demo-Kurs eingeschrieben mit den passenden Rollen
+6. **Config-Flag** `multiUser?: boolean` in `PluginConfig` (Default `true`) — für zukünftige Single-Account-Plugins als Opt-Out
+7. **Snapshot-Doku** (`03-dev-doc.md`): Schritt hinzufügen "Accounts anlegen bevor `pg_dump`"
+8. **Moodle-Default-Admin:** In alten Snapshots wurde der Admin von moodle-docker aus `MOODLE_DOCKER_PHPUNIT_*` gezogen. Neu: expliziter Seed mit den drei Accounts.
 
-**Option A — Drei Users im Snapshot, manueller Login**
-- Snapshot enthält 3 Users (admin/teacher1/student1) mit bekannten Passwörtern
-- Portal zeigt 3 Karten mit Rollen-Namen + Credentials
-- Nutzer loggt sich manuell ein bei Klick auf Karte
-- **Pro:** simpel, keine neuen Moodle-APIs nötig
-- **Contra:** unsmooth, mehrfaches Passwort-Tippen
+**Pending:**
+- Snapshot leitnerflow-v1 regenerieren mit den drei Accounts (VPS-Job, siehe task19)
 
-**Option B — Single-Sign-On via Token-Link**
-- `loginastoken` Moodle-Feature oder `auth_token` Plugin
-- Portal generiert Link `https://<instance>/login/token?token=…&userid=…`
-- Ein Klick → direkt in der Zielrolle eingeloggt
-- **Pro:** smooth, "wow" Faktor
-- **Contra:** braucht Moodle-seitiges Setup (eigenes Auth-Plugin), Security-Review
-
-**Option C — Rollenwechsler im laufenden Moodle (Switch role)**
-- Nutzer loggt sich als Admin ein
-- Moodle hat eingebaute "Switch role to" Funktion (Kurs-Admin-Menü)
-- **Pro:** null Custom-Code
-- **Contra:** Switch role ist nur Ansichts-Simulation, keine echten Teacher/Student-Rechte. Einige Plugins verhalten sich dann trotzdem anders.
-
-**Empfohlen:** Option A für MVP, Option B als Ziel wenn Demo-Traffic rechtfertigt.
-
-**Open Questions für Johannes:**
-- Welche Rollen sollen wählbar sein? Nur Admin/Teacher/Student oder auch Manager, Courseadmin, Non-editing teacher?
-- Gleicher Kurs für alle oder drei separate Kurse?
-- Soll die Rolle pro Plugin-Config gesetzt werden können (z.B. bei LeitnerFlow: nur Admin + Student sinnvoll)?
+**Non-goals (weiterhin):**
+- Kein Rollen-Switcher im Portal (Phase 2)
+- Kein Auto-Login via Webservice-Token (Phase 2)
+- Keine individuellen Passwörter pro Rolle
 
 ---
 
@@ -425,21 +421,32 @@ Feature: feat10
 Status: open
 Feature: feat11
 
+**Entscheidung (2026-04-09, Johannes):** HTTP Basic Auth reicht für den MVP
+— die Daten sind nicht kritisch. GitHub OAuth / SSO erst in Phase 2.
+
 **Scope MVP:**
 1. Neue Route `GET /admin` → serve `webui/admin.html` (neue Datei)
-2. `webui/admin.html`: Bearer-Token-Feld, Tabelle aller Instanzen
-3. API-Endpoints (alle mit Admin-Key-Check):
+2. `webui/admin.html`: Tabelle aller Instanzen + Tabelle aller aktiven Tokens
+3. API-Endpoints (alle hinter Basic-Auth-Middleware):
    - `GET /api/admin/instances` → Liste aus `registry.listInstances()` angereichert mit Request-Info
    - `POST /api/admin/instances/:id/extend` → ruft `instance_extend` Tool intern auf
    - `DELETE /api/admin/instances/:id` → ruft cleanup intern auf
    - `GET /api/admin/instances/:id/logs` → `docker compose logs --tail 50`
-4. Auth-Middleware: prüft `Authorization: Bearer ${ADMIN_API_KEY}`
-5. Minimale UI: Tabelle mit Aktions-Buttons, kein Fancy-Framework
+   - `GET /api/admin/tokens` → alle Einträge aus `tokens.json`
+4. **Auth-Middleware:**
+   - `app.use('/admin', basicAuth({ users: { admin: ADMIN_PASSWORD } }))`
+   - `app.use('/api/admin', basicAuth(...))`
+   - `ADMIN_PASSWORD` Env-Variable — Server startet nicht ohne (throw im Bootstrap)
+   - Dependency: `express-basic-auth` (npm)
+5. Minimale UI: Tabelle mit Aktions-Buttons, kein Fancy-Framework, gleiches Design-System wie demo-portal.html
 
 **Non-goals (MVP):**
+- Kein GitHub OAuth (Phase 2)
+- Kein 2FA, kein Audit-Log
 - Keine Dark-Mode
 - Keine Instance-Creation von Hand (der Flow bleibt Self-Service)
 - Keine Rollen-Verwaltung für Admins
+- Keine CSRF-Tokens (Same-Origin + Basic Auth reicht für internes Tool)
 
 ---
 
@@ -447,20 +454,37 @@ Feature: feat11
 Status: open
 Feature: feat12
 
+**Entscheidung (2026-04-09, Johannes):**
+- Codes werden **pre-generated** und auf Anfrage an spezielle Kunden /
+  Trainingsteilnehmer ausgegeben (manuell, kein Self-Service).
+- **Alle Codes haben im MVP dieselbe Laufzeit: 1 Tag (1440 Min).**
+- Format im Env wird vereinfacht: `EXTEND_CODES=EDUMA2026,PRIVATE,TRAIN01`
+  (Komma-getrennte Code-Namen, kein `:MINUTEN`-Suffix mehr — TTL ist global).
+
 **Scope:**
-1. Env-Variable `EXTEND_CODES` parsen: Format `CODE1:MINUTEN,CODE2:MINUTEN` (z.B. `EDUMA2026:1440,TEST:120`)
-2. Neues Feld in `MoodleInstance`: `extendedBy?: {code: string, addedMinutes: number, at: string}` (nur 1x pro Instanz verwendbar)
-3. Neue Route `POST /api/extend-code` mit Body `{token: string, code: string}`:
+1. Env-Variable `EXTEND_CODES` parsen: Komma-getrennte Liste von Code-Namen
+2. Globale Konstante `EXTEND_CODE_TTL_MINUTES = 1440` (überschreibbar via `EXTEND_CODE_TTL_MINUTES` Env)
+3. Neues Feld in `MoodleInstance`: `extendedBy?: {code: string, at: string}` (nur 1x pro Instanz verwendbar)
+4. Neue Route `POST /api/extend-code` mit Body `{token: string, code: string}`:
    - Token → Request → instanceId → Instance laden
-   - Code in `EXTEND_CODES` nachschlagen
-   - Wenn gültig: `instance.extendedBy` setzen, `maxAge` individuell auf `createdAt + addedMinutes` anpassen
-   - Antwort: `{ok: true, extendedUntil: "…"}` oder `{error: "..."}`
-4. Frontend (Warteseite + innerhalb der laufenden Demo irgendwo): kleines Eingabefeld "Verlängerungscode"
-5. Cleanup-Scheduler muss individuelle `maxAge` respektieren (nicht mehr global `DEMO_MAX_AGE_MINUTES`)
+   - Code in `EXTEND_CODES` nachschlagen (case-insensitive)
+   - Wenn gültig und Instanz noch nicht verlängert: `instance.extendedBy` setzen, `instance.maxAgeMinutes = EXTEND_CODE_TTL_MINUTES` (override des globalen Defaults)
+   - Antwort: `{ok: true, extendedUntil: "2026-04-10T16:30:00Z"}` oder `{error: "..."}`
+5. Frontend (Warteseite + innerhalb der laufenden Demo irgendwo): kleines Eingabefeld "Verlängerungscode" im Footer oder in der Creds-Box
+6. Cleanup-Scheduler muss individuelle `maxAgeMinutes` respektieren (nicht mehr nur global `DEMO_MAX_AGE_MINUTES`)
+
+**Code-Generation-Workflow (manuell, Admin):**
+```bash
+# Neuen Code erzeugen (auf der Messe vor dem Event):
+CODE=$(openssl rand -hex 4 | tr '[:lower:]' '[:upper:]')
+echo $CODE  # → z.B. "A3F89B12"
+# Im systemd-Service `EXTEND_CODES=EDUMA2026,A3F89B12` ergänzen + `systemctl restart moodle-runbot`
+```
 
 **Fallstricke:**
 - Cleanup-Scheduler liest aktuell `DEMO_MAX_AGE_MINUTES` global. Für individuelle Max-Age brauchen wir `instance.maxAgeMinutes` als Override im Check.
-- Codes könnten leaken → idealerweise zeitbegrenzt (z.B. EDUMA2026 nur bis 30.04.2026 gültig). Format erweitern: `CODE:MIN:UNTIL_DATE`.
+- Codes könnten leaken → Admin muss Codes regelmäßig rotieren. Dokumentieren im Runbook.
+- Wenn `extendedBy` gesetzt ist: das Feld `lastActivity` muss im Cleanup-Job so verstanden werden, dass die Verlängerung **ab dem Moment des Code-Einsatzes** zählt, nicht ab `createdAt`. Sonst wäre eine Instanz, die nach 58 Min verlängert wird, in 24h-2 Min schon wieder weg.
 
 ---
 
