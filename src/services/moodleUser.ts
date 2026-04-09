@@ -119,7 +119,9 @@ try {
     $user->email      = $email;
     $user->firstname  = $firstname;
     $user->lastname   = $lastname;
-    $user->lang       = 'de';
+    // Keine explizite 'lang' Einstellung — Moodle nimmt Site-Default.
+    // Hardcoded 'de' würde Warning "property lang has invalid data" auslösen,
+    // falls das Sprachpaket nicht installiert ist.
     $user->timezone   = '99';
 
     $id = user_create_user($user, true, false);

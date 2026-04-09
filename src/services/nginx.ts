@@ -1,6 +1,6 @@
 // src/services/nginx.ts
 // Verwaltet nginx-Config-Dateien für Demo-Instanzen.
-// Für jede Instanz wird eine eigene /etc/nginx/conf.d/demo-{id}.conf
+// Für jede Instanz wird eine eigene /etc/nginx/conf.d/runbot-{id}.conf
 // geschrieben und nginx neu geladen.
 //
 // Config-Aufbau pro Instanz:
@@ -54,7 +54,7 @@ export async function registerInstance(
     return;
   }
 
-  const confPath = `${NGINX_CONF_DIR}/demo-${instanceId}.conf`;
+  const confPath = `${NGINX_CONF_DIR}/runbot-${instanceId}.conf`;
   const subdomain = `${instanceId}.${BASE_DOMAIN}`;
 
   const config = `
@@ -73,9 +73,11 @@ server {
 
 # ── HTTPS Reverse Proxy zur Moodle-Instanz ───────────────────────────────
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+    # http2 als listen-Parameter (alte Syntax) — funktioniert in nginx 1.18–1.24.
+    # Ab 1.25+ wäre "http2 on;" als eigener Directive erlaubt, aber Ubuntu 24.04
+    # liefert 1.24.0, und die alte Syntax funktioniert in beiden.
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name ${subdomain};
 
     ssl_certificate     ${SSL_FULLCHAIN};
@@ -131,7 +133,7 @@ server {
 export async function unregisterInstance(instanceId: string): Promise<void> {
   if (!NGINX_ENABLED) return;
 
-  const confPath = `${NGINX_CONF_DIR}/demo-${instanceId}.conf`;
+  const confPath = `${NGINX_CONF_DIR}/runbot-${instanceId}.conf`;
   try {
     await fs.unlink(confPath);
     await reloadNginx();
@@ -141,7 +143,8 @@ export async function unregisterInstance(instanceId: string): Promise<void> {
 }
 
 /**
- * Räumt alle demo-*.conf Dateien auf.
+ * Räumt alle runbot-*.conf Dateien auf (inkl. alten demo-*.conf Waisen
+ * aus vorherigen Versionen).
  * Gedacht für Server-Neustart — sollte beim boot aufgerufen werden,
  * damit Waisen (Configs für abgestürzte Instanzen) verschwinden.
  */
@@ -150,11 +153,13 @@ export async function cleanupAllConfigs(): Promise<void> {
 
   try {
     const files = await fs.readdir(NGINX_CONF_DIR);
-    const demoFiles = files.filter(f => f.startsWith("demo-") && f.endsWith(".conf"));
-    await Promise.all(demoFiles.map(f => fs.unlink(path.join(NGINX_CONF_DIR, f)).catch(() => {})));
-    if (demoFiles.length > 0) {
+    const stale = files.filter(
+      f => (f.startsWith("runbot-") || f.startsWith("demo-")) && f.endsWith(".conf")
+    );
+    await Promise.all(stale.map(f => fs.unlink(path.join(NGINX_CONF_DIR, f)).catch(() => {})));
+    if (stale.length > 0) {
       await reloadNginx();
-      console.error(`[nginx] Cleaned up ${demoFiles.length} stale config(s)`);
+      console.error(`[nginx] Cleaned up ${stale.length} stale config(s)`);
     }
   } catch {
     // nginx conf dir existiert nicht — kein Problem

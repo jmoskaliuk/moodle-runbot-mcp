@@ -9,7 +9,8 @@ export declare function registerInstance(instanceId: string, port: number): Prom
  */
 export declare function unregisterInstance(instanceId: string): Promise<void>;
 /**
- * Räumt alle demo-*.conf Dateien auf.
+ * Räumt alle runbot-*.conf Dateien auf (inkl. alten demo-*.conf Waisen
+ * aus vorherigen Versionen).
  * Gedacht für Server-Neustart — sollte beim boot aufgerufen werden,
  * damit Waisen (Configs für abgestürzte Instanzen) verschwinden.
  */
