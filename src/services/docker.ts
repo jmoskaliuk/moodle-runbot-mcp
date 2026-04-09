@@ -12,6 +12,7 @@ const execAsync = promisify(exec);
 
 const MOODLE_DOCKER_REPO = "https://github.com/moodlehq/moodle-docker.git";
 const MOODLE_REPO = "https://github.com/moodle/moodle.git";
+const MOODLE_CACHE_DIR = process.env.MOODLE_CACHE_DIR ?? "/opt/moodle-cache";
 const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
 
 // ── Branch name → Moodle git branch ──────────────────────────────────────────
@@ -66,15 +67,24 @@ export async function provisionInstance(instance: MoodleInstance): Promise<void>
 
   // 1. Clone moodle-docker (shallow, once per instance dir)
   if (!await exists(instance.moodleDockerDir)) {
-    await run(`git clone --depth 1 ${MOODLE_DOCKER_REPO} ${instance.moodleDockerDir}`);
+    const cachedDocker = `${MOODLE_CACHE_DIR}/moodle-docker`;
+    await run(`cp -r ${cachedDocker} ${instance.moodleDockerDir}`);
   }
 
   // 2. Clone Moodle core (shallow, correct branch)
   if (!await exists(instance.moodleDir)) {
     const moodleBranch = MOODLE_BRANCH_MAP[instance.moodleVersion];
-    await run(
-      `git clone --depth 1 -b ${moodleBranch} ${MOODLE_REPO} ${instance.moodleDir}`
-    );
+    const cacheKey = `moodle-${instance.moodleVersion.replace(".", "")}`;
+    const cachedMoodle = `${MOODLE_CACHE_DIR}/${cacheKey}`;
+    const { stat } = await import("fs/promises");
+    const cacheExists = await stat(cachedMoodle).then(() => true).catch(() => false);
+    if (cacheExists) {
+      await run(`cp -r ${cachedMoodle} ${instance.moodleDir}`);
+    } else {
+      await run(
+        `git clone --depth 1 -b ${moodleBranch} ${MOODLE_REPO} ${instance.moodleDir}`
+      );
+    }
   }
 
   // 3. Copy moodle-docker config.php template

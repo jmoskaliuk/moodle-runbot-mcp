@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import express from "express";
+import rateLimit from "express-rate-limit";
 
 import { startCleanupScheduler, recordActivity } from "./services/cleanup.js";
 
@@ -77,6 +78,27 @@ async function runHTTP(): Promise<void> {
   const app = express();
   app.use(express.json());
 
+  // Rate-Limiting für Demo-Anfragen
+  const demoLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 Minuten
+    max: 5,                    // max 5 Anfragen pro IP
+    message: { error: "Zu viele Anfragen. Bitte warte 15 Minuten." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // MCP-Endpunkt mit API-Key absichern
+  const MCP_API_KEY = process.env.MCP_API_KEY ?? "";
+  const mcpAuthMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!MCP_API_KEY) { next(); return; } // Kein Key konfiguriert = offen (Dev-Modus)
+    const key = req.headers["x-api-key"] ?? req.query["api_key"];
+    if (key !== MCP_API_KEY) {
+      res.status(403).json({ error: "Forbidden: Invalid API key" });
+      return;
+    }
+    next();
+  };
+
   // CORS — allow demo portal to call MCP from the browser
   const allowedOrigins = (process.env.CORS_ORIGINS ?? "*").split(",").map(s => s.trim());
   app.use((req, res, next) => {
@@ -108,7 +130,7 @@ async function runHTTP(): Promise<void> {
   });
 
   // MCP endpoint — stateless, new transport per request
-  app.post("/mcp", async (req, res) => {
+  app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
     const t = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -127,7 +149,7 @@ async function runHTTP(): Promise<void> {
   // ── Demo-Anfrage-Flow ─────────────────────────────────────────────────────
 
   // POST /request-demo — Kunde gibt E-Mail + Name ein, bekommt Bestätigungs-E-Mail
-  app.post("/request-demo", async (req, res) => {
+  app.post("/request-demo", demoLimiter, async (req, res) => {
     const { email: userEmail, name, configId } = req.body as {
       email?: string; name?: string; configId?: string;
     };
