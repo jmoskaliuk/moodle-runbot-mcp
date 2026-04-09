@@ -756,6 +756,26 @@ Entdeckt: Admin-Dashboard zeigt Token-Einträge mit Phase "running" für längst
 
 ---
 
+### task30 Snapshot-Building-Instanzen vor Cleanup schützen
+Status: open
+Feature: feat03 (Runbot-MCP)
+Entdeckt: 2026-04-09 beim Erstellen des `exam2pdf-v1` Snapshots. Die Instanz `pr-exam2pdf-5057e6` wurde um 20:38 fertig bereitgestellt, der Cleanup-Scheduler (`inactivity=15min`) hat sie um 20:54:44 wegen „inactivity timeout (16 min idle)" entfernt — mitten im Snapshot-Workflow, bevor `snapshot_create` aufgerufen werden konnte.
+
+**Problem:** Der Inactivity-Tracker in `services/cleanup.ts` zählt nur HTTP-Requests auf die Moodle-Instanz selbst. Wenn eine Instanz rein für Snapshot-Building gestartet wird (ohne echten User-Traffic), ist sie aus Cleanup-Sicht sofort „idle" und wird nach 15 Min abgeräumt — auch wenn ein Admin gerade die Demo-DB präpariert.
+
+**Lösung:**
+1. `MoodleInstance`-Typ bekommt optionales Feld `pinned?: boolean` und `pinReason?: string`.
+2. `tools/instances.ts` → `instance_start` akzeptiert optionalen Parameter `pinned: boolean` (Default: `false`). Wenn `true`, wird das Feld in der Instance-Registry gesetzt.
+3. `services/cleanup.ts` → `checkInactivity()` überspringt Instanzen mit `pinned === true` komplett (weder maxAge noch inactivity triggern Cleanup).
+4. `tools/snapshots.ts` → neues Tool `snapshot_build` als Convenience-Wrapper: startet eine gepinnte Instanz, wartet bis ready, ruft `snapshot_create` auf, stoppt die Instanz explizit. Ein-Aufruf-Workflow.
+5. Admin-Dashboard: Gepinnte Instanzen bekommen ein 📌-Icon in der Phase-Spalte, damit sichtbar ist warum Cleanup sie ignoriert.
+
+**Verify:** Neue gepinnte Instanz startet, 20 Min nichts tun, Instanz läuft immer noch. `snapshot_build`-Call produziert erfolgreich einen Snapshot ohne manuelle Timing-Koordination.
+
+**Workaround bis zum Fix:** Snapshot innerhalb von 12 Minuten nach `instance_start` auslösen (Puffer zu 15-Min-Timeout).
+
+---
+
 ### task27 Details-Link im Demo-Portal auf Plugin-Detail-Seite
 Status: **done 2026-04-09**
 Feature: feat01 (Webui)
