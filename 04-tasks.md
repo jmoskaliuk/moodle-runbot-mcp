@@ -599,7 +599,7 @@ Feature: feat13
 ---
 
 ### task24 Rollenbasierte Demo-Szenarien (Admin/Teacher/Student)
-Status: in progress (Snapshot-Fix erforderlich)
+Status: **done 2026-04-09**
 Feature: feat10
 
 **Entscheidung (2026-04-09, Johannes):** Option A — Drei vordefinierte
@@ -607,22 +607,19 @@ Accounts im Snapshot, manueller Login, identisches Passwort. Kein Auto-Login,
 kein Rollen-Switcher im MVP. Die E-Mail-Adresse des Interessenten taucht
 nirgends als Moodle-Username auf.
 
-**Scope:**
+**Umgesetzt:**
 1. `src/index.ts` — `createDemoUser` + `enrollUserInDemoCourse` Calls entfernt ✓
-2. `src/index.ts` — `/api/demo-status/:token` sendet `accounts: ["admin","teacher","student"]` statt `username: request.email` ✓
-3. `buildLoadingPage` — Creds-Box zeigt `admin · teacher · student` + statisches Passwort-Label ✓
-4. `sendConfirmationEmail` + `sendDemoReadyEmail` — Login-Zeile ersetzt durch Accounts-Zeile ✓
-5. **Snapshots überarbeiten:** Alle bestehenden Snapshots (leitnerflow-v1, etc.) müssen die drei Accounts enthalten.
-   - `admin` (Site-Administrator, Passwort `demo1234`)
-   - `teacher` (Teacher im Demo-Kurs, Passwort `demo1234`)
-   - `student` (Student im Demo-Kurs, Passwort `demo1234`)
-   - Alle drei sind im Demo-Kurs eingeschrieben mit den passenden Rollen
-6. **Config-Flag** `multiUser?: boolean` in `PluginConfig` (Default `true`) — für zukünftige Single-Account-Plugins als Opt-Out
-7. **Snapshot-Doku** (`03-dev-doc.md`): Schritt hinzufügen "Accounts anlegen bevor `pg_dump`"
-8. **Moodle-Default-Admin:** In alten Snapshots wurde der Admin von moodle-docker aus `MOODLE_DOCKER_PHPUNIT_*` gezogen. Neu: expliziter Seed mit den drei Accounts.
+2. `src/index.ts` — `/api/demo-status/:token` sendet `accounts: ["admin","teacher","student"]` ✓
+3. `buildLoadingPage` — Creds-Box zeigt Admin/Trainer/Teilnehmer + Passwort-Label ✓ (task28: Wording angepasst)
+4. `sendConfirmationEmail` + `sendDemoReadyEmail` — Login-Zeile zeigt Accounts ✓
+5. Snapshot `leitnerflow-v1` enthält alle drei Accounts mit DEMO_PASSWORD — **verifiziert durch Johannes E2E-Test 2026-04-09**. Admin/teacher/student alle eingeloggt, kein session mismatch.
+6. Config-Flag `multiUser` — verschoben auf Phase 2, aktuell nur ein Plugin
+7. Snapshot-Doku in `task19`-Runbook verankert (Pre-Snapshot-Checkliste)
 
-**Pending:**
-- Snapshot leitnerflow-v1 regenerieren mit den drei Accounts (VPS-Job, siehe task19)
+**Non-goals (weiterhin):**
+- Kein Rollen-Switcher im Portal (Phase 2)
+- Kein Auto-Login via Webservice-Token (Phase 2)
+- Keine individuellen Passwörter pro Rolle
 
 **Non-goals (weiterhin):**
 - Kein Rollen-Switcher im Portal (Phase 2)
