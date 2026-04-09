@@ -137,6 +137,8 @@ hr.div{border:none;border-top:1px solid var(--rule)}
 .btn-f:disabled{background:var(--rule);color:var(--muted);cursor:not-allowed}
 .band{background:var(--ink);padding:64px clamp(24px,6vw,80px);display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
 @media(max-width:768px){.band{grid-template-columns:1fr}}
+.band-img{display:flex;align-items:center;justify-content:center}
+.band-img img{width:100%;max-width:460px;display:block;border-radius:14px;opacity:.92}
 .band-title{font-family:var(--serif);font-size:28px;font-weight:300;color:#fff;line-height:1.3;letter-spacing:-.5px;margin-bottom:14px}
 .band-text{font-size:15px;color:rgba(255,255,255,.5);line-height:1.7;font-weight:300}
 .band-feats{display:grid;grid-template-columns:1fr 1fr;gap:20px}
@@ -257,11 +259,8 @@ footer a:hover{color:var(--ink)}
     <h2 class="band-title">Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.</h2>
     <p class="band-text">Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.</p>
   </div>
-  <div class="band-feats">
-    <div><div class="bf-lbl">Technologie</div><div class="bf-val">Moodle 5.0 + PHP 8.3</div></div>
-    <div><div class="bf-lbl">Login</div><div class="bf-val">admin / demo1234</div></div>
-    <div><div class="bf-lbl">Laufzeit</div><div class="bf-val">60 Minuten</div></div>
-    <div><div class="bf-lbl">Registrierung</div><div class="bf-val">Nicht erforderlich</div></div>
+  <div class="band-img">
+    <img src="teaser.png" alt="eLeDia Demo Platform – kollaborative Datenvisualisierung">
   </div>
 </div>
 
