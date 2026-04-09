@@ -248,7 +248,7 @@ footer a:hover{color:var(--ink)}
 <!-- STICKY CTA BAND -->
 <div class="cta-band">
   <div>
-    <span class="cta-band-name" id="bandName">LeitnerFlow</span>
+    <span class="cta-band-name" id="bandPluginName">LeitnerFlow</span>
     <span class="cta-band-type" id="bandType">· Plugin</span>
   </div>
   <div class="cta-band-right">
@@ -279,11 +279,10 @@ footer a:hover{color:var(--ink)}
       Lernende wiederholen Inhalte genau dann, wenn es lernpsychologisch
       am wirkungsvollsten ist — ohne externen Tool-Wechsel.
     </p>
-    <div class="hero-chips">
+    <div class="hero-chips" id="heroChips">
       <div class="chip">Moodle 5.0+</div>
       <div class="chip">PHP 8.3</div>
       <div class="chip">Open Source</div>
-      <div class="chip">GPLv3</div>
     </div>
     <div class="usps" id="usps">
       <div class="usp">
@@ -449,7 +448,7 @@ footer a:hover{color:var(--ink)}
       <!-- Changelog -->
       <div class="tech-block fade-in" style="grid-column:1/-1;transition-delay:.1s">
         <div class="tb-title">Changelog</div>
-        <div class="changelog">
+        <div class="changelog" id="changelogContainer">
           <div class="cl-entry">
             <div class="cl-ver">1.2.0</div>
             <div class="cl-date">Jan 2026</div>
@@ -471,21 +470,31 @@ footer a:hover{color:var(--ink)}
   </div>
 </section>
 
+<!-- README (hidden until GitHub data loaded) -->
+<section class="readme-section" style="display:none;padding:64px 0;border-top:1px solid var(--rule)">
+  <div class="wrap">
+    <div class="section-kicker fade-in">README</div>
+    <div id="readmeContainer" style="
+      font-size:14px;line-height:1.75;color:var(--ink2);max-width:760px;
+      --heading-color:var(--ink);
+    "></div>
+  </div>
+</section>
+
 <footer>
   <div class="footer-logo">eLeDia</div>
   <a href="demo-portal.html">Alle Demos</a>
-  <a href="https://project52.eledia.ai">Project52</a>
-  <a href="#">Impressum</a>
-  <a href="#">Datenschutz</a>
+  <a href="https://eledia.de/impressum/" target="_blank">Impressum</a>
+  <a href="https://eledia.de/datenschutzerklaerung/" target="_blank">Datenschutz</a>
 </footer>
 
 <!-- MODAL -->
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-top">
-      <div class="modal-icon" style="background:#eff6ff">🃏</div>
+      <div class="modal-icon" id="mModalIcon" style="background:#eff6ff">🃏</div>
       <div class="modal-titles">
-        <div class="modal-name">LeitnerFlow Demo</div>
+        <div class="modal-name" id="mModalName">LeitnerFlow Demo</div>
         <div class="modal-sub" id="mSub">Wird gestartet…</div>
       </div>
       <button class="modal-x" onclick="closeModal()">×</button>
@@ -519,13 +528,104 @@ footer a:hover{color:var(--ink)}
 
 <div class="toast-wrap" id="toasts"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-const MCP = 'http://localhost:3000/mcp';
-const ITEM = {
-  id:'leitnerflow',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql',
-  pluginSrcPath:'/opt/plugins/mod_eledialeitnerflow',
-  pluginType:'mod',pluginName:'eledialeitnerflow',
-};
+// ── Dynamic data loading ───────────────────────────────────────────
+const API = window.location.origin;
+const pluginId = window.location.pathname.split('/').filter(Boolean).pop() ?? 'leitnerflow';
+let ITEM = { id: pluginId, moodleVersion:'5.0', phpVersion:'8.3', db:'pgsql',
+  pluginSrcPath:'', pluginType:'mod', pluginName:'' };
+
+async function loadPluginData() {
+  try {
+    const r = await fetch(`${API}/api/plugin/${pluginId}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const cfg = d.config;
+    if (cfg) {
+      ITEM = {
+        id: cfg.id,
+        moodleVersion: cfg.moodleVersion ?? '5.0',
+        phpVersion: cfg.phpVersion ?? '8.3',
+        db: cfg.db ?? 'pgsql',
+        pluginSrcPath: cfg.plugin?.srcPath ?? '',
+        pluginType: cfg.plugin?.type ?? 'mod',
+        pluginName: cfg.plugin?.name ?? '',
+      };
+      document.title = `${cfg.name} — eLeDia Demo`;
+      const heroName = document.getElementById('heroName');
+      if (heroName) heroName.textContent = cfg.name;
+      const heroTitle = document.getElementById('heroTitle');
+      if (heroTitle) heroTitle.textContent = cfg.description ?? '';
+      const heroDesc = document.getElementById('heroDesc');
+      if (heroDesc) heroDesc.textContent = '';  // title already covers this
+      const bandName = document.getElementById('bandPluginName');
+      if (bandName) bandName.textContent = cfg.name;
+      const chips = document.getElementById('heroChips');
+      if (chips) chips.innerHTML = [
+        `Moodle ${cfg.moodleVersion}+`, `PHP ${cfg.phpVersion}`, 'Open Source',
+      ].map(c => `<div class="chip">${c}</div>`).join('');
+      const badge = document.getElementById('heroBadge');
+      if (badge) {
+        const clsMap = { plugin:'tb-plugin', theme:'tb-theme', config:'tb-config', vanilla:'tb-config' };
+        const lblMap = { plugin:'Plugin', theme:'Theme', config:'Konfiguration', vanilla:'Moodle' };
+        badge.className = `type-badge ${clsMap[cfg.type] ?? 'tb-plugin'}`;
+        badge.textContent = lblMap[cfg.type] ?? 'Plugin';
+      }
+      const mIcon = document.getElementById('mModalIcon');
+      if (mIcon) { mIcon.textContent = cfg.icon ?? '🧩'; mIcon.style.background = cfg.iconBg ?? '#eff6ff'; }
+      const mName = document.getElementById('mModalName');
+      if (mName) mName.textContent = `${cfg.name} Demo`;
+      if (cfg.features?.length) {
+        const uspsEl = document.getElementById('usps');
+        if (uspsEl) {
+          const icons = ['🧠','📚','📊','🏆','📱','♿','🔒','🔁'];
+          uspsEl.innerHTML = cfg.features.map((f, i) =>
+            `<div class="usp"><div class="usp-icon">${icons[i % icons.length]}</div>` +
+            `<div><div class="usp-title">${f}</div></div></div>`
+          ).join('');
+        }
+      }
+    }
+    if (d.github) {
+      renderReadme(d.github.readme);
+      renderChangelog(d.github.releases);
+    }
+  } catch (e) {
+    console.warn('[detail] loadPluginData failed:', e);
+  }
+}
+
+function renderReadme(markdown) {
+  if (!markdown) return;
+  const el = document.getElementById('readmeContainer');
+  if (!el) return;
+  el.innerHTML = typeof marked !== 'undefined'
+    ? marked.parse(markdown)
+    : `<pre style="white-space:pre-wrap;font-size:13px">${markdown.slice(0,3000)}</pre>`;
+  const sec = el.closest('.readme-section');
+  if (sec) sec.style.display = 'block';
+}
+
+function renderChangelog(releases) {
+  if (!releases?.length) return;
+  const el = document.getElementById('changelogContainer');
+  if (!el) return;
+  el.innerHTML = releases.map(r => {
+    const date = r.published_at
+      ? new Date(r.published_at).toLocaleDateString('de-DE', {month:'short', year:'numeric'})
+      : '';
+    const notes = (r.body ?? '').replace(/#+\s*/g,'').replace(/\*\*/g,'').split('\n')
+      .filter(l => l.trim()).slice(0,3).join(' · ') || r.name;
+    return `<div class="cl-entry">
+      <div class="cl-ver">${r.tag_name}</div>
+      <div class="cl-date">${date}</div>
+      <div class="cl-notes">${notes}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Demo launch (MCP) ──────────────────────────────────────────────
 const STEPS=[
   {label:'Moodle-Umgebung vorbereiten'},
   {label:'Plugin installieren'},
@@ -646,6 +746,7 @@ function toast(msg){const el=document.createElement('div');el.className='toast';
 const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');obs.unobserve(e.target)}})},{threshold:.1});
 document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.fade-in').forEach(el=>obs.observe(el));
+  loadPluginData();
 });
 </script>
 </body>

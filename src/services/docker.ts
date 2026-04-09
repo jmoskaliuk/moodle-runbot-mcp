@@ -121,27 +121,65 @@ export async function startContainers(
   const env = envString(composeEnv(instance));
   const compose = path.join(instance.moodleDockerDir, "bin", "moodle-docker-compose");
 
+  console.error(`[docker] Starting containers for ${instance.id}…`);
   await run(`${env} ${compose} up -d`, instance.moodleDockerDir);
 
-  // Warten bis DB bereit
-  await run(
-    `${env} ${compose} exec -T webserver php admin/cli/wait_for_db.php || true`,
-    instance.moodleDockerDir
-  );
+  // Warten bis DB erreichbar ist (Polling, bis zu 120s)
+  await waitForDatabase(instance, 120);
 
   if (snapshotFile) {
-    // Snapshot-Modus: DB aus Dump restaurieren (schnell, mit Demo-Daten)
-    // Import passiert in snapshot.ts nach diesem Aufruf
+    // Snapshot-Modus: DB aus Dump restaurieren — Import passiert in snapshot.ts
     console.error(`[docker] Snapshot-Modus: ${snapshotFile}`);
   } else {
-    // Frisch-Modus: leere Moodle-DB anlegen
-    await run(
-      `${env} ${compose} exec -T webserver php admin/cli/install_database.php ` +
-      `--agree-license --fullname="eLeDia Demo ${instance.id}" ` +
-      `--shortname="${instance.id}" --adminpass="demo1234" --adminemail="admin@eledia.de" || true`,
-      instance.moodleDockerDir
-    );
+    // Frisch-Modus: Moodle-DB initialisieren
+    console.error(`[docker] Running install_database.php…`);
+    try {
+      const { stdout, stderr } = await execAsync(
+        `${env} ${compose} exec -T webserver php admin/cli/install_database.php ` +
+        `--agree-license --fullname="eLeDia Demo ${instance.id}" ` +
+        `--shortname="${instance.id}" --adminpass="demo1234" --adminemail="admin@eledia.de"`,
+        { cwd: instance.moodleDockerDir, maxBuffer: 10 * 1024 * 1024 }
+      );
+      console.error(`[docker] install_database stdout: ${stdout.slice(0, 500)}`);
+      if (stderr) console.error(`[docker] install_database stderr: ${stderr.slice(0, 500)}`);
+    } catch (err) {
+      const e = err as { stdout?: string; stderr?: string; message?: string };
+      const combined = `${e.stdout ?? ""} ${e.stderr ?? e.message ?? ""}`;
+      // Moodle gibt "already installed" zurück wenn DB schon existiert — nicht fatal
+      if (combined.includes("already installed") || combined.includes("already exists") || combined.includes("Site already installed")) {
+        console.error(`[docker] Moodle already installed — OK`);
+      } else {
+        throw new Error(
+          `install_database.php failed:\nstdout: ${e.stdout ?? ""}\nstderr: ${e.stderr ?? e.message ?? ""}`
+        );
+      }
+    }
+    console.error(`[docker] Moodle database ready for ${instance.id}`);
   }
+}
+
+/**
+ * Pollt wait_for_db.php bis die Datenbank erreichbar ist oder Timeout abläuft.
+ */
+async function waitForDatabase(instance: MoodleInstance, timeoutSecs: number): Promise<void> {
+  const env = envString(composeEnv(instance));
+  const compose = path.join(instance.moodleDockerDir, "bin", "moodle-docker-compose");
+  const deadline = Date.now() + timeoutSecs * 1000;
+
+  console.error(`[docker] Waiting for database (max ${timeoutSecs}s)…`);
+  while (Date.now() < deadline) {
+    try {
+      await execAsync(
+        `${env} ${compose} exec -T webserver php admin/cli/wait_for_db.php`,
+        { cwd: instance.moodleDockerDir, maxBuffer: 1024 * 1024 }
+      );
+      console.error(`[docker] Database is ready`);
+      return;
+    } catch {
+      await new Promise<void>(r => setTimeout(r, 5000));
+    }
+  }
+  throw new Error(`[docker] Database not ready after ${timeoutSecs}s`);
 }
 
 /**

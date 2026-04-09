@@ -32,6 +32,8 @@ export interface DemoConfig {
   phpVersion:    string;
   db:            string;
   visible:       boolean;
+  type?:         string;            // "plugin" | "theme" | "config" | "vanilla"
+  githubRepo?:   string;            // "owner/repo" für GitHub-API-Daten
 }
 
 // ── Lesen ─────────────────────────────────────────────────────────────────────
