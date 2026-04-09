@@ -1,0 +1,148 @@
+[
+  {
+    "id": "leitnerflow",
+    "name": "LeitnerFlow",
+    "category": "lernen",
+    "categoryLabel": "Lernen & Spaced Repetition",
+    "icon": "🃏",
+    "iconBg": "#eff6ff",
+    "description": "Karteikarten-System nach der Leitner-Methode direkt in Moodle. Lernende wiederholen Inhalte zum optimalen Zeitpunkt — automatisch gesteuert.",
+    "features": [
+      "5-Box Leitner-System mit automatischer Wiederholung",
+      "Integration mit Moodle Question Bank",
+      "Fortschritts-Dashboard für Lehrende",
+      "Automatische Bewertung im Gradebook"
+    ],
+    "plugin": {
+      "srcPath": "/opt/plugins/mod_eledialeitnerflow",
+      "type": "mod",
+      "name": "eledialeitnerflow"
+    },
+    "snapshotId": "leitnerflow-v1",
+    "moodleVersion": "5.0",
+    "phpVersion": "8.3",
+    "db": "pgsql",
+    "visible": true
+  },
+  {
+    "id": "cohortbridge",
+    "name": "CohortBridge",
+    "category": "verwaltung",
+    "categoryLabel": "Verwaltung & Synchronisation",
+    "icon": "🔗",
+    "iconBg": "#f0fdf4",
+    "description": "Synchronisiert Moodle-Kohorten aus externen Systemen. Automatische Einschreibung ohne manuellen Aufwand.",
+    "features": [
+      "Synchronisation aus LDAP, CSV, REST-API",
+      "Regelbasierte Kohorten-Zuweisung",
+      "Audit-Log und Konflikt-Report",
+      "Scheduled Tasks Integration"
+    ],
+    "plugin": {
+      "srcPath": "/opt/plugins/local_cohortbridge",
+      "type": "local",
+      "name": "cohortbridge"
+    },
+    "snapshotId": "cohortbridge-v1",
+    "moodleVersion": "5.0",
+    "phpVersion": "8.3",
+    "db": "pgsql",
+    "visible": true
+  },
+  {
+    "id": "gradingsnapshot",
+    "name": "GradingSnapshot",
+    "category": "reporting",
+    "categoryLabel": "Reporting & Bewertung",
+    "icon": "📸",
+    "iconBg": "#fdf4ff",
+    "description": "Erstellt zeitgesteuerte Snapshots des Gradebook-Stands. Ideal für Zwischenbewertungen und Prüfungskommissionen.",
+    "features": [
+      "Zeitgesteuerte Gradebook-Snapshots",
+      "Vergleichsansicht zwischen Zeitpunkten",
+      "PDF-Export für Kommissionen",
+      "Kurs- und Kategoriefilter"
+    ],
+    "plugin": {
+      "srcPath": "/opt/plugins/report_gradingsnapshot",
+      "type": "report",
+      "name": "gradingsnapshot"
+    },
+    "snapshotId": "gradingsnapshot-v1",
+    "moodleVersion": "5.0",
+    "phpVersion": "8.3",
+    "db": "pgsql",
+    "visible": true
+  },
+  {
+    "id": "progressboard",
+    "name": "ProgressBoard",
+    "category": "reporting",
+    "categoryLabel": "Reporting & Dashboard",
+    "icon": "📊",
+    "iconBg": "#fff7ed",
+    "description": "Visuelles Fortschritts-Dashboard für Kursleitende. Zeigt Lernstand, Aktivität und Risikostufen auf einen Blick.",
+    "features": [
+      "Fortschrittsanzeige pro Teilnehmer",
+      "Risiko-Ampel für gefährdete Lernende",
+      "Aktivitäts-Heatmap",
+      "Export als CSV und PDF"
+    ],
+    "plugin": {
+      "srcPath": "/opt/plugins/block_progressboard",
+      "type": "block",
+      "name": "progressboard"
+    },
+    "snapshotId": "progressboard-v1",
+    "moodleVersion": "5.0",
+    "phpVersion": "8.3",
+    "db": "pgsql",
+    "visible": true
+  },
+  {
+    "id": "enrollink",
+    "name": "EnrolLink",
+    "category": "verwaltung",
+    "categoryLabel": "Verwaltung & Einschreibung",
+    "icon": "🔑",
+    "iconBg": "#f0fdf4",
+    "description": "Erzeugt sichere Einschreibelinks mit Gültigkeitsdauer, Nutzungslimit und optionalem Passwortschutz.",
+    "features": [
+      "Zeitlich begrenzte Einschreibelinks",
+      "Nutzungslimit pro Link",
+      "Optionaler Passwortschutz",
+      "Link-Dashboard mit Statistiken"
+    ],
+    "plugin": {
+      "srcPath": "/opt/plugins/enrol_link",
+      "type": "enrol",
+      "name": "link"
+    },
+    "snapshotId": "enrollink-v1",
+    "moodleVersion": "5.0",
+    "phpVersion": "8.3",
+    "db": "pgsql",
+    "visible": true
+  },
+  {
+    "id": "vanilla",
+    "name": "Vanilla Moodle 5.0",
+    "category": "lernen",
+    "categoryLabel": "Referenz",
+    "icon": "🏔",
+    "iconBg": "#f8fafc",
+    "description": "Sauberes Moodle 5.0 ohne zusätzliche Plugins — als Referenz oder für einen ersten Eindruck der Plattform.",
+    "features": [
+      "Standard-Moodle ohne Modifikationen",
+      "Demo-Kurse und Beispieldaten",
+      "Alle Standardaktivitäten",
+      "Gut als Vergleichsbasis"
+    ],
+    "plugin": null,
+    "snapshotId": "vanilla-5.0",
+    "moodleVersion": "5.0",
+    "phpVersion": "8.3",
+    "db": "pgsql",
+    "visible": true
+  }
+]

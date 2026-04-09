@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moodle Runbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & Variables ──────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #0a0c0f;
+    --surface:    #111318;
+    --surface2:   #181c23;
+    --border:     #1e2430;
+    --border2:    #2a3040;
+    --text:       #c8d0e0;
+    --muted:      #4a5568;
+    --accent:     #f97316;
+    --accent2:    #fb923c;
+    --green:      #22c55e;
+    --red:        #ef4444;
+    --yellow:     #eab308;
+    --blue:       #3b82f6;
+    --purple:     #a855f7;
+    --mono:       'JetBrains Mono', monospace;
+    --display:    'Syne', sans-serif;
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanlines overlay ──────────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────────────── */
+  .app { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .logo span { color: var(--accent); }
+
+  .header-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .mcp-status {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    background: var(--surface2);
+  }
+  .mcp-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .mcp-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .mcp-dot.error { background: var(--red); }
+
+  .header-btn {
+    background: none;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .header-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Main grid ──────────────────────────────────────────────────── */
+  main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────── */
+  aside {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-header {
+    padding: 16px 20px 10px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Config picker ──────────────────────────────────────────────── */
+  .configs { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+
+  .config-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--surface2);
+    position: relative;
+    overflow: hidden;
+  }
+  .config-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--border2);
+    transition: background 0.15s;
+  }
+  .config-card:hover { border-color: var(--border2); }
+  .config-card:hover::before { background: var(--accent); }
+  .config-card.selected { border-color: var(--accent); background: rgba(249,115,22,0.05); }
+  .config-card.selected::before { background: var(--accent); }
+
+  .config-name {
+    font-weight: 500;
+    color: #fff;
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .config-desc { color: var(--muted); font-size: 11px; line-height: 1.4; margin-bottom: 8px; }
+  .config-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid;
+  }
+  .tag-moodle { color: var(--orange, #f97316); border-color: rgba(249,115,22,0.3); background: rgba(249,115,22,0.08); }
+  .tag-php { color: var(--purple); border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.08); }
+  .tag-db { color: var(--blue); border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.08); }
+  .tag-plugin { color: var(--green); border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+
+  /* ── Quick options ──────────────────────────────────────────────── */
+  .options-section { padding: 12px; border-top: 1px solid var(--border); }
+  .option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .option-label { color: var(--text); }
+  select, input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    outline: none;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  /* ── Launch button ──────────────────────────────────────────────── */
+  .launch-area { padding: 12px; border-top: 1px solid var(--border); margin-top: auto; }
+  .launch-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+  .launch-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+  .launch-btn:active { transform: translateY(0); }
+  .launch-btn:disabled { background: var(--border2); color: var(--muted); cursor: not-allowed; transform: none; }
+  .launch-btn.loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+  /* ── Main content ────────────────────────────────────────────────── */
+  .content { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Stats bar ──────────────────────────────────────────────────── */
+  .stats-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .stat {
+    padding: 14px 24px;
+    border-right: 1px solid var(--border);
+    flex: 1;
+  }
+  .stat-value {
+    font-family: var(--display);
+    font-size: 24px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.red { color: var(--red); }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  /* ── Instances grid ──────────────────────────────────────────────── */
+  .instances-area { flex: 1; overflow-y: auto; padding: 16px; }
+  .instances-grid { display: grid; gap: 12px; }
+  .no-instances {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: var(--muted);
+    gap: 12px;
+    border: 1px dashed var(--border2);
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+  .no-instances-icon { font-size: 40px; opacity: 0.3; }
+  .no-instances-text { font-size: 12px; }
+
+  /* ── Instance card ──────────────────────────────────────────────── */
+  .instance-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+    animation: slideIn 0.25s ease-out;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .instance-card:hover { border-color: var(--border2); }
+
+  .instance-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .instance-id {
+    font-weight: 500;
+    color: #fff;
+    font-size: 12px;
+  }
+  .instance-branch {
+    color: var(--muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .instance-actions { margin-left: auto; display: flex; gap: 6px; }
+
+  /* Status badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .badge-running  { background: rgba(34,197,94,0.12);  color: var(--green);  border: 1px solid rgba(34,197,94,0.3); }
+  .badge-running::before  { background: var(--green); box-shadow: 0 0 4px var(--green); animation: pulse 2s infinite; }
+  .badge-starting { background: rgba(234,179,8,0.12);  color: var(--yellow); border: 1px solid rgba(234,179,8,0.3); }
+  .badge-starting::before { background: var(--yellow); animation: pulse 1s infinite; }
+  .badge-testing  { background: rgba(59,130,246,0.12); color: var(--blue);   border: 1px solid rgba(59,130,246,0.3); }
+  .badge-testing::before  { background: var(--blue); animation: pulse 0.8s infinite; }
+  .badge-stopped  { background: rgba(74,85,104,0.2);   color: var(--muted);  border: 1px solid var(--border2); }
+  .badge-stopped::before  { background: var(--muted); }
+  .badge-error    { background: rgba(239,68,68,0.12);  color: var(--red);    border: 1px solid rgba(239,68,68,0.3); }
+  .badge-error::before    { background: var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .instance-body { padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+  .instance-meta { display: flex; flex-direction: column; gap: 6px; }
+  .meta-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .meta-item { display: flex; gap: 4px; align-items: center; font-size: 11px; color: var(--muted); }
+  .meta-item strong { color: var(--text); }
+  .instance-url {
+    font-size: 11px;
+    color: var(--accent);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+  }
+  .instance-url:hover { color: var(--accent2); text-decoration: underline; }
+
+  .instance-tests { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .test-result {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .test-result.passed { border-color: rgba(34,197,94,0.3); color: var(--green); background: rgba(34,197,94,0.08); }
+  .test-result.failed { border-color: rgba(239,68,68,0.3); color: var(--red); background: rgba(239,68,68,0.08); }
+
+  /* Instance action buttons */
+  .btn {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--muted);
+  }
+  .btn:hover { color: var(--text); border-color: var(--text); }
+  .btn-danger:hover { color: var(--red); border-color: rgba(239,68,68,0.5); background: rgba(239,68,68,0.08); }
+  .btn-primary { color: var(--accent); border-color: rgba(249,115,22,0.4); }
+  .btn-primary:hover { background: rgba(249,115,22,0.1); color: var(--accent2); }
+  .btn-test { color: var(--blue); border-color: rgba(59,130,246,0.4); }
+  .btn-test:hover { background: rgba(59,130,246,0.1); }
+
+  /* ── Log drawer ──────────────────────────────────────────────────── */
+  .log-drawer {
+    position: fixed;
+    right: 0; bottom: 0; top: 56px;
+    width: 520px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 200;
+  }
+  .log-drawer.open { transform: translateX(0); }
+  .log-drawer-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface2);
+  }
+  .log-drawer-title { font-weight: 500; color: #fff; font-size: 12px; flex: 1; }
+  .log-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .log-close:hover { color: var(--text); background: var(--border2); }
+  .log-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    font-size: 11px;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log-content .log-error { color: var(--red); }
+  .log-content .log-warn { color: var(--yellow); }
+  .log-content .log-ok { color: var(--green); }
+  .log-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .log-tab {
+    padding: 8px 16px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: var(--mono);
+  }
+  .log-tab:hover { color: var(--text); }
+  .log-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Toast ───────────────────────────────────────────────────────── */
+  .toasts {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .toast {
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    border: 1px solid;
+    animation: toastIn 0.2s ease-out;
+    white-space: nowrap;
+    pointer-events: auto;
+  }
+  .toast-info  { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+  .toast-ok    { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.4); color: var(--green); }
+  .toast-error { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: var(--red); }
+  @keyframes toastIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+
+  /* ── Scrollbars ──────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🐘</div>
+      Moodle<span>Runbot</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);border-left:1px solid var(--border);padding-left:16px;">
+      Docker Orchestration Dashboard
+    </div>
+    <div class="header-status">
+      <div class="mcp-status">
+        <div class="mcp-dot" id="mcpDot"></div>
+        <span id="mcpLabel">MCP: checking…</span>
+      </div>
+      <button class="header-btn" onclick="refreshAll()">↻ Refresh</button>
+      <button class="header-btn" onclick="showSettings()">⚙ Settings</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Sidebar -->
+    <aside>
+      <div class="section-header">Konfigurationen</div>
+      <div class="configs" id="configList"></div>
+
+      <div class="options-section">
+        <div class="section-header" style="padding:0 0 10px;border:none;font-size:10px;">Optionen</div>
+        <div class="option-row">
+          <span class="option-label">PR / Label</span>
+          <input type="text" id="optPr" placeholder="42" style="width:80px;">
+        </div>
+        <div class="option-row">
+          <span class="option-label">Branch</span>
+          <input type="text" id="optBranch" placeholder="main" style="width:110px;">
+        </div>
+        <div class="option-row">
+          <span class="option-label">Moodle</span>
+          <select id="optMoodle">
+            <option value="5.1">5.1 (main)</option>
+            <option value="5.0" selected>5.0</option>
+            <option value="4.5">4.5</option>
+            <option value="4.4">4.4</option>
+            <option value="4.3">4.3</option>
+          </select>
+        </div>
+        <div class="option-row">
+          <span class="option-label">PHP</span>
+          <select id="optPhp">
+            <option value="8.4">8.4</option>
+            <option value="8.3" selected>8.3</option>
+            <option value="8.2">8.2</option>
+            <option value="8.1">8.1</option>
+          </select>
+        </div>
+        <div class="option-row">
+          <span class="option-label">Datenbank</span>
+          <select id="optDb">
+            <option value="pgsql" selected>PostgreSQL</option>
+            <option value="mariadb">MariaDB</option>
+            <option value="mysql">MySQL</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="launch-area">
+        <button class="launch-btn" id="launchBtn" onclick="launchInstance()">
+          ▶ Instanz starten
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="content">
+      <!-- Stats bar -->
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Instanzen gesamt</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value green" id="statRunning">0</div>
+          <div class="stat-label">Running</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value yellow" id="statStarting">0</div>
+          <div class="stat-label">Starting</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value red" id="statError">0</div>
+          <div class="stat-label">Fehler</div>
+        </div>
+      </div>
+
+      <!-- Instances -->
+      <div class="instances-area">
+        <div class="instances-grid" id="instancesGrid">
+          <div class="no-instances">
+            <div class="no-instances-icon">🐳</div>
+            <div class="no-instances-text">Keine Instanzen aktiv — wähle eine Konfiguration und starte</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Log Drawer -->
+<div class="log-drawer" id="logDrawer">
+  <div class="log-drawer-header">
+    <span class="log-drawer-title" id="logDrawerTitle">Logs</span>
+    <button class="log-close" onclick="closeLogDrawer()">✕</button>
+  </div>
+  <div class="log-tabs">
+    <button class="log-tab active" onclick="switchTab('logs', this)">Container Logs</button>
+    <button class="log-tab" onclick="switchTab('tests', this)">Test Output</button>
+  </div>
+  <div class="log-content" id="logContent">Keine Logs geladen.</div>
+</div>
+
+<!-- Toasts -->
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────
+const MCP_URL = 'http://localhost:3000/mcp';
+
+// Vorkonfigurierte Umgebungen
+const CONFIGS = [
+  {
+    id: 'leitnerflow-demo',
+    name: 'LeitnerFlow Demo',
+    desc: 'Moodle mit LeitnerFlow + Beispiel-Karteikarten und Demo-Kursen',
+    tags: [
+      { label: 'Moodle 5.0', cls: 'tag-moodle' },
+      { label: 'PHP 8.3', cls: 'tag-php' },
+      { label: 'PostgreSQL', cls: 'tag-db' },
+      { label: 'mod_eledialeitnerflow', cls: 'tag-plugin' },
+    ],
+    pluginSrcPath: '/opt/plugins/mod_eledialeitnerflow',
+    pluginType: 'mod',
+    pluginName: 'eledialeitnerflow',
+    moodleVersion: '5.0',
+    phpVersion: '8.3',
+    db: 'pgsql',
+  },
+  {
+    id: 'quiz-h5p',
+    name: 'Quiz + H5P',
+    desc: 'Moodle mit erweitertem Quiz-Modul und H5P für interaktive Inhalte',
+    tags: [
+      { label: 'Moodle 5.0', cls: 'tag-moodle' },
+      { label: 'PHP 8.3', cls: 'tag-php' },
+      { label: 'MariaDB', cls: 'tag-db' },
+      { label: 'mod_quiz', cls: 'tag-plugin' },
+      { label: 'h5p', cls: 'tag-plugin' },
+    ],
+    pluginSrcPath: '/opt/plugins/mod_quiz_extended',
+    pluginType: 'mod',
+    pluginName: 'quiz_extended',
+    moodleVersion: '5.0',
+    phpVersion: '8.3',
+    db: 'mariadb',
+  },
+  {
+    id: 'vanilla-43',
+    name: 'Vanilla Moodle 4.3',
+    desc: 'Sauberes Moodle 4.3 ohne zusätzliche Plugins, für Kompatibilitätstests',
+    tags: [
+      { label: 'Moodle 4.3', cls: 'tag-moodle' },
+      { label: 'PHP 8.1', cls: 'tag-php' },
+      { label: 'PostgreSQL', cls: 'tag-db' },
+    ],
+    pluginSrcPath: null,
+    pluginType: null,
+    pluginName: null,
+    moodleVersion: '4.3',
+    phpVersion: '8.1',
+    db: 'pgsql',
+  },
+  {
+    id: 'dev-latest',
+    name: 'Dev / Bleeding Edge',
+    desc: 'Moodle main branch mit PHP 8.4 — für maximale Zukunftssicherheit',
+    tags: [
+      { label: 'Moodle 5.1', cls: 'tag-moodle' },
+      { label: 'PHP 8.4', cls: 'tag-php' },
+      { label: 'PostgreSQL', cls: 'tag-db' },
+    ],
+    pluginSrcPath: null,
+    pluginType: null,
+    pluginName: null,
+    moodleVersion: '5.1',
+    phpVersion: '8.4',
+    db: 'pgsql',
+  },
+];
+
+// ── State ────────────────────────────────────────────────────────────
+let selectedConfig = null;
+let instances = [];
+let activeLogInstance = null;
+let activeTab = 'logs';
+let lastTestOutput = '';
+let pollTimer = null;
+
+// ── Init ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderConfigs();
+  checkMcpConnection();
+  loadInstances();
+  // Poll every 5s
+  pollTimer = setInterval(loadInstances, 5000);
+});
+
+// ── MCP Communication ─────────────────────────────────────────────────
+async function mcpCall(toolName, args) {
+  const body = {
+    jsonrpc: '2.0',
+    id: Date.now(),
+    method: 'tools/call',
+    params: { name: toolName, arguments: args },
+  };
+  const res = await fetch(MCP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message ?? JSON.stringify(data.error));
+  // Parse text content from MCP response
+  const text = data.result?.content?.[0]?.text ?? '{}';
+  return JSON.parse(text);
+}
+
+async function checkMcpConnection() {
+  const dot = document.getElementById('mcpDot');
+  const label = document.getElementById('mcpLabel');
+  try {
+    const res = await fetch('http://localhost:3000/health');
+    if (res.ok) {
+      dot.className = 'mcp-dot connected';
+      label.textContent = 'MCP: connected';
+    } else throw new Error();
+  } catch {
+    dot.className = 'mcp-dot error';
+    label.textContent = 'MCP: offline';
+  }
+}
+
+// ── Configs ──────────────────────────────────────────────────────────
+function renderConfigs() {
+  const el = document.getElementById('configList');
+  el.innerHTML = CONFIGS.map(c => `
+    <div class="config-card" onclick="selectConfig('${c.id}')" id="cfg-${c.id}">
+      <div class="config-name">${c.name}</div>
+      <div class="config-desc">${c.desc}</div>
+      <div class="config-tags">
+        ${c.tags.map(t => `<span class="tag ${t.cls}">${t.label}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectConfig(id) {
+  selectedConfig = CONFIGS.find(c => c.id === id);
+  document.querySelectorAll('.config-card').forEach(el => el.classList.remove('selected'));
+  document.getElementById(`cfg-${id}`).classList.add('selected');
+  // Apply config defaults to option selects
+  if (selectedConfig) {
+    document.getElementById('optMoodle').value = selectedConfig.moodleVersion;
+    document.getElementById('optPhp').value = selectedConfig.phpVersion;
+    document.getElementById('optDb').value = selectedConfig.db;
+  }
+}
+
+// ── Launch ────────────────────────────────────────────────────────────
+async function launchInstance() {
+  const btn = document.getElementById('launchBtn');
+  const prId = document.getElementById('optPr').value || String(Date.now()).slice(-4);
+  const branch = document.getElementById('optBranch').value || 'main';
+  const moodleVersion = document.getElementById('optMoodle').value;
+  const phpVersion = document.getElementById('optPhp').value;
+  const db = document.getElementById('optDb').value;
+
+  const cfg = selectedConfig;
+
+  // Build args
+  const args = {
+    prId,
+    branch,
+    moodleVersion,
+    phpVersion,
+    db,
+    pluginSrcPath: cfg?.pluginSrcPath ?? '/opt/plugins/default',
+    pluginType: cfg?.pluginType ?? 'local',
+    pluginName: cfg?.pluginName ?? 'default',
+  };
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = '⏳ Starte…';
+  toast('Instanz wird gestartet…', 'info');
+
+  try {
+    const result = await mcpCall('instance_start', args);
+    toast(`✓ Instanz ${result.instanceId} gestartet`, 'ok');
+    loadInstances();
+  } catch (e) {
+    toast(`Fehler: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = '▶ Instanz starten';
+  }
+}
+
+// ── Instances ─────────────────────────────────────────────────────────
+async function loadInstances() {
+  try {
+    const data = await mcpCall('instance_list', { statusFilter: 'all' });
+    instances = data.instances ?? [];
+    renderInstances();
+    updateStats();
+    checkMcpConnection();
+  } catch (e) {
+    // MCP offline — show gracefully
+    updateStats();
+  }
+}
+
+function renderInstances() {
+  const grid = document.getElementById('instancesGrid');
+  if (!instances.length) {
+    grid.innerHTML = `
+      <div class="no-instances">
+        <div class="no-instances-icon">🐳</div>
+        <div class="no-instances-text">Keine Instanzen aktiv — wähle eine Konfiguration und starte</div>
+      </div>`;
+    return;
+  }
+  grid.innerHTML = instances.map(inst => renderInstanceCard(inst)).join('');
+}
+
+function renderInstanceCard(inst) {
+  const badge = `<span class="badge badge-${inst.status}">${inst.status}</span>`;
+  const age = timeSince(inst.createdAt);
+  const url = inst.url ?? `http://localhost:${inst.webPort ?? '?'}`;
+
+  return `
+  <div class="instance-card" id="inst-${inst.instanceId}">
+    <div class="instance-header">
+      ${badge}
+      <div>
+        <div class="instance-id">${inst.instanceId}</div>
+        <div class="instance-branch">⎇ ${inst.branch ?? 'unknown'}</div>
+      </div>
+      <div class="instance-actions">
+        <button class="btn btn-test" onclick="runTests('${inst.instanceId}', 'phpunit')">PHPUnit</button>
+        <button class="btn btn-test" onclick="runTests('${inst.instanceId}', 'behat')">Behat</button>
+        <button class="btn btn-primary" onclick="openLogs('${inst.instanceId}')">Logs</button>
+        <button class="btn btn-danger" onclick="stopInstance('${inst.instanceId}')">✕ Stop</button>
+      </div>
+    </div>
+    <div class="instance-body">
+      <div class="instance-meta">
+        <div class="meta-row">
+          <div class="meta-item">📦 <strong>${inst.moodleVersion ?? '?'}</strong></div>
+          <div class="meta-item">🐘 PHP <strong>${inst.phpVersion ?? '?'}</strong></div>
+          <div class="meta-item">🗄 <strong>${inst.db ?? '?'}</strong></div>
+          <div class="meta-item">🕐 <strong>${age}</strong></div>
+          <div class="meta-item">🔌 Port <strong>${inst.webPort ?? '?'}</strong></div>
+        </div>
+        <a class="instance-url" href="${url}" target="_blank">
+          ↗ ${url}
+        </a>
+      </div>
+      <div class="instance-tests" id="tests-${inst.instanceId}">
+        <div class="test-result">keine Tests</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = instances.length;
+  document.getElementById('statRunning').textContent = instances.filter(i => i.status === 'running').length;
+  document.getElementById('statStarting').textContent = instances.filter(i => i.status === 'starting' || i.status === 'testing').length;
+  document.getElementById('statError').textContent = instances.filter(i => i.status === 'error').length;
+}
+
+// ── Instance actions ──────────────────────────────────────────────────
+async function stopInstance(id) {
+  if (!confirm(`Instanz ${id} wirklich stoppen und löschen?`)) return;
+  toast(`Stoppe ${id}…`, 'info');
+  try {
+    await mcpCall('instance_stop', { instanceId: id });
+    toast(`✓ ${id} gestoppt`, 'ok');
+    loadInstances();
+  } catch(e) { toast(`Fehler: ${e.message}`, 'error'); }
+}
+
+async function openLogs(id) {
+  activeLogInstance = id;
+  activeTab = 'logs';
+  document.getElementById('logDrawerTitle').textContent = `Logs — ${id}`;
+  document.getElementById('logContent').textContent = 'Lade Logs…';
+  document.getElementById('logDrawer').classList.add('open');
+  switchTab('logs', document.querySelector('.log-tab'));
+  await fetchLogs(id);
+}
+
+async function fetchLogs(id) {
+  try {
+    const data = await mcpCall('instance_logs', { instanceId: id, lines: 200 });
+    const log = data.log ?? 'Keine Logs verfügbar';
+    document.getElementById('logContent').innerHTML = colorizeLogs(log);
+  } catch(e) {
+    document.getElementById('logContent').textContent = `Fehler: ${e.message}`;
+  }
+}
+
+async function runTests(id, type) {
+  const testsEl = document.getElementById(`tests-${id}`);
+  if (testsEl) testsEl.innerHTML = `<div class="test-result">⏳ ${type} läuft…</div>`;
+  toast(`Starte ${type} auf ${id}…`, 'info');
+  try {
+    const data = await mcpCall('instance_run_tests', { instanceId: id, type });
+    lastTestOutput = data.output ?? '';
+    const cls = data.status === 'passed' ? 'passed' : 'failed';
+    const icon = data.status === 'passed' ? '✓' : '✗';
+    if (testsEl) testsEl.innerHTML = `
+      <div class="test-result ${cls}" onclick="showTestOutput('${id}')" style="cursor:pointer" title="Klicken für Details">
+        ${icon} ${type}: ${data.summary ?? data.status}
+      </div>`;
+    toast(`${type}: ${data.summary ?? data.status}`, data.status === 'passed' ? 'ok' : 'error');
+    loadInstances();
+  } catch(e) {
+    if (testsEl) testsEl.innerHTML = `<div class="test-result">✗ Fehler</div>`;
+    toast(`Fehler: ${e.message}`, 'error');
+  }
+}
+
+function showTestOutput(id) {
+  activeLogInstance = id;
+  document.getElementById('logDrawer').classList.add('open');
+  switchTab('tests', document.querySelectorAll('.log-tab')[1]);
+  document.getElementById('logContent').innerHTML = colorizeTests(lastTestOutput);
+}
+
+function closeLogDrawer() {
+  document.getElementById('logDrawer').classList.remove('open');
+}
+
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (tab === 'logs' && activeLogInstance) fetchLogs(activeLogInstance);
+  if (tab === 'tests') {
+    document.getElementById('logContent').innerHTML = lastTestOutput
+      ? colorizeTests(lastTestOutput)
+      : '<span style="color:var(--muted)">Noch keine Tests ausgeführt.</span>';
+  }
+}
+
+function refreshAll() {
+  checkMcpConnection();
+  loadInstances();
+  if (activeLogInstance && activeTab === 'logs') fetchLogs(activeLogInstance);
+  toast('Aktualisiert', 'info');
+}
+
+// ── Log colorizer ─────────────────────────────────────────────────────
+function colorizeLogs(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(error|fatal|exception)/gi, '<span class="log-error">$1</span>')
+    .replace(/(warning|warn)/gi, '<span class="log-warn">$1</span>')
+    .replace(/(ok|success|started|ready)/gi, '<span class="log-ok">$1</span>');
+}
+
+function colorizeTests(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(FAILURES|FAILED|✗)/g, '<span class="log-error">$1</span>')
+    .replace(/(OK|passed|✓)/g, '<span class="log-ok">$1</span>')
+    .replace(/(WARNING|skipped)/gi, '<span class="log-warn">$1</span>');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────
+function timeSince(iso) {
+  if (!iso) return '?';
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'gerade eben';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  return `${Math.floor(h/24)}d`;
+}
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function showSettings() {
+  const url = prompt('MCP Server URL:', MCP_URL);
+  if (url) toast(`URL gesetzt (reload nötig): ${url}`, 'info');
+}
+</script>
+</body>
+</html>

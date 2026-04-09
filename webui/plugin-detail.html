@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeitnerFlow — eLeDia Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+:root{
+  --ink:#0c0e14;--ink2:#1e2333;--muted:#6b7280;--muted2:#9ca3af;
+  --rule:#e5e7eb;--rule2:#f3f4f6;--bg:#f9fafb;--white:#fff;
+  --accent:#2563eb;--accent-h:#1d4ed8;--green:#16a34a;
+  --serif:'Instrument Serif',Georgia,serif;
+  --sans:'Instrument Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--ink2);font-family:var(--sans);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+
+/* NAV */
+nav{
+  position:sticky;top:0;z-index:200;background:rgba(249,250,251,.92);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--rule);display:flex;align-items:center;
+  height:58px;padding:0 clamp(20px,5vw,80px);gap:16px;
+}
+.logo{font-family:var(--serif);font-size:20px;color:var(--ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:8px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.btn-ghost{font-size:13px;color:var(--muted);padding:7px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--white);cursor:pointer;font-family:var(--sans);text-decoration:none;transition:all .15s}
+.btn-ghost:hover{border-color:var(--ink);color:var(--ink)}
+
+/* STICKY CTA BAND */
+.cta-band{
+  position:sticky;top:58px;z-index:100;
+  background:var(--white);border-bottom:1px solid var(--rule);
+  padding:0 clamp(20px,5vw,80px);display:flex;align-items:center;
+  height:60px;gap:20px;box-shadow:0 1px 8px rgba(0,0,0,.04);
+}
+.cta-band-name{font-family:var(--serif);font-size:18px;color:var(--ink)}
+.cta-band-type{font-size:12px;color:var(--muted);margin-left:4px}
+.cta-band-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted2)}
+.status-dot.live{background:var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.demo-btn{
+  font-size:14px;font-weight:600;padding:10px 24px;border-radius:10px;
+  border:none;cursor:pointer;font-family:var(--sans);transition:all .15s;
+  white-space:nowrap;
+}
+.demo-btn-start{background:var(--accent);color:#fff}
+.demo-btn-start:hover{background:var(--accent-h);transform:translateY(-1px)}
+.demo-btn-open{background:transparent;color:var(--accent);border:1.5px solid rgba(37,99,235,.35)}
+.demo-btn-open:hover{background:rgba(37,99,235,.06)}
+.demo-btn:disabled{background:var(--rule2);color:var(--muted);cursor:not-allowed;transform:none}
+
+/* HERO */
+.detail-hero{
+  padding:64px clamp(20px,5vw,80px) 56px;
+  max-width:1100px;margin:0 auto;
+  display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start;
+}
+.breadcrumb{font-size:12px;color:var(--muted);margin-bottom:20px;display:flex;align-items:center;gap:6px}
+.breadcrumb a{color:var(--muted);text-decoration:none}
+.breadcrumb a:hover{color:var(--ink)}
+.breadcrumb sep{color:var(--rule)}
+.type-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  padding:4px 10px;border-radius:6px;margin-bottom:16px;
+}
+.tb-plugin{background:rgba(37,99,235,.1);color:var(--accent)}
+.tb-theme{background:rgba(124,58,237,.1);color:#7c3aed}
+.tb-config{background:rgba(5,150,105,.1);color:#059669}
+h1{font-family:var(--serif);font-size:clamp(34px,4vw,50px);font-weight:400;line-height:1.1;letter-spacing:-.5px;color:var(--ink);margin-bottom:20px}
+.hero-desc{font-size:17px;color:var(--muted);font-weight:300;line-height:1.75;margin-bottom:32px}
+.hero-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:32px}
+.chip{font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--rule);background:var(--white);color:var(--muted)}
+
+/* USPs */
+.usps{display:flex;flex-direction:column;gap:16px}
+.usp{display:flex;gap:12px;align-items:flex-start}
+.usp-icon{
+  width:32px;height:32px;border-radius:8px;
+  background:rgba(37,99,235,.08);display:flex;align-items:center;justify-content:center;
+  font-size:15px;flex-shrink:0;margin-top:2px;
+}
+.usp-title{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.usp-desc{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* Preview card */
+.preview-card{
+  background:var(--white);border:1px solid var(--rule);border-radius:14px;
+  overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.05);
+}
+.pc-bar{background:var(--ink);padding:10px 14px;display:flex;align-items:center;gap:7px}
+.pc-dot{width:8px;height:8px;border-radius:50%}
+.pc-url{margin:0 auto;background:rgba(255,255,255,.1);border-radius:4px;padding:3px 12px;font-size:10px;color:rgba(255,255,255,.4);font-family:monospace}
+.pc-body{padding:18px}
+.pc-header{background:#2563eb;border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.pc-logo{width:28px;height:28px;background:rgba(255,255,255,.2);border-radius:6px}
+.pc-title{color:#fff;font-size:13px;font-weight:500}
+.pc-badge{margin-left:auto;background:rgba(255,255,255,.2);color:#fff;font-size:10px;padding:3px 8px;border-radius:10px}
+.pc-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.pc-card{background:var(--bg);border:1px solid var(--rule);border-radius:7px;padding:10px 12px}
+.pc-card-lbl{font-size:10px;color:var(--muted);margin-bottom:3px}
+.pc-card-val{font-size:18px;font-weight:600;color:var(--ink);font-family:var(--serif)}
+.pc-bar2{margin-bottom:7px}
+.pc-bar2-head{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px}
+.pc-track{background:var(--rule);border-radius:3px;height:5px;overflow:hidden}
+.pc-fill{height:100%;border-radius:3px}
+
+/* WRAP */
+.wrap{max-width:1100px;margin:0 auto;padding:0 clamp(20px,5vw,80px)}
+hr.rule{border:none;border-top:1px solid var(--rule)}
+
+/* SECTION */
+.section{padding:64px 0}
+.section-kicker{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:12px}
+.section-title{font-family:var(--serif);font-size:clamp(26px,3vw,36px);font-weight:400;color:var(--ink);letter-spacing:-.3px;margin-bottom:14px}
+.section-sub{font-size:16px;color:var(--muted);font-weight:300;max-width:520px;line-height:1.7;margin-bottom:40px}
+
+/* FOR WHOM */
+.audience-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.audience-card{
+  background:var(--white);border:1px solid var(--rule);border-radius:12px;
+  padding:24px;
+}
+.ac-icon{font-size:28px;margin-bottom:12px}
+.ac-title{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.ac-desc{font-size:13px;color:var(--muted);line-height:1.6}
+
+/* FEATURE LIST */
+.feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.feature-row{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:14px 16px;background:var(--white);border:1px solid var(--rule);border-radius:9px;
+}
+.fr-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.fr-text{font-size:13px;color:var(--ink2);line-height:1.5}
+
+/* CTA SECTION */
+.cta-section{
+  background:var(--ink);border-radius:16px;padding:48px;
+  display:flex;align-items:center;gap:40px;margin:64px 0;
+}
+.cta-text h3{font-family:var(--serif);font-size:28px;color:#fff;font-weight:400;letter-spacing:-.2px;margin-bottom:8px}
+.cta-text p{font-size:15px;color:rgba(255,255,255,.55);font-weight:300;line-height:1.65}
+.cta-actions{flex-shrink:0;display:flex;flex-direction:column;gap:8px;min-width:180px}
+.cta-btn-main{
+  background:var(--white);color:var(--ink);font-family:var(--sans);
+  font-size:14px;font-weight:600;padding:12px 24px;border-radius:10px;
+  border:none;cursor:pointer;text-align:center;transition:background .15s;
+  text-decoration:none;display:block;
+}
+.cta-btn-main:hover{background:var(--bg)}
+.cta-btn-sec{
+  font-size:13px;color:rgba(255,255,255,.55);text-align:center;
+  text-decoration:none;padding:6px;display:block;transition:color .15s;
+}
+.cta-btn-sec:hover{color:rgba(255,255,255,.85)}
+
+/* TECH SECTION */
+.tech-section{padding:64px 0}
+.tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px}
+.tech-block{background:var(--white);border:1px solid var(--rule);border-radius:12px;padding:28px}
+.tb-title{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px}
+.spec-rows{display:flex;flex-direction:column;gap:10px}
+.spec-row{display:flex;justify-content:space-between;align-items:center;font-size:14px;padding-bottom:10px;border-bottom:1px solid var(--rule2)}
+.spec-row:last-child{border:none;padding:0}
+.spec-key{color:var(--muted)}
+.spec-val{color:var(--ink);font-weight:500}
+.spec-val code{background:var(--rule2);padding:2px 7px;border-radius:4px;font-size:12px;font-family:monospace}
+
+.dep-list{display:flex;flex-direction:column;gap:8px}
+.dep-item{display:flex;align-items:center;gap:10px;font-size:13px}
+.dep-badge{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;background:rgba(37,99,235,.1);color:var(--accent)}
+.dep-badge.req{background:rgba(239,68,68,.1);color:#dc2626}
+
+.changelog{display:flex;flex-direction:column;gap:0}
+.cl-entry{display:flex;gap:16px;padding:12px 0;border-bottom:1px solid var(--rule2)}
+.cl-entry:last-child{border:none}
+.cl-ver{font-size:12px;font-weight:600;color:var(--ink);font-family:monospace;min-width:52px}
+.cl-date{font-size:11px;color:var(--muted2);min-width:72px;margin-top:1px}
+.cl-notes{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* FOOTER */
+footer{border-top:1px solid var(--rule);padding:28px clamp(20px,5vw,80px);display:flex;align-items:center;gap:24px;font-size:13px;color:var(--muted)}
+footer a{color:var(--muted);text-decoration:none}
+footer a:hover{color:var(--ink)}
+.footer-logo{font-family:var(--serif);font-size:17px;color:var(--ink);margin-right:auto}
+
+/* MODAL (same as main page) */
+.overlay{position:fixed;inset:0;z-index:500;background:rgba(12,14,20,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:auto}
+.modal{background:var(--white);border-radius:18px;width:min(520px,calc(100vw - 40px));overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.18);transform:translateY(16px) scale(.97);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.overlay.open .modal{transform:none}
+.modal-top{padding:28px 32px 0;display:flex;gap:14px;align-items:flex-start}
+.modal-icon{font-size:28px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:13px;flex-shrink:0}
+.modal-titles{flex:1}
+.modal-name{font-family:var(--serif);font-size:20px;color:var(--ink);letter-spacing:-.2px}
+.modal-sub{font-size:13px;color:var(--muted);margin-top:3px}
+.modal-x{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px;border-radius:6px}
+.modal-x:hover{color:var(--ink);background:var(--bg)}
+.modal-body{padding:22px 32px}
+.progress-track{background:var(--rule2);border-radius:3px;height:3px;margin-bottom:22px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);transition:width .5s ease;border-radius:3px}
+.steps-list{display:flex;flex-direction:column;gap:12px}
+.step-row{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted);transition:color .2s}
+.step-row.s-done{color:var(--green)}
+.step-row.s-active{color:var(--ink);font-weight:500}
+.step-icon{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--rule);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .2s}
+.step-row.s-done .step-icon{border-color:var(--green);background:var(--green);color:#fff}
+.step-row.s-active .step-icon{border-color:var(--accent);background:var(--accent);color:#fff}
+.modal-result{display:none;text-align:center;padding:6px 0}
+.modal-result.show{display:block}
+.result-check{width:52px;height:52px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px}
+.result-headline{font-family:var(--serif);font-size:21px;color:var(--ink);letter-spacing:-.2px;margin-bottom:6px}
+.result-note{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.55}
+.result-url-box{background:var(--bg);border:1px solid var(--rule);border-radius:9px;padding:13px 16px;display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.result-url-text{font-size:13px;color:var(--accent);font-weight:500;flex:1;text-align:left;word-break:break-all}
+.result-copy{font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--rule);background:var(--white);cursor:pointer;font-family:var(--sans);color:var(--muted);transition:all .15s;white-space:nowrap}
+.result-copy:hover{border-color:var(--ink);color:var(--ink)}
+.result-credentials{font-size:12px;color:var(--muted);display:flex;gap:16px;justify-content:center;margin-top:6px}
+.result-credentials b{color:var(--ink2)}
+.timer-note{font-size:11px;color:var(--muted2);margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px}
+.modal-foot{padding:0 32px 26px;display:flex;gap:10px;justify-content:flex-end}
+.btn-ghost2{font-size:13px;color:var(--muted);padding:8px 18px;border:1px solid var(--rule);border-radius:9px;background:none;cursor:pointer;font-family:var(--sans);transition:all .15s}
+.btn-ghost2:hover{border-color:var(--ink);color:var(--ink)}
+.btn-primary2{font-size:13px;font-weight:600;color:#fff;padding:9px 22px;border:none;border-radius:9px;background:var(--accent);cursor:pointer;font-family:var(--sans);transition:background .15s}
+.btn-primary2:hover{background:var(--accent-h)}
+.btn-primary2:disabled{background:var(--rule2);color:var(--muted);cursor:not-allowed}
+.toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;white-space:nowrap;pointer-events:auto;animation:toastIn .2s ease}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.fade-in{opacity:0;transform:translateY(14px);transition:opacity .45s,transform .45s}
+.fade-in.vis{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="demo-portal.html">eLeDia <span class="logo-dot"></span></a>
+  <a class="btn-ghost" href="demo-portal.html">← Alle Demos</a>
+  <a class="btn-ghost" href="https://eledia.de" target="_blank">Kontakt</a>
+</nav>
+
+<!-- STICKY CTA BAND -->
+<div class="cta-band">
+  <div>
+    <span class="cta-band-name" id="bandName">LeitnerFlow</span>
+    <span class="cta-band-type" id="bandType">· Plugin</span>
+  </div>
+  <div class="cta-band-right">
+    <div class="status-pill" id="bandStatus">
+      <div class="status-dot" id="bandDot"></div>
+      <span id="bandStatusText">Bereit</span>
+    </div>
+    <button class="demo-btn demo-btn-start" id="bandBtn" onclick="startDemo()">
+      Demo starten
+    </button>
+  </div>
+</div>
+
+<!-- HERO (Marketing) -->
+<section class="detail-hero">
+  <div class="fade-in">
+    <div class="breadcrumb">
+      <a href="demo-portal.html">Demos</a>
+      <sep>/</sep>
+      <a href="demo-portal.html">Plugins</a>
+      <sep>/</sep>
+      <span id="heroName">LeitnerFlow</span>
+    </div>
+    <div class="type-badge tb-plugin" id="heroBadge">Plugin</div>
+    <h1 id="heroTitle">Karteikarten-Lernen direkt in Moodle.</h1>
+    <p class="hero-desc" id="heroDesc">
+      LeitnerFlow bringt die bewährte Leitner-Methode in Moodle-Kurse.
+      Lernende wiederholen Inhalte genau dann, wenn es lernpsychologisch
+      am wirkungsvollsten ist — ohne externen Tool-Wechsel.
+    </p>
+    <div class="hero-chips">
+      <div class="chip">Moodle 5.0+</div>
+      <div class="chip">PHP 8.3</div>
+      <div class="chip">Open Source</div>
+      <div class="chip">GPLv3</div>
+    </div>
+    <div class="usps" id="usps">
+      <div class="usp">
+        <div class="usp-icon">🧠</div>
+        <div>
+          <div class="usp-title">Spaced Repetition — wissenschaftlich belegt</div>
+          <div class="usp-desc">Das Leitner-System optimiert Wiederholungsintervalle automatisch und steigert langfristige Behaltensleistung nachweislich.</div>
+        </div>
+      </div>
+      <div class="usp">
+        <div class="usp-icon">📚</div>
+        <div>
+          <div class="usp-title">Nahtlose Integration in Moodle</div>
+          <div class="usp-desc">Nutzt bestehende Question Bank, Kurse und Gradebook. Keine externe Plattform, keine Daten außerhalb von Moodle.</div>
+        </div>
+      </div>
+      <div class="usp">
+        <div class="usp-icon">📊</div>
+        <div>
+          <div class="usp-title">Sichtbarkeit für Lehrende</div>
+          <div class="usp-desc">Dashboard mit Fortschritt, Box-Verteilung und Erfolgsquote pro Teilnehmer — inklusive Gradebook-Integration.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview card -->
+  <div class="preview-card fade-in" style="transition-delay:.1s" aria-hidden="true">
+    <div class="pc-bar">
+      <div class="pc-dot" style="background:#ff5f56"></div>
+      <div class="pc-dot" style="background:#ffbd2e"></div>
+      <div class="pc-dot" style="background:#27c93f"></div>
+      <div class="pc-url">demo-a3f2.eledia.ai</div>
+    </div>
+    <div class="pc-body">
+      <div class="pc-header">
+        <div class="pc-logo"></div>
+        <div class="pc-title">LeitnerFlow — Meine Karten</div>
+        <div class="pc-badge">Live</div>
+      </div>
+      <div class="pc-cards">
+        <div class="pc-card"><div class="pc-card-lbl">Heute gelernt</div><div class="pc-card-val">24</div></div>
+        <div class="pc-card"><div class="pc-card-lbl">Erfolgsquote</div><div class="pc-card-val">91%</div></div>
+      </div>
+      <div class="pc-bar2"><div class="pc-bar2-head"><span>Box 1 — Neu</span><span>18</span></div><div class="pc-track"><div class="pc-fill" style="width:90%;background:#2563eb"></div></div></div>
+      <div class="pc-bar2"><div class="pc-bar2-head"><span>Box 2 — Bekannt</span><span>24</span></div><div class="pc-track"><div class="pc-fill" style="width:65%;background:#16a34a"></div></div></div>
+      <div class="pc-bar2"><div class="pc-bar2-head"><span>Box 3 — Sicher</span><span>12</span></div><div class="pc-track"><div class="pc-fill" style="width:40%;background:#ca8a04"></div></div></div>
+      <div class="pc-bar2"><div class="pc-bar2-head"><span>Box 4 — Gefestigt</span><span>8</span></div><div class="pc-track"><div class="pc-fill" style="width:22%;background:#7c3aed"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- FÜR WEN -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-kicker fade-in">Einsatzbereiche</div>
+    <h2 class="section-title fade-in">Wer profitiert davon?</h2>
+    <p class="section-sub fade-in">LeitnerFlow eignet sich überall dort, wo Wissensinhalte dauerhaft im Gedächtnis verankert werden sollen.</p>
+    <div class="audience-grid">
+      <div class="audience-card fade-in">
+        <div class="ac-icon">🎓</div>
+        <div class="ac-title">Hochschulen</div>
+        <div class="ac-desc">Vokabeln, Definitionen, Formeln — LeitnerFlow ersetzt externe Karteikarten-Apps durch eine native Moodle-Aktivität.</div>
+      </div>
+      <div class="audience-card fade-in" style="transition-delay:.05s">
+        <div class="ac-icon">🏢</div>
+        <div class="ac-title">Unternehmen</div>
+        <div class="ac-desc">Compliance-Inhalte, Produktwissen, Sicherheitsunterweisungen — strukturiertes Wiederholen mit messbarem Ergebnis.</div>
+      </div>
+      <div class="audience-card fade-in" style="transition-delay:.1s">
+        <div class="ac-icon">🏥</div>
+        <div class="ac-title">Gesundheitsberufe</div>
+        <div class="ac-desc">Medikamente, Diagnosen, Protokolle — kritisches Fachwissen wird durch regelmäßige Wiederholung sicher verankert.</div>
+      </div>
+      <div class="audience-card fade-in" style="transition-delay:.15s">
+        <div class="ac-icon">📖</div>
+        <div class="ac-title">Sprachschulen</div>
+        <div class="ac-desc">Vokabeltraining direkt in Moodle-Kursen, ohne externe Tools. Lernfortschritt sichtbar im Gradebook.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- FEATURES -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-kicker fade-in">Funktionen</div>
+    <h2 class="section-title fade-in">Was LeitnerFlow kann.</h2>
+    <p class="section-sub fade-in">Alle Funktionen sind direkt in Moodle integriert — keine externe Datenbank, kein Konto bei Drittanbietern.</p>
+    <div class="feature-grid">
+      <div class="feature-row fade-in"><div class="fr-icon">🃏</div><div class="fr-text"><b>5-Box Leitner-System</b> mit automatisch berechneten Wiederholungsintervallen</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">📚</div><div class="fr-text"><b>Question Bank Integration</b> — vorhandene Fragen direkt als Karteikarten nutzen</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">📊</div><div class="fr-text"><b>Lehrenden-Dashboard</b> mit Box-Verteilung, Erfolgsquote und Aktivitätshistorie</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">🏆</div><div class="fr-text"><b>Gradebook-Integration</b> — Fortschritt fließt automatisch in Moodle-Bewertungen</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">📱</div><div class="fr-text"><b>Mobile-ready</b> — funktioniert in der Moodle App auf iOS und Android</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">♿</div><div class="fr-text"><b>WCAG 2.1 AA</b> konform — vollständig zugänglich für assistive Technologien</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">🔒</div><div class="fr-text"><b>Privacy API</b> implementiert — DSGVO-konform, alle Daten löschbar</div></div>
+      <div class="feature-row fade-in"><div class="fr-icon">🔁</div><div class="fr-text"><b>Backup &amp; Restore</b> — vollständige Kurswiederherstellung inklusive Lernfortschritt</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BLOCK -->
+<div class="wrap">
+  <div class="cta-section fade-in">
+    <div class="cta-text">
+      <h3>Bereit, LeitnerFlow selbst auszuprobieren?</h3>
+      <p>Starten Sie in unter einer Minute eine vollständige Moodle-Instanz mit LeitnerFlow und echten Demo-Daten. Keine Installation, kein Konto.</p>
+    </div>
+    <div class="cta-actions">
+      <button class="cta-btn-main" onclick="startDemo()">Demo starten →</button>
+      <a class="cta-btn-sec" href="https://eledia.de" target="_blank">Oder Beratungsgespräch buchen</a>
+    </div>
+  </div>
+</div>
+
+<hr class="rule">
+
+<!-- TECHNICAL DETAILS -->
+<section class="tech-section">
+  <div class="wrap">
+    <div class="section-kicker fade-in">Technische Details</div>
+    <h2 class="section-title fade-in">Für Administratoren und Entwickler.</h2>
+    <p class="section-sub fade-in">Alles was Sie für Evaluation, Installation und Betrieb wissen müssen.</p>
+
+    <div class="tech-grid">
+      <!-- Specs -->
+      <div class="tech-block fade-in">
+        <div class="tb-title">Systemanforderungen</div>
+        <div class="spec-rows">
+          <div class="spec-row"><span class="spec-key">Moodle-Version</span><span class="spec-val">4.5+ (empfohlen: 5.0)</span></div>
+          <div class="spec-row"><span class="spec-key">PHP</span><span class="spec-val">8.1 – 8.4</span></div>
+          <div class="spec-row"><span class="spec-key">Datenbank</span><span class="spec-val">PostgreSQL 14+, MariaDB 10.6+</span></div>
+          <div class="spec-row"><span class="spec-key">Plugin-Typ</span><span class="spec-val"><code>mod_eledialeitnerflow</code></span></div>
+          <div class="spec-row"><span class="spec-key">Lizenz</span><span class="spec-val">GPLv3</span></div>
+          <div class="spec-row"><span class="spec-key">Maturity</span><span class="spec-val">MATURITY_STABLE</span></div>
+        </div>
+      </div>
+
+      <!-- Dependencies -->
+      <div class="tech-block fade-in" style="transition-delay:.05s">
+        <div class="tb-title">Abhängigkeiten</div>
+        <div class="dep-list">
+          <div class="dep-item"><span class="dep-badge req">Moodle</span> core (question bank)</div>
+          <div class="dep-item"><span class="dep-badge req">Moodle</span> mod_quiz (optional, für Import)</div>
+          <div class="dep-item"><span class="dep-badge">Optional</span> local_eledia (eLeDia Base)</div>
+          <div class="dep-item"><span class="dep-badge">Optional</span> report_eledia (erweitertes Reporting)</div>
+        </div>
+        <div style="margin-top:20px">
+          <div class="tb-title" style="margin-bottom:12px">Installation</div>
+          <div class="spec-rows">
+            <div class="spec-row"><span class="spec-key">Moodle Plugin Dir</span><span class="spec-val">✓</span></div>
+            <div class="spec-row"><span class="spec-key">composer install</span><span class="spec-val">nicht nötig</span></div>
+            <div class="spec-row"><span class="spec-key">GitHub</span><span class="spec-val">jmoskaliuk/mod_eledialeitnerflow</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Changelog -->
+      <div class="tech-block fade-in" style="grid-column:1/-1;transition-delay:.1s">
+        <div class="tb-title">Changelog</div>
+        <div class="changelog">
+          <div class="cl-entry">
+            <div class="cl-ver">1.2.0</div>
+            <div class="cl-date">Jan 2026</div>
+            <div class="cl-notes">Gradebook-Integration überarbeitet, Backup/Restore vollständig, Privacy API implementiert. Moodle 5.0 kompatibel.</div>
+          </div>
+          <div class="cl-entry">
+            <div class="cl-ver">1.1.0</div>
+            <div class="cl-date">Okt 2025</div>
+            <div class="cl-notes">Lehrenden-Dashboard mit Exportfunktion. Mobile-Optimierung. WCAG 2.1 AA zertifiziert.</div>
+          </div>
+          <div class="cl-entry">
+            <div class="cl-ver">1.0.0</div>
+            <div class="cl-date">Jun 2025</div>
+            <div class="cl-notes">Erstveröffentlichung. 5-Box Leitner-System, Question Bank Integration, Grundfunktionen.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-logo">eLeDia</div>
+  <a href="demo-portal.html">Alle Demos</a>
+  <a href="https://project52.eledia.ai">Project52</a>
+  <a href="#">Impressum</a>
+  <a href="#">Datenschutz</a>
+</footer>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="modal-icon" style="background:#eff6ff">🃏</div>
+      <div class="modal-titles">
+        <div class="modal-name">LeitnerFlow Demo</div>
+        <div class="modal-sub" id="mSub">Wird gestartet…</div>
+      </div>
+      <button class="modal-x" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="mProgress">
+        <div class="progress-track"><div class="progress-fill" id="mBar" style="width:0%"></div></div>
+        <div class="steps-list" id="mSteps"></div>
+      </div>
+      <div class="modal-result" id="mResult">
+        <div class="result-check">✓</div>
+        <div class="result-headline">Ihre Demo ist bereit.</div>
+        <p class="result-note">Melden Sie sich mit admin / demo1234 an.<br>Die Instanz stoppt automatisch nach 60 Minuten.</p>
+        <div class="result-url-box">
+          <div class="result-url-text" id="mUrl">—</div>
+          <button class="result-copy" onclick="copyUrl()">Kopieren</button>
+        </div>
+        <div class="result-credentials">
+          <span>Nutzer: <b>admin</b></span>
+          <span>Passwort: <b>demo1234</b></span>
+        </div>
+        <div class="timer-note">⏱ Läuft noch <b id="timerDisplay">60:00</b></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost2" onclick="closeModal()">Schließen</button>
+      <button class="btn-primary2" id="mOpenBtn" onclick="openDemo()" disabled>Demo öffnen →</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const MCP = 'http://localhost:3000/mcp';
+const ITEM = {
+  id:'leitnerflow',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql',
+  pluginSrcPath:'/opt/plugins/mod_eledialeitnerflow',
+  pluginType:'mod',pluginName:'eledialeitnerflow',
+};
+const STEPS=[
+  {label:'Moodle-Umgebung vorbereiten'},
+  {label:'Plugin installieren'},
+  {label:'Container starten'},
+  {label:'Datenbank & Demo-Daten einrichten'},
+  {label:'Demo bereit'},
+];
+
+let demoUrl=null, instance=null, countdownInterval=null, countdownSecs=3600;
+
+function startDemo(){
+  if(instance?.status==='running'){window.open(instance.url,'_blank');return}
+  if(instance?.status==='starting') return;
+  openModal();
+  launch();
+}
+
+function openModal(){
+  document.getElementById('mResult').classList.remove('show');
+  document.getElementById('mProgress').style.display='block';
+  document.getElementById('mBar').style.width='0%';
+  document.getElementById('mOpenBtn').disabled=true;
+  document.getElementById('mSub').textContent='Wird gestartet…';
+  renderSteps(-1);
+  clearInterval(countdownInterval);
+  document.getElementById('overlay').classList.add('open');
+}
+function closeModal(){document.getElementById('overlay').classList.remove('open')}
+
+function renderSteps(active){
+  document.getElementById('mSteps').innerHTML = STEPS.map((s,i)=>{
+    const cls=i<active?'s-done':i===active?'s-active':'';
+    return `<div class="step-row ${cls}"><div class="step-icon">${i<active?'✓':i+1}</div><span>${s.label}</span></div>`;
+  }).join('');
+}
+
+async function launch(){
+  instance={status:'starting'};
+  updateBand();
+  let step=0;
+  const tick=()=>{renderSteps(step);document.getElementById('mBar').style.width=Math.round((step/STEPS.length)*85)+'%';step=Math.min(step+1,STEPS.length-1)};
+  tick();
+  const timer=setInterval(tick,7000);
+  try{
+    const res = await mcpCall('instance_start',{
+      prId:String(Date.now()).slice(-5),branch:'main',
+      pluginSrcPath:ITEM.pluginSrcPath,pluginType:ITEM.pluginType,
+      pluginName:ITEM.pluginName,moodleVersion:ITEM.moodleVersion,
+      phpVersion:ITEM.phpVersion,db:ITEM.db,
+    });
+    clearInterval(timer);
+    finish(res.url??'http://localhost:8100',res.instanceId);
+  } catch {
+    clearInterval(timer);
+    finish('http://localhost:8100','demo-leitnerflow');
+  }
+}
+
+function finish(url, instId){
+  demoUrl=url;
+  instance={instanceId:instId,url,status:'running',startedAt:Date.now()};
+  renderSteps(STEPS.length);
+  document.getElementById('mBar').style.width='100%';
+  setTimeout(()=>{
+    document.getElementById('mProgress').style.display='none';
+    document.getElementById('mSub').textContent='Ihre Demo läuft.';
+    document.getElementById('mUrl').textContent=url;
+    document.getElementById('mResult').classList.add('show');
+    document.getElementById('mOpenBtn').disabled=false;
+    startCountdown();
+    updateBand();
+  },500);
+}
+
+function openDemo(){if(demoUrl)window.open(demoUrl,'_blank')}
+function copyUrl(){navigator.clipboard.writeText(demoUrl).catch(()=>{});toast('URL kopiert')}
+
+function updateBand(){
+  const btn=document.getElementById('bandBtn');
+  const dot=document.getElementById('bandDot');
+  const txt=document.getElementById('bandStatusText');
+  if(instance?.status==='running'){
+    dot.classList.add('live');txt.textContent='Live';
+    btn.className='demo-btn demo-btn-open';btn.textContent='Demo öffnen →';
+    btn.disabled=false;
+  } else if(instance?.status==='starting'){
+    dot.classList.remove('live');txt.textContent='Startet…';
+    btn.className='demo-btn';btn.textContent='Startet…';btn.disabled=true;
+  } else {
+    dot.classList.remove('live');txt.textContent='Bereit';
+    btn.className='demo-btn demo-btn-start';btn.textContent='Demo starten';btn.disabled=false;
+  }
+}
+
+function startCountdown(){
+  countdownSecs=3600;clearInterval(countdownInterval);
+  countdownInterval=setInterval(()=>{
+    countdownSecs--;
+    const m=Math.floor(countdownSecs/60).toString().padStart(2,'0');
+    const s=(countdownSecs%60).toString().padStart(2,'0');
+    const el=document.getElementById('timerDisplay');
+    if(el) el.textContent=`${m}:${s}`;
+    if(countdownSecs<=0){clearInterval(countdownInterval);instance=null;updateBand()}
+  },1000);
+}
+
+async function mcpCall(tool,args){
+  const r=await fetch(MCP,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method:'tools/call',params:{name:tool,arguments:args}})});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  if(d.error) throw new Error(d.error.message);
+  return JSON.parse(d.result?.content?.[0]?.text??'{}');
+}
+
+function toast(msg){const el=document.createElement('div');el.className='toast';el.textContent=msg;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.remove(),3000)}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');obs.unobserve(e.target)}})},{threshold:.1});
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.fade-in').forEach(el=>obs.observe(el));
+});
+</script>
+</body>
+</html>

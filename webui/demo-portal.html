@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eLeDia Plugin Demos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+:root{
+  --ink:#0f1117;--ink2:#2d3142;--muted:#7a8090;--rule:#e8eaee;
+  --bg:#fafaf8;--white:#fff;--accent:#1a56db;--accent2:#1e40af;
+  --green:#059669;--amber:#d97706;
+  --serif:'Fraunces',Georgia,serif;--sans:'DM Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--ink2);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 clamp(24px,8vw,120px);display:flex;align-items:center;gap:32px;height:60px}
+.nav-logo{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--ink);text-decoration:none}
+.nav-logo span{color:var(--accent)}
+.nav-links{display:flex;gap:24px;margin-left:auto}
+.nav-links a{font-size:14px;color:var(--muted);text-decoration:none;transition:color .15s}
+.nav-links a:hover{color:var(--ink)}
+.nav-cta{background:var(--ink)!important;color:#fff!important;padding:8px 18px;border-radius:6px;font-weight:500}
+.wrap{max-width:1100px;margin:0 auto;padding:0 clamp(24px,6vw,80px)}
+.hero{padding:96px clamp(24px,6vw,80px) 80px;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;max-width:1100px;margin:0 auto}
+@media(max-width:768px){.hero{grid-template-columns:1fr;padding:60px 24px 48px}.hero-vis{display:none}}
+.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:16px}
+.hero-h1{font-family:var(--serif);font-size:clamp(36px,4vw,52px);font-weight:300;line-height:1.15;color:var(--ink);letter-spacing:-1px;margin-bottom:24px}
+.hero-h1 em{font-style:italic;color:var(--accent)}
+.hero-lead{font-size:17px;color:var(--muted);line-height:1.7;margin-bottom:36px;font-weight:300}
+.hero-cta{display:inline-block;background:var(--accent);color:#fff;padding:13px 30px;border-radius:8px;font-size:15px;font-weight:500;text-decoration:none;margin-bottom:36px;transition:background .15s}
+.hero-cta:hover{background:var(--accent2)}
+.hero-stats{display:flex;gap:32px;padding-top:24px;border-top:1px solid var(--rule)}
+.stat-val{font-family:var(--serif);font-size:28px;font-weight:600;color:var(--ink);line-height:1}
+.stat-lbl{font-size:12px;color:var(--muted);margin-top:4px}
+.hero-vis{background:var(--white);border:1px solid var(--rule);border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,.06)}
+.vis-bar{background:var(--ink);padding:11px 14px;display:flex;align-items:center;gap:7px}
+.dot{width:10px;height:10px;border-radius:50%}
+.dot-r{background:#ff5f56}.dot-y{background:#ffbd2e}.dot-g{background:#27c93f}
+.vis-url{margin:0 auto;background:rgba(255,255,255,.1);border-radius:4px;padding:3px 14px;font-size:11px;color:rgba(255,255,255,.5);font-family:monospace}
+.vis-body{padding:18px}
+.vis-hdr{background:#1a73e8;border-radius:8px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.vis-logo{width:26px;height:26px;background:rgba(255,255,255,.25);border-radius:5px}
+.vis-title{color:#fff;font-size:13px;font-weight:500}
+.vis-badge{display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;font-size:10px;font-weight:500;padding:3px 8px;border-radius:20px;margin-left:auto}
+.vis-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.vis-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.vis-card{background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:11px}
+.vis-card-lbl{font-size:10px;color:var(--muted);margin-bottom:3px}
+.vis-card-val{font-size:18px;font-weight:600;color:var(--ink)}
+.vis-bar-wrap{margin-bottom:7px}
+.vis-bar-lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px}
+.vis-bar-track{background:var(--rule);border-radius:4px;height:5px;overflow:hidden}
+.vis-bar-fill{height:100%;border-radius:4px}
+hr.div{border:none;border-top:1px solid var(--rule)}
+.how{padding:80px 0}
+.sec-title{font-family:var(--serif);font-size:clamp(26px,3vw,36px);font-weight:300;color:var(--ink);letter-spacing:-.5px;line-height:1.2;margin-bottom:16px}
+.sec-lead{font-size:16px;color:var(--muted);font-weight:300;max-width:560px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-top:48px}
+@media(max-width:640px){.steps{grid-template-columns:1fr}}
+.step{background:var(--white);padding:32px 28px}
+.step-n{font-family:var(--serif);font-size:44px;font-weight:300;color:var(--rule);line-height:1;margin-bottom:16px;letter-spacing:-2px}
+.step-t{font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px}
+.step-d{font-size:14px;color:var(--muted);line-height:1.6}
+.plugins-sec{padding:80px 0}
+.plugins-hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:48px;gap:24px;flex-wrap:wrap}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.fbtn{font-size:12px;padding:6px 14px;border-radius:20px;border:1px solid var(--rule);background:var(--white);color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans)}
+.fbtn:hover{border-color:var(--ink);color:var(--ink)}
+.fbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px}
+.card{background:var(--white);border:1px solid var(--rule);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s}
+.card:hover{box-shadow:0 8px 32px rgba(0,0,0,.08);transform:translateY(-2px)}
+.card-top{padding:26px 26px 20px;flex:1}
+.p-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px}
+.p-cat{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-weight:500}
+.p-name{font-family:var(--serif);font-size:20px;font-weight:400;color:var(--ink);line-height:1.2;margin-bottom:10px;letter-spacing:-.3px}
+.p-desc{font-size:14px;color:var(--muted);line-height:1.65;margin-bottom:18px;font-weight:300}
+.p-feats{display:flex;flex-direction:column;gap:5px}
+.p-feat{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink2)}
+.p-feat::before{content:'→';color:var(--accent);font-size:12px;margin-top:2px;flex-shrink:0}
+.p-meta{display:flex;gap:10px;padding:0 26px 14px;flex-wrap:wrap}
+.p-meta-i{font-size:11px;color:var(--muted)}
+.p-meta-i strong{color:var(--ink2)}
+.card-bot{padding:16px 26px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:10px;background:var(--bg)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;white-space:nowrap}
+.pill::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.pill-ready{color:var(--muted);background:var(--rule)}
+.pill-running{color:var(--green);background:#dcfce7}
+.pill-starting{color:var(--amber);background:#fef3c7}
+.dbtn{margin-left:auto;padding:10px 20px;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;border:none;white-space:nowrap}
+.dbtn-p{background:var(--accent);color:#fff}
+.dbtn-p:hover{background:var(--accent2)}
+.dbtn-s{background:transparent;color:var(--accent);border:1px solid rgba(26,86,219,.3)}
+.dbtn-s:hover{background:rgba(26,86,219,.06)}
+.dbtn:disabled{background:var(--rule);color:var(--muted);cursor:not-allowed}
+.overlay{position:fixed;inset:0;z-index:500;background:rgba(15,17,23,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;padding:24px}
+.overlay.open{opacity:1;pointer-events:auto}
+.modal{background:var(--white);border-radius:16px;width:min(500px,100%);overflow:hidden;transform:translateY(12px) scale(.98);transition:transform .25s;box-shadow:0 24px 64px rgba(0,0,0,.15)}
+.overlay.open .modal{transform:translateY(0) scale(1)}
+.m-hdr{padding:26px 26px 0;display:flex;align-items:flex-start;gap:14px}
+.m-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.m-title{font-family:var(--serif);font-size:20px;font-weight:400;color:var(--ink);letter-spacing:-.3px;line-height:1.2}
+.m-sub{font-size:13px;color:var(--muted);margin-top:4px}
+.m-close{margin-left:auto;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:2px;border-radius:4px;line-height:1}
+.m-close:hover{color:var(--ink)}
+.m-body{padding:20px 26px}
+.m-prog{background:var(--bg);border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.prog-bar{height:3px;background:var(--accent);width:0%;transition:width .5s ease}
+.prog-steps{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.ps{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);transition:color .2s}
+.ps.done{color:var(--green)}
+.ps.active{color:var(--ink);font-weight:500}
+.ps-ind{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--rule);display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;transition:all .2s}
+.ps.done .ps-ind{border-color:var(--green);background:var(--green);color:#fff}
+.ps.active .ps-ind{border-color:var(--accent);background:var(--accent);color:#fff}
+.m-result{display:none;text-align:center;padding:4px 0 10px}
+.m-result.show{display:block}
+.r-check{font-size:36px;margin-bottom:10px}
+.r-url{display:inline-flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:11px 16px;font-size:13px;color:var(--accent);text-decoration:none;font-weight:500;margin:10px 0;transition:border-color .15s}
+.r-url:hover{border-color:var(--accent)}
+.r-note{font-size:12px;color:var(--muted)}
+.m-foot{padding:0 26px 22px;display:flex;gap:10px;justify-content:flex-end}
+.btn-o{padding:10px 18px;border:1px solid var(--rule);border-radius:8px;background:none;color:var(--muted);font-family:var(--sans);font-size:14px;cursor:pointer;transition:all .15s}
+.btn-o:hover{border-color:var(--ink);color:var(--ink)}
+.btn-f{padding:10px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
+.btn-f:hover{background:var(--accent2)}
+.btn-f:disabled{background:var(--rule);color:var(--muted);cursor:not-allowed}
+.band{background:var(--ink);padding:64px clamp(24px,6vw,80px);display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+@media(max-width:768px){.band{grid-template-columns:1fr}}
+.band-title{font-family:var(--serif);font-size:28px;font-weight:300;color:#fff;line-height:1.3;letter-spacing:-.5px;margin-bottom:14px}
+.band-text{font-size:15px;color:rgba(255,255,255,.5);line-height:1.7;font-weight:300}
+.band-feats{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.bf-lbl{font-size:11px;color:rgba(255,255,255,.35);margin-bottom:3px}
+.bf-val{font-size:14px;color:rgba(255,255,255,.8)}
+footer{border-top:1px solid var(--rule);padding:28px clamp(24px,6vw,80px);display:flex;align-items:center;gap:20px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+footer a{color:var(--muted);text-decoration:none}
+footer a:hover{color:var(--ink)}
+.f-logo{font-family:var(--serif);font-size:15px;color:var(--ink);margin-right:auto}
+.fade-up{opacity:0;transform:translateY(18px);transition:opacity .5s,transform .5s}
+.fade-up.visible{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#">eLeDia<span>.</span></a>
+  <div class="nav-links">
+    <a href="#plugins">Plugins</a>
+    <a href="#how">Wie es funktioniert</a>
+    <a href="https://project52.eledia.ai" target="_blank">Project52</a>
+    <a href="https://eledia.de" class="nav-cta" target="_blank">Kontakt</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div>
+    <div class="eyebrow">Moodle Plugin Demos</div>
+    <h1 class="hero-h1">Plugins <em>erleben</em>,<br>bevor Sie entscheiden.</h1>
+    <p class="hero-lead">Starten Sie in Sekunden eine vollständige Moodle-Instanz mit dem Plugin Ihrer Wahl — vorkonfiguriert, mit echten Beispieldaten, ohne Installation.</p>
+    <a class="hero-cta" href="#plugins">Alle Plugins ansehen</a>
+    <div class="hero-stats">
+      <div><div class="stat-val">6</div><div class="stat-lbl">Plugins verfügbar</div></div>
+      <div><div class="stat-val" id="statActive">—</div><div class="stat-lbl">Demos aktiv</div></div>
+      <div><div class="stat-val">~45s</div><div class="stat-lbl">Startzeit</div></div>
+    </div>
+  </div>
+  <div class="hero-vis">
+    <div class="vis-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="vis-url">demo-leitnerflow.eledia.ai</div>
+    </div>
+    <div class="vis-body">
+      <div class="vis-hdr">
+        <div class="vis-logo"></div>
+        <div class="vis-title">LeitnerFlow — Demo</div>
+        <span class="vis-badge">Live</span>
+      </div>
+      <div class="vis-grid">
+        <div class="vis-card"><div class="vis-card-lbl">Karten gelernt</div><div class="vis-card-val">124</div></div>
+        <div class="vis-card"><div class="vis-card-lbl">Erfolgsquote</div><div class="vis-card-val">87%</div></div>
+      </div>
+      <div class="vis-bar-wrap">
+        <div class="vis-bar-lbl"><span>Box 1</span><span>32 Karten</span></div>
+        <div class="vis-bar-track"><div class="vis-bar-fill" style="width:85%;background:#1a73e8"></div></div>
+      </div>
+      <div class="vis-bar-wrap">
+        <div class="vis-bar-lbl"><span>Box 2</span><span>28 Karten</span></div>
+        <div class="vis-bar-track"><div class="vis-bar-fill" style="width:70%;background:#059669"></div></div>
+      </div>
+      <div class="vis-bar-wrap">
+        <div class="vis-bar-lbl"><span>Box 3</span><span>17 Karten</span></div>
+        <div class="vis-bar-track"><div class="vis-bar-fill" style="width:45%;background:#d97706"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<section class="how" id="how">
+  <div class="wrap">
+    <div class="eyebrow">So funktioniert es</div>
+    <h2 class="sec-title">Eine Demo in drei Schritten.</h2>
+    <div class="steps">
+      <div class="step fade-up">
+        <div class="step-n">01</div>
+        <div class="step-t">Plugin wählen</div>
+        <div class="step-d">Wählen Sie das Plugin, das Sie interessiert. Jede Demo kommt mit sinnvollen Beispieldaten und einem vorkonfigurierten Kurs.</div>
+      </div>
+      <div class="step fade-up" style="transition-delay:.1s">
+        <div class="step-n">02</div>
+        <div class="step-t">Demo starten</div>
+        <div class="step-d">Ein Klick genügt. Wir starten eine isolierte Moodle-Instanz exklusiv für Sie — dauert typischerweise 30–60 Sekunden.</div>
+      </div>
+      <div class="step fade-up" style="transition-delay:.2s">
+        <div class="step-n">03</div>
+        <div class="step-t">Frei erkunden</div>
+        <div class="step-d">Ihre persönliche Demo läuft 60 Minuten. Danach wird sie automatisch gelöscht. Keine Registrierung, keine Daten.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<section class="plugins-sec" id="plugins">
+  <div class="wrap">
+    <div class="plugins-hdr">
+      <div>
+        <div class="eyebrow">Verfügbare Plugins</div>
+        <h2 class="sec-title">Was möchten Sie testen?</h2>
+        <p class="sec-lead">Alle Plugins sind für Moodle 5.x entwickelt und Open Source.</p>
+      </div>
+      <div class="filters">
+        <button class="fbtn active" onclick="filter('all',this)">Alle</button>
+        <button class="fbtn" onclick="filter('lernen',this)">Lernen</button>
+        <button class="fbtn" onclick="filter('verwaltung',this)">Verwaltung</button>
+        <button class="fbtn" onclick="filter('reporting',this)">Reporting</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</section>
+
+<div class="band">
+  <div>
+    <h2 class="band-title">Volle Moodle-Umgebung.<br>Kein Aufwand Ihrerseits.</h2>
+    <p class="band-text">Jede Demo läuft in einer vollständig isolierten Docker-Umgebung auf unseren Servern. Keine Daten werden dauerhaft gespeichert. Nach 60 Minuten wird die Instanz automatisch entfernt.</p>
+  </div>
+  <div class="band-feats">
+    <div><div class="bf-lbl">Technologie</div><div class="bf-val">Moodle 5.0 + PHP 8.3</div></div>
+    <div><div class="bf-lbl">Login</div><div class="bf-val">admin / demo1234</div></div>
+    <div><div class="bf-lbl">Laufzeit</div><div class="bf-val">60 Minuten</div></div>
+    <div><div class="bf-lbl">Registrierung</div><div class="bf-val">Nicht erforderlich</div></div>
+  </div>
+</div>
+
+<footer>
+  <div class="f-logo">eLeDia</div>
+  <a href="https://project52.eledia.ai" target="_blank">Project52</a>
+  <a href="#">Impressum</a>
+  <a href="#">Datenschutz</a>
+</footer>
+
+<div class="overlay" id="ov" onclick="if(event.target===this)close()">
+  <div class="modal">
+    <div class="m-hdr">
+      <div class="m-icon" id="mIcon"></div>
+      <div><div class="m-title" id="mTitle"></div><div class="m-sub" id="mSub">Wird vorbereitet…</div></div>
+      <button class="m-close" onclick="close()">×</button>
+    </div>
+    <div class="m-body">
+      <!-- E-Mail Formular — wird zuerst gezeigt -->
+      <div id="mForm">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:16px;font-weight:300">
+          Wir senden Ihnen einen Bestätigungslink — damit ist Ihr persönlicher Login gesichert.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
+              Name <span style="color:var(--muted);font-weight:300">(optional)</span>
+            </label>
+            <input id="fName" type="text" placeholder="Ihr Name"
+              style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">
+              E-Mail <span style="color:var(--red);font-size:10px">*</span>
+            </label>
+            <input id="fEmail" type="email" placeholder="ihre@email.de"
+              style="width:100%;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'"
+              onkeydown="if(event.key==='Enter')submitForm()">
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">
+          Ihre E-Mail wird nur für diese Demo verwendet.
+        </p>
+      </div>
+
+      <!-- Fortschritt (nach Formular-Submit) -->
+      <div class="m-prog" id="mProg" style="display:none">
+        <div class="prog-bar" id="pBar"></div>
+        <div class="prog-steps" id="pSteps"></div>
+      </div>
+      <div class="m-result" id="mRes">
+        <div class="r-check">✉️</div>
+        <p style="font-size:15px;color:var(--ink);margin-bottom:8px;font-weight:500">E-Mail wurde gesendet.</p>
+        <p style="font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+          Prüfen Sie Ihr Postfach und klicken Sie den Bestätigungslink.<br>
+          Danach startet Ihre Demo automatisch.
+        </p>
+        <p class="r-note">Link ist 24 Stunden gültig · Kein Passwort nötig</p>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn-o" onclick="close()">Abbrechen</button>
+      <button class="btn-f" id="mBtn" onclick="submitForm()">Bestätigungslink senden →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MCP='http://localhost:3000/mcp';
+const CONFIGS_URL='http://localhost:3000/configs';
+const STEPS=['Moodle-Umgebung vorbereiten','Plugin installieren','Container starten','Datenbank & Demo-Daten einrichten','Instanz bereit'];
+
+// ── State ─────────────────────────────────────────────────────────
+let P=[];          // Configs vom Server
+let inst={};       // laufende Instanzen: id → { url, status }
+let cur=null;      // aktuell gestartetes Plugin
+let url=null;      // URL der fertigen Demo
+let activeFilter='all';
+
+// ── Configs laden ─────────────────────────────────────────────────
+async function loadConfigs(){
+  // Ladezustand
+  document.getElementById('grid').innerHTML=`
+    <div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);font-size:14px">
+      Konfigurationen werden geladen…
+    </div>`;
+  try{
+    const r=await fetch(CONFIGS_URL);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    P=d.configs??[];
+    document.getElementById('statPlugins').textContent=P.length;
+    render(activeFilter);
+  }catch{
+    // Fallback: Beispiel-Configs wenn Server nicht erreichbar
+    P=FALLBACK_CONFIGS;
+    document.getElementById('statPlugins').textContent=P.length;
+    render(activeFilter);
+  }
+}
+
+// Fallback falls Server noch nicht läuft (lokale Entwicklung)
+const FALLBACK_CONFIGS=[
+  {id:'leitnerflow',name:'LeitnerFlow',category:'lernen',categoryLabel:'Lernen & Spaced Repetition',
+   icon:'🃏',iconBg:'#eff6ff',
+   description:'Karteikarten-System nach der Leitner-Methode direkt in Moodle.',
+   features:['5-Box Leitner-System','Integration mit Question Bank','Fortschritts-Dashboard','Gradebook-Integration'],
+   plugin:{srcPath:'/opt/plugins/mod_eledialeitnerflow',type:'mod',name:'eledialeitnerflow'},
+   snapshotId:'leitnerflow-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+  {id:'cohortbridge',name:'CohortBridge',category:'verwaltung',categoryLabel:'Verwaltung & Synchronisation',
+   icon:'🔗',iconBg:'#f0fdf4',
+   description:'Synchronisiert Moodle-Kohorten aus externen Systemen automatisch.',
+   features:['LDAP, CSV, REST-API','Regelbasierte Zuweisung','Audit-Log','Scheduled Tasks'],
+   plugin:{srcPath:'/opt/plugins/local_cohortbridge',type:'local',name:'cohortbridge'},
+   snapshotId:'cohortbridge-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+  {id:'gradingsnapshot',name:'GradingSnapshot',category:'reporting',categoryLabel:'Reporting & Bewertung',
+   icon:'📸',iconBg:'#fdf4ff',
+   description:'Zeitgesteuerte Snapshots des Gradebook-Stands für Prüfungskommissionen.',
+   features:['Gradebook-Snapshots','Vergleichsansicht','PDF-Export','Kursfilter'],
+   plugin:{srcPath:'/opt/plugins/report_gradingsnapshot',type:'report',name:'gradingsnapshot'},
+   snapshotId:'gradingsnapshot-v1',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+  {id:'vanilla',name:'Vanilla Moodle 5.0',category:'lernen',categoryLabel:'Referenz',
+   icon:'🏔',iconBg:'#f8fafc',
+   description:'Sauberes Moodle 5.0 ohne Plugins — als Referenz.',
+   features:['Standard-Moodle','Demo-Kurse','Alle Standardaktivitäten','Vergleichsbasis'],
+   plugin:null,snapshotId:'vanilla-5.0',moodleVersion:'5.0',phpVersion:'8.3',db:'pgsql'},
+];
+
+// ── Render ────────────────────────────────────────────────────────
+function render(f='all'){
+  activeFilter=f;
+  const g=document.getElementById('grid');
+  const visible=P.filter(p=>f==='all'||p.category===f);
+
+  if(!visible.length){
+    g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);font-size:14px">Keine Plugins in dieser Kategorie.</div>`;
+    return;
+  }
+
+  g.innerHTML=visible.map(p=>{
+    const i=inst[p.id];
+    const pill=i
+      ?`<span class="pill pill-${i.status}">${i.status==='running'?'Live':'Startet…'}</span>`
+      :`<span class="pill pill-ready">Bereit</span>`;
+    const bl=i?.status==='running'?'Demo öffnen →':i?'Wird gestartet…':'Demo starten';
+    const bc=i?.status==='running'?'dbtn dbtn-s':'dbtn dbtn-p';
+    const bd=i&&i.status!=='running'?'disabled':'';
+    // snapshotId zeigt ob Demo-Daten vorhanden sind
+    const hasDemoData=p.snapshotId?'✓ Demo-Daten':'Frische Installation';
+    return`<div class="card fade-up">
+      <div class="card-top">
+        <div class="p-icon" style="background:${p.iconBg}">${p.icon}</div>
+        <div class="p-cat">${p.categoryLabel}</div>
+        <div class="p-name">${p.name}</div>
+        <div class="p-desc">${p.description}</div>
+        <div class="p-feats">${(p.features||[]).map(f=>`<div class="p-feat">${f}</div>`).join('')}</div>
+      </div>
+      <div class="p-meta">
+        <span class="p-meta-i">Moodle <strong>${p.moodleVersion}</strong></span>
+        <span class="p-meta-i">PHP <strong>${p.phpVersion}</strong></span>
+        <span class="p-meta-i" style="color:var(--green)">${hasDemoData}</span>
+      </div>
+      <div class="card-bot">
+        ${pill}
+        <button class="${bc}" onclick="start('${p.id}')" ${bd}>${bl}</button>
+      </div>
+    </div>`;
+  }).join('');
+  g.querySelectorAll('.fade-up').forEach(el=>obs.observe(el));
+}
+
+function filter(f,btn){
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');render(f);
+}
+
+// ── Demo starten ──────────────────────────────────────────────────
+function start(id){
+  const i=inst[id];
+  if(i?.status==='running'){window.open(i.url,'_blank');return;}
+  cur=P.find(p=>p.id===id);if(!cur)return;
+  openModal();runFlow();
+}
+
+function openModal(){
+  document.getElementById('mIcon').textContent=cur.icon;
+  document.getElementById('mIcon').style.background=cur.iconBg;
+  document.getElementById('mTitle').textContent=cur.name+' Demo';
+  document.getElementById('mSub').textContent='Kurz anmelden — dann geht\'s los.';
+  document.getElementById('mRes').classList.remove('show');
+  document.getElementById('mForm').style.display='block';
+  document.getElementById('mProg').style.display='none';
+  document.getElementById('mBtn').disabled=false;
+  document.getElementById('mBtn').textContent='Bestätigungslink senden →';
+  url=null;
+  document.getElementById('ov').classList.add('open');
+  // Fokus auf E-Mail-Feld
+  setTimeout(()=>document.getElementById('fEmail')?.focus(),100);
+}
+
+function close(){document.getElementById('ov').classList.remove('open')}
+function openUrl(){if(url)window.open(url,'_blank')}
+
+async function submitForm(){
+  const emailVal=document.getElementById('fEmail').value.trim();
+  const nameVal=document.getElementById('fName').value.trim();
+
+  if(!emailVal||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)){
+    document.getElementById('fEmail').style.borderColor='var(--red)';
+    document.getElementById('fEmail').focus();
+    return;
+  }
+
+  const btn=document.getElementById('mBtn');
+  btn.disabled=true;
+  btn.textContent='Wird gesendet…';
+
+  try{
+    const r=await fetch('http://localhost:3000/request-demo',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:emailVal,name:nameVal||'Demo-Nutzer',configId:cur.id})
+    });
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error??'Unbekannter Fehler');
+
+    // Formular ausblenden, Erfolg zeigen
+    document.getElementById('mForm').style.display='none';
+    document.getElementById('mSub').textContent='Bitte prüfen Sie Ihr Postfach.';
+    document.getElementById('mRes').classList.add('show');
+    btn.style.display='none';
+
+  }catch(e){
+    btn.disabled=false;
+    btn.textContent='Erneut versuchen';
+    // Fehlermeldung unter dem Formular
+    let err=document.getElementById('fError');
+    if(!err){
+      err=document.createElement('p');
+      err.id='fError';
+      err.style.cssText='font-size:12px;color:var(--red);margin-top:8px';
+      document.getElementById('mForm').appendChild(err);
+    }
+    err.textContent=e.message||'E-Mail konnte nicht gesendet werden.';
+  }
+}
+
+function drawSteps(a){
+  document.getElementById('pSteps').innerHTML=STEPS.map((s,i)=>{
+    const c=i<a?'done':i===a?'active':'';
+    return`<div class="ps ${c}"><div class="ps-ind">${i<a?'✓':i+1}</div><span>${s}</span></div>`;
+  }).join('');
+}
+function bar(p){document.getElementById('pBar').style.width=p+'%'}
+
+// ── MCP Helper ────────────────────────────────────────────────────
+async function mcp(tool,args){
+  const r=await fetch(MCP,{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method:'tools/call',params:{name:tool,arguments:args}})});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.message);
+  return JSON.parse(d.result?.content?.[0]?.text??'{}');
+}
+
+// ── Intersection Observer ─────────────────────────────────────────
+const obs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target);}});
+},{threshold:.1});
+
+// ── Boot ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.fade-up').forEach(el=>obs.observe(el));
+  loadConfigs(); // Configs vom Server laden, dann rendern
+});
+</script>
+</body>
+</html>
