@@ -7,6 +7,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import basicAuth from "express-basic-auth";
 
 import { startCleanupScheduler, recordActivity, cleanupOrphans } from "./services/cleanup.js";
 
@@ -38,7 +39,7 @@ import * as email from "./services/email.js";
 import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
-import { getInstance, saveInstance, allocatePort } from "./services/registry.js";
+import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
 import * as nginxSvc from "./services/nginx.js";
 import { randomBytes } from "crypto";
@@ -99,6 +100,21 @@ if (EXTEND_CODES.size > 0) {
     `[extend-codes] ${EXTEND_CODES.size} code(s) loaded, TTL=${EXTEND_CODE_TTL_MINUTES}min`
   );
 }
+
+// ── Admin-Dashboard (task25 / feat11) ─────────────────────────────────────────
+// HTTP Basic Auth — Server startet nicht ohne ADMIN_PASSWORD um versehentliches
+// Deployment ohne Auth zu verhindern.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
+if (!ADMIN_PASSWORD) {
+  console.error("[admin] FEHLER: ADMIN_PASSWORD nicht gesetzt — Server wird nicht gestartet.");
+  console.error("[admin] Bitte ADMIN_PASSWORD in /etc/moodle-runbot.env setzen und Service neu starten.");
+  process.exit(1);
+}
+const adminAuth = basicAuth({
+  users: { admin: ADMIN_PASSWORD },
+  challenge: true,
+  realm: "eLeDia Runbot Admin",
+});
 
 async function runHTTP(): Promise<void> {
   const app = express();
@@ -563,6 +579,100 @@ async function runHTTP(): Promise<void> {
     try {
       const configs = await loadConfigs();
       res.json({ count: configs.length, configs });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // ── Admin-Dashboard (task25) ────────────────────────────────────────────────
+  // Alle /admin/* Routen hinter Basic Auth.
+  // Nginx-Konvention: Der Browser spricht /api/admin/*, nginx strippt /api/
+  // und Express sieht /admin/*. Daher keine /api/-Präfixe in Express.
+  //
+  // Zugang: https://demo.eledia.ai/api/admin  (nginx → GET /admin → admin.html)
+  // Env: ADMIN_PASSWORD=... in /etc/moodle-runbot.env
+
+  // GET /admin → serve admin.html
+  app.get("/admin", adminAuth, (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "webui", "admin.html"));
+  });
+
+  // GET /admin/instances → Liste aller Instanzen aus Registry
+  app.get("/admin/instances", adminAuth, async (_req, res) => {
+    try {
+      const instances = await getAllInstances();
+      res.json({ count: instances.length, instances });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // GET /admin/tokens → alle Token-Einträge
+  app.get("/admin/tokens", adminAuth, async (_req, res) => {
+    try {
+      const requests = await tokens.listRequests();
+      res.json({ count: requests.length, requests });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // GET /admin/instances/:id/logs → docker compose logs --tail 100
+  app.get("/admin/instances/:id/logs", adminAuth, async (req, res) => {
+    try {
+      const inst = await getInstance(req.params.id);
+      if (!inst) { res.status(404).json({ error: "Instanz nicht gefunden" }); return; }
+      const logs = await dockerSvc.getLogs(inst, 100);
+      res.json({ instanceId: inst.id, logs });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // POST /admin/instances/:id/extend → Laufzeit verlängern
+  // Body: { minutes: number }  (default 60)
+  app.post("/admin/instances/:id/extend", adminAuth, async (req, res) => {
+    try {
+      const inst = await getInstance(req.params.id);
+      if (!inst) { res.status(404).json({ error: "Instanz nicht gefunden" }); return; }
+      const minutes = Math.max(1, Math.min(10080, parseInt(req.body?.minutes ?? "60", 10) || 60));
+      const now = new Date().toISOString();
+      inst.maxAgeMinutes = minutes;
+      inst.lastActivity  = now; // tooIdle-Timer zurücksetzen
+      if (!inst.extendedBy) {
+        inst.extendedBy = { code: "ADMIN", at: now };
+      } else {
+        inst.extendedBy.at = now; // erneute Verlängerung → Uhr neu starten
+      }
+      await saveInstance(inst);
+      const expiresAt = new Date(new Date(now).getTime() + minutes * 60000).toISOString();
+      res.json({ ok: true, instanceId: inst.id, extendedByMinutes: minutes, expiresAt });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // DELETE /admin/instances/:id → Instanz stoppen + aufräumen
+  app.delete("/admin/instances/:id", adminAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const inst = await getInstance(id);
+      if (!inst) { res.status(404).json({ error: "Instanz nicht gefunden" }); return; }
+      inst.status = "stopping";
+      await saveInstance(inst);
+      // Reihenfolge wie in cleanup.ts: nginx → docker → dir → registry
+      await nginxSvc.unregisterInstance(id).catch((e: unknown) => {
+        console.error(`[admin] WARN nginx unregister ${id}:`, e);
+      });
+      await dockerSvc.stopContainers(inst).catch((e: unknown) => {
+        console.error(`[admin] WARN docker stop ${id}:`, e);
+      });
+      await dockerSvc.cleanupInstanceDir(inst).catch((e: unknown) => {
+        console.error(`[admin] WARN cleanup dir ${id}:`, e);
+      });
+      await deleteInstance(id);
+      console.error(`[admin] Manually deleted instance ${id}`);
+      res.json({ ok: true, instanceId: id });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

@@ -632,27 +632,32 @@ nirgends als Moodle-Username auf.
 ---
 
 ### task25 Admin-Dashboard für laufende Instanzen
-Status: open
+Status: **done 2026-04-09**
 Feature: feat11
 
 **Entscheidung (2026-04-09, Johannes):** HTTP Basic Auth reicht für den MVP
 — die Daten sind nicht kritisch. GitHub OAuth / SSO erst in Phase 2.
 
-**Scope MVP:**
-1. Neue Route `GET /admin` → serve `webui/admin.html` (neue Datei)
-2. `webui/admin.html`: Tabelle aller Instanzen + Tabelle aller aktiven Tokens
-3. API-Endpoints (alle hinter Basic-Auth-Middleware):
-   - `GET /api/admin/instances` → Liste aus `registry.listInstances()` angereichert mit Request-Info
-   - `POST /api/admin/instances/:id/extend` → ruft `instance_extend` Tool intern auf
-   - `DELETE /api/admin/instances/:id` → ruft cleanup intern auf
-   - `GET /api/admin/instances/:id/logs` → `docker compose logs --tail 50`
-   - `GET /api/admin/tokens` → alle Einträge aus `tokens.json`
-4. **Auth-Middleware:**
-   - `app.use('/admin', basicAuth({ users: { admin: ADMIN_PASSWORD } }))`
-   - `app.use('/api/admin', basicAuth(...))`
-   - `ADMIN_PASSWORD` Env-Variable — Server startet nicht ohne (throw im Bootstrap)
-   - Dependency: `express-basic-auth` (npm)
-5. Minimale UI: Tabelle mit Aktions-Buttons, kein Fancy-Framework, gleiches Design-System wie demo-portal.html
+**Umgesetzt 2026-04-09:**
+- `webui/admin.html`: Zwei Tabellen (Instanzen + Token-Anfragen), Live-Refresh alle 30s, Log-Modal, Extend-Inline-Input (+Zeit-Button mit freier Minuten-Eingabe), Stop-Button (DELETE), Toast-Notifications. Design-System wie demo-portal.html.
+- Express-Routen (nginx-Strip-konform, kein `/api/`-Präfix in Express):
+  - `GET /admin` → serve `admin.html` (Browser URL: `/api/admin`)
+  - `GET /admin/instances` (Browser: `/api/admin/instances`)
+  - `GET /admin/tokens` (Browser: `/api/admin/tokens`)
+  - `GET /admin/instances/:id/logs` (tail 100)
+  - `POST /admin/instances/:id/extend` (Body: `{minutes}`, default 60, max 10080)
+  - `DELETE /admin/instances/:id` (nginx → docker → dir → registry, Fehler werden geloggt aber geben trotzdem 200 zurück wenn Registry-Delete klappt)
+- `express-basic-auth` als Middleware auf allen `/admin/*`-Routen.
+- **ADMIN_PASSWORD Guard:** Server wirft beim Start `process.exit(1)` wenn `ADMIN_PASSWORD` Env-Variable nicht gesetzt. Logging-Hinweis auf `/etc/moodle-runbot.env`.
+
+**VPS Setup nach Deploy:**
+```bash
+# In /etc/moodle-runbot.env hinzufügen:
+ADMIN_PASSWORD=<sicheres-passwort>
+systemctl restart moodle-runbot
+# Dashboard unter https://demo.eledia.ai/api/admin aufrufen
+# Browser fragt nach: Benutzer "admin", Passwort wie gesetzt
+```
 
 **Non-goals (MVP):**
 - Kein GitHub OAuth (Phase 2)

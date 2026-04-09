@@ -332,20 +332,22 @@ Deployed im Commit TBD.
 ### bug18 Snapshot-Restore macht kein DB-weites URL-Rewrite
 
 Feature: feat05
-Status: open (task21, noch anzulegen)
+Status: **fixed 2026-04-09** (src/services/snapshot.ts + src/services/docker.ts)
 Entdeckt: 2026-04-09 beim Schreiben des task19-Runbooks
 
 **Description**
-`restoreSnapshot()` in `src/services/snapshot.ts:163-180` setzt nach dem Einspielen zwar `wwwroot` via `admin/cli/cfg.php`, macht aber kein Search-Replace auf die DB-Inhalte. Moodle speichert absolute URLs in diversen Tabellen (`mdl_log`, `mdl_logstore_standard_log`, `mdl_events_*`, `mdl_grade_items`, `mdl_backup_controllers`, atto-editor-Inhalte mit eingebetteten Bildern in `mdl_*.intro`-Feldern). Nach einem Snapshot-Restore können diese URLs noch auf die Seed-Instanz zeigen.
+`restoreSnapshot()` machte kein Search-Replace auf die DB-Inhalte. Moodle speichert absolute URLs in diversen Tabellen (`mdl_log`, `mdl_grade_items`, `mdl_backup_controllers`, atto-editor-Inhalte in `mdl_*.intro`-Feldern). Nach einem Snapshot-Restore zeigten diese noch auf den Seed-Host.
 
-Für den konkreten `leitnerflow-v1`-Snapshot ist das wahrscheinlich unkritisch, solange die Seed-Daten clean sind (keine eingebetteten Bilder, kein Log-Verlauf der matter). Aber für zukünftige Snapshots mit echten Kursen wird das relevant.
+**Fix (2026-04-09)**
+Neuer Schritt 3 in `restoreSnapshot()`:
+1. Alte wwwroot direkt aus `mdl_config WHERE name='wwwroot'` lesen (nach dem Dump-Import, vor dem Sessions-Truncate)
+2. Mit der neuen Instanz-URL vergleichen
+3. Falls abweichend: `admin/tool/replace/cli/replace.php --search=<old> --replace=<new>` aufrufen — Moodles eigenes Search-Replace-Tool das alle Spalten kennt inkl. BLOB-Codierungen
+4. Fehler werden geloggt aber NICHT weitergegeben (wwwroot kommt aus config.php, Restore ist auch ohne Rewrite funktional)
 
-**Fix-Optionen**
-1. Moodle-eigenes `admin/tool/replace/cli/replace.php --search=<oldurl> --replace=<newurl>` aufrufen. Achtung: das Tool muss explizit aktiviert werden und mutiert auch Pfade/Backup-Blobs — kann langsam sein (mehrere Sekunden pro GB).
-2. Manuell `sed` auf dem entpackten SQL-Dump während Restore: schneller, aber fragil bei binären BLOB-Spalten.
-3. Seeds so designen dass sie keine absoluten URLs enthalten (= Regel für task19-Seed-Erstellung).
+Zusätzlich: `$CFG->tool_replace_allowdb = true` in den Override-Block in `patchConfigForProduction()` aufgenommen, damit das CLI-Tool freigeschaltet ist.
 
-Ergänzend: `wwwroot` sollte wie oben dokumentiert via `config.php`-Override gesetzt werden statt via `admin/cli/cfg.php`, weil unser `patchConfigForProduction()` den DB-Wert ohnehin überschreibt. Der cfg.php-Call in snapshot.ts ist faktisch tote Code-Zeile — kann entfernt werden.
+Leitnerflow-v1-Snapshot: Das Rewrite findet einen Diff zwischen dem Seed-URL und dem neuen Instanz-URL und führt den Replace durch. Bei clean seeds (keine File-Uploads, keine eingebetteten Bilder) ist das eine No-Op auf Inhaltsebene, räumt aber trotzdem Log-Einträge auf.
 
 ---
 
