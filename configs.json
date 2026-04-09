@@ -1,6 +1,7 @@
 [
   {
     "id": "leitnerflow",
+    "type": "plugin",
     "name": "LeitnerFlow",
     "category": "aktivitaet",
     "categoryLabel": "Aktivität",
@@ -21,7 +22,8 @@
       "type": "mod",
       "name": "eledialeitnerflow"
     },
-    "snapshotId": "leitnerflow-v1",
+    "githubRepo": "jmoskaliuk/moodle-runbot-mcp",
+    "snapshotId": null,
     "visible": true
   }
 ]

@@ -40,7 +40,8 @@ moodle-runbot-mcp (Node.js, Port 3000)
 | `src/services/snapshot.ts` | Snapshot-Verwaltung (list, create, restore, delete) |
 | `src/services/registry.ts` | Instanz-Registry (speichern, laden, Port-Vergabe) |
 | `src/services/cleanup.ts` | Inaktivitäts-Cleanup-Scheduler |
-| `src/services/moodleUser.ts` | Demo-Nutzer anlegen, in Kurs einschreiben |
+| `src/services/moodleUser.ts` | Demo-Nutzer anlegen, in Kurs einschreiben (3-Retry, 15s Delay) |
+| `src/services/github.ts` | GitHub API: Repo-Info, README, Releases (1h TTL-Cache) |
 | `src/tools/instances.ts` | MCP-Tools für Instanzen |
 | `src/tools/snapshots.ts` | MCP-Tools für Snapshots |
 | `src/tools/configs.ts` | MCP-Tools für Configs |

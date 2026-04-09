@@ -39,12 +39,20 @@ async function run(cmd: string, cwd?: string): Promise<{ stdout: string; stderr:
 }
 
 function composeEnv(instance: MoodleInstance): Record<string, string> {
+  const BASE_DOMAIN = process.env.BASE_DOMAIN ?? "";
+  // MOODLE_DOCKER_WEB_HOST tells moodle-docker what hostname to put in config.php ($CFG->wwwroot).
+  // Without it Moodle defaults to localhost, breaking cookies and redirects in production.
+  const webHost = BASE_DOMAIN
+    ? `${instance.id}.${BASE_DOMAIN}`
+    : `localhost:${instance.webPort}`;
+
   return {
     COMPOSE_PROJECT_NAME: instance.composeProject,
     MOODLE_DOCKER_WWWROOT: instance.moodleDir,
     MOODLE_DOCKER_DB: instance.db,
     MOODLE_DOCKER_PHP_VERSION: instance.phpVersion,
     MOODLE_DOCKER_WEB_PORT: `0.0.0.0:${instance.webPort}`,
+    MOODLE_DOCKER_WEB_HOST: webHost,
     MOODLE_DOCKER_BROWSER: "chrome",
     PATH: process.env.PATH ?? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
   };
