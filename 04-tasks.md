@@ -322,7 +322,7 @@ Bugs: bug09
 ---
 
 ### task17 plugin-detail.html: MCP-Variable + Demo-Flow-Integration
-Status: **done 2026-04-09** (commit `4aa961d`, zusammen mit bug18 Variante B)
+Status: **mostly done 2026-04-09** (Punkte 1–3 done via commit `4aa961d`, Punkt 4 → task21-Nachzügler, Punkt 5 → task27)
 Feature: feat01 (Webui)
 Bugs: bug07, bug08, bug12
 
@@ -330,7 +330,7 @@ Bugs: bug07, bug08, bug12
 2. `startDemo()` umbauen: darf nicht `instance_start` direkt aufrufen. Stattdessen dasselbe Modal wie demo-portal.html öffnen, POST auf `/api/request-demo`, "Bitte prüfen Sie Ihr Postfach" anzeigen. — **done**
 3. `heroTitle` ↔ `heroDesc` Copy-Paste beheben. — **done** (im gleichen Zug mitbereinigt)
 4. Hardcoded deutsche Strings auf `data-i18n` umstellen. — verschoben auf task21-Nachzügler (reine Copy-Arbeit, nicht blockierend)
-5. Plugin-Detail-Seite in demo-portal.html verlinken (Details-Button auf Karten). — **done** (Portal-Grid hat bereits „Details"-Link)
+5. Plugin-Detail-Seite in demo-portal.html verlinken (Details-Button auf Karten). — **noch offen**. Beim Live-Verify aufgefallen: Die Plugin-Cards im Portal haben aktuell KEINEN Details-Link auf `/plugin/:id`. Die Detail-Seite ist derzeit nur über den Direkt-URL `/api/plugin/leitnerflow` erreichbar (nginx strippt `/api/` → Express-Handler `/plugin/:id` → sendFile). Korrektur verschoben auf einen schlanken Nachfolge-Task task27.
 
 ---
 
@@ -614,6 +614,36 @@ echo $CODE  # → z.B. "A3F89B12"
 - Cleanup-Scheduler liest aktuell `DEMO_MAX_AGE_MINUTES` global. Für individuelle Max-Age brauchen wir `instance.maxAgeMinutes` als Override im Check.
 - Codes könnten leaken → Admin muss Codes regelmäßig rotieren. Dokumentieren im Runbook.
 - Wenn `extendedBy` gesetzt ist: das Feld `lastActivity` muss im Cleanup-Job so verstanden werden, dass die Verlängerung **ab dem Moment des Code-Einsatzes** zählt, nicht ab `createdAt`. Sonst wäre eine Instanz, die nach 58 Min verlängert wird, in 24h-2 Min schon wieder weg.
+
+**Aktivierung auf VPS:**
+Codes werden per systemd-Environment in der Unit gesetzt. Beispiel:
+```bash
+sudo systemctl edit moodle-runbot
+# In der Override-Datei:
+[Service]
+Environment="EXTEND_CODES=EDUMA2026,PRIVATE,TRAIN01"
+# optional (default 1440):
+Environment="EXTEND_CODE_TTL_MINUTES=1440"
+
+sudo systemctl restart moodle-runbot
+sudo journalctl -u moodle-runbot -n 20 --no-pager | grep extend-codes
+# Erwartung: [extend-codes] 3 code(s) loaded, TTL=1440min
+```
+
+---
+
+### task27 Details-Link im Demo-Portal auf Plugin-Detail-Seite
+Status: open
+Feature: feat01 (Webui)
+
+Beim Live-Verify von task17/bug18 am 2026-04-09 gemerkt: Die Plugin-Karten im `demo-portal.html`-Grid haben keinen „Details"-Link, der auf die Plugin-Detail-Seite führt. Die Detail-Seite ist aktuell nur über den Direkt-URL `/api/plugin/:id` erreichbar — und das ist ein nginx-Strip-Artefakt, keine offizielle Route (Express selbst hört auf `/plugin/:id`, was aber nicht durch nginx kommt, weil nginx nur `/api/*` proxyt).
+
+**Scope:**
+1. In `webui/demo-portal.html` in der Plugin-Card-Render-Funktion einen Link „Mehr erfahren" hinzufügen, der auf `/api/plugin/${p.id}` zeigt. Der `/api/`-Präfix ist hier unumgänglich, solange die nginx-Config nicht aufgeräumt ist (siehe Idee „nginx-Config sauber aufräumen").
+2. Alternativ (sauberer): nginx aufräumen und dann nur noch `/plugin/:id` verwenden. Siehe idea-Block unter 💡 Ideen.
+3. CSS: Der Details-Link sollte sich klar vom „Demo starten"-CTA unterscheiden (sekundär, weniger prominent).
+
+Sehr klein, kann in einem Zug mit den nächsten Portal-Polish-Tasks erledigt werden.
 
 ---
 
