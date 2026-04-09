@@ -30,8 +30,10 @@ nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,.92);backdrop-
 .nav-links a{font-size:14px;color:var(--muted);text-decoration:none;transition:color .15s}
 .nav-links a:hover{color:var(--ink)}
 .nav-cta{background:var(--ink)!important;color:#fff!important;padding:8px 18px;border-radius:6px;font-weight:500}
-.lang-toggle{padding:5px 12px;border-radius:6px;border:1px solid var(--rule);background:transparent;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans);letter-spacing:.5px}
-.lang-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.lang-toggle{display:flex;align-items:center;background:var(--ink);border-radius:20px;padding:3px;gap:0;margin-left:8px}
+.lt-opt{padding:4px 13px;border-radius:16px;border:none;background:transparent;font-size:12px;font-weight:600;color:rgba(255,255,255,.45);cursor:pointer;transition:all .2s;font-family:var(--sans);letter-spacing:.5px;line-height:1.4}
+.lt-opt.active{background:#fff;color:var(--ink)}
+.lt-opt:not(.active):hover{color:rgba(255,255,255,.8)}
 .wrap{max-width:1100px;margin:0 auto;padding:0 clamp(24px,6vw,80px)}
 .hero{padding:96px clamp(24px,6vw,80px) 80px;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;max-width:1100px;margin:0 auto}
 @media(max-width:768px){.hero{grid-template-columns:1fr;padding:60px 24px 48px}.hero-vis{display:none}}
@@ -162,7 +164,10 @@ footer a:hover{color:var(--ink)}
     <a href="#plugins">Plugins</a>
     <a href="#how" data-i18n="nav_how">Wie es funktioniert</a>
     <a href="https://eledia.de/kontakt" class="nav-cta" target="_blank" data-i18n="nav_contact">Kontakt</a>
-    <button class="lang-toggle" id="langBtn" onclick="toggleLang()">EN</button>
+    <div class="lang-toggle">
+      <button class="lt-opt active" id="ltDe" onclick="setLang('de')">DE</button>
+      <button class="lt-opt" id="ltEn" onclick="setLang('en')">EN</button>
+    </div>
   </div>
 </nav>
 
@@ -388,8 +393,8 @@ function setLang(l){
   document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
   document.querySelectorAll('[data-i18n-html]').forEach(el=>{el.innerHTML=t(el.dataset.i18nHtml);});
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{el.placeholder=t(el.dataset.i18nPlaceholder);});
-  const btn=document.getElementById('langBtn');
-  if(btn) btn.textContent=l==='de'?'EN':'DE';
+  document.getElementById('ltDe')?.classList.toggle('active',l==='de');
+  document.getElementById('ltEn')?.classList.toggle('active',l==='en');
   render(activeFilter);
 }
 
