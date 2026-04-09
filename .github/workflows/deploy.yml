@@ -28,7 +28,8 @@ jobs:
 
           echo "==> Pull latest code"
           cd $APP_DIR
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
 
           echo "==> Install dependencies & build"
           npm ci --quiet
