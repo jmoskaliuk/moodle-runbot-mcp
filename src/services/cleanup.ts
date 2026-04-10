@@ -19,6 +19,7 @@ import path from 'path';
 import { getAllInstances, saveInstance, deleteInstance } from './registry.js';
 import { stopContainers, cleanupInstanceDir } from './docker.js';
 import { unregisterInstance } from './nginx.js';
+import { expireByInstance } from './tokens.js';
 import type { MoodleInstance } from '../types.js';
 
 const execAsync = promisify(exec);
@@ -89,6 +90,13 @@ async function runCleanup(): Promise<void> {
         await stopContainers(inst);
         await cleanupInstanceDir(inst);
         await deleteInstance(inst.id);
+        // task29: Zugehörigen Demo-Request-Token auf expired setzen,
+        // damit das Admin-Dashboard die Instanz nicht mehr als „running"
+        // anzeigt. Best-effort — Fehler hier dürfen den Cleanup nicht
+        // abbrechen.
+        await expireByInstance(inst.id).catch(e =>
+          console.error(`[cleanup] WARN expire token for ${inst.id}:`, e)
+        );
         console.error(`[cleanup] ✓ ${inst.id} removed`);
       } catch (e) {
         console.error(`[cleanup] ✗ Failed to stop ${inst.id}:`, e);

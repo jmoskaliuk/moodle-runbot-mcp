@@ -740,7 +740,22 @@ Die `/request-demo`-Bestätigungs-E-Mail (`src/services/email.ts`) zeigte eine Z
 ---
 
 ### task29 Token-Status nach Instanz-Stop auf EXPIRED setzen
-Status: open
+Status: ✅ done 2026-04-10
+
+**Umgesetzt:** Neuer Service-Helper `expireByInstance(instanceId)` in
+`src/services/tokens.ts` setzt alle DemoRequests mit passender `instanceId`
+auf `status='expired'` und entfernt `phase` + `phaseError`. Reverse-Lookup
+statt Extra-Feld auf `MoodleInstance`, weil die DemoRequest-Tabelle ohnehin
+schon `instanceId` kennt und der Lookup für unseren Scale trivial ist.
+
+Eingebaut in alle drei Stop-Pfade:
+1. `services/cleanup.ts` — Scheduler-Stop (maxAge/inactivity)
+2. `src/index.ts` — `DELETE /admin/instances/:id` (manuell aus Dashboard)
+3. `src/tools/instances.ts` — MCP-Tool `instance_stop`
+
+Fehler beim Expire sind best-effort geloggt, aber brechen den Stop nicht ab.
+Idempotent: mehrfache Aufrufe haben keine Wirkung, da `status !== "expired"`
+gepruft wird.
 Feature: feat01, feat03
 Entdeckt: Admin-Dashboard zeigt Token-Einträge mit Phase "running" für längst gestoppte Instanzen — historisch korrekter Stand, aber irreführend.
 
@@ -808,7 +823,34 @@ Entdeckt: 2026-04-09 (Johannes)
 ---
 
 ### task32 E-Mail-Layout: Logo + Website-Schrift übernehmen
-Status: open
+Status: ✅ done 2026-04-10
+
+**Umgesetzt:** Neues Modul `src/services/emailTemplates.ts` mit drei
+Template-Funktionen `confirmEmail()`, `readyEmail()`, `errorEmail()` plus
+einem `baseLayout()`-Helper für den gemeinsamen Rahmen. `src/services/email.ts`
+reduziert auf reinen SMTP-Transport.
+
+Branding-Änderungen gegenüber vorher:
+- **Logo statt Text-Wortmarke:** `<img src="https://demo.eledia.ai/eledia_runbot.png" height="38">` im Header. Config via `EMAIL_LOGO_URL` env-var, default `${BASE_URL}/eledia_runbot.png`.
+- **eLeDia-Farbpalette:** Accent `#ab1d79` (Lila) statt `#1a56db` (Blau),
+  aus `webui/demo-portal.html :root` geklaut. Body-BG `#f3f5f8`, Card `#ffffff`,
+  Ink `#353535`, Muted `#6b6b6f`, Rule `#e9e9e9`, Success (Ready-Mail) `#3aadaa`.
+- **System-Font-Stack:** `-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
+  Oxygen,Ubuntu,Cantarell,sans-serif` — die Portal-Fonts "Open Sans" und
+  "DM Sans" werden von vielen E-Mail-Clients nicht geladen, der System-Stack
+  rendert überall zuverlässig das jeweils hübscheste Haus-Font.
+- **Preheader:** Versteckter Vorschautext direkt nach `<body>` für eine
+  bessere Inbox-List-Preview. Nur im Client-Preview sichtbar, in der
+  gerenderten Mail `display:none`.
+- **HTML-Escape:** Alle dynamischen Werte (firstName, pluginName, URLs)
+  werden durch `escapeHtml()` gejagt — vorher wurden sie direkt inline
+  eingebettet, was bei Namen mit `<` oder `&` die Struktur zerrissen hätte.
+- **Text-Fallback:** Weiter als `text:`-Property in nodemailer, jetzt aber
+  aus derselben Template-Funktion geliefert (statt zweimal hingeschrieben).
+
+**Verify nach Deploy:** Demo anfordern → Bestätigungs-Mail in Gmail/Outlook-
+Web/Apple Mail öffnen → Logo sichtbar, Accent-Lila statt Blau, lesbar auch
+ohne externes Image-Loading (Text-Fallback ist sauber strukturiert).
 Feature: feat01 (Webui), feat07 (Demo-Nutzerverwaltung)
 Entdeckt: 2026-04-09 (Johannes)
 
@@ -827,7 +869,28 @@ Entdeckt: 2026-04-09 (Johannes)
 ---
 
 ### task33 Moodle-Site-Name auf „Demo | <Plugin-Titel>" setzen
-Status: open
+Status: ✅ done 2026-04-10
+
+**Umgesetzt:** Neuer Helper `setSiteName(instance, siteName)` in
+`src/services/docker.ts`. Schreibt direkt in die DB (`UPDATE mdl_course SET
+fullname=..., shortname=... WHERE id=1`), weil Moodle den Site-Namen
+kanonisch im Front-Page-Kurs hält und `$CFG->sitename`-Overrides an
+vielen Stellen ignoriert werden. Pgsql + MariaDB/MySQL beide abgedeckt.
+Shortname kriegt einen Suffix aus den letzten 6 Instanz-ID-Zeichen, damit
+die UNIQUE-Constraint auf `mdl_course.shortname` bei mehreren parallelen
+Demos desselben Plugins nicht greift. Purge caches im Anschluss, damit der
+neue Name sofort im Header erscheint.
+
+In `src/index.ts` `/confirm`-Handler nach `startContainers()` und
+optionalem `restoreSnapshot()` aufgerufen — wichtig: NACH Restore, damit
+der Dump unsere Werte nicht überschreibt. Format: `Demo | ${config.name}`
+mit `config.name` aus `configs.json`. Fehler sind best-effort-geloggt, weil
+der Name rein kosmetisch ist.
+
+Escape-Strategie: Wir inline das SQL-Literal per docker exec, also werden
+Hochkomma/Backslash/Backtick/Semikolon aus dem Input entfernt (Moodle-Labels
+sind ohnehin ASCII-sauber). Keine Prepared Statements verfügbar via
+`docker exec db psql -c`.
 Feature: feat02 (Moodle-Provisioning)
 Entdeckt: 2026-04-09 (Johannes)
 
@@ -869,9 +932,29 @@ Entdeckt: 2026-04-09 (Johannes)
 ---
 
 ### task35 Plugin-Icon aus GitHub-Repo im Portal-Grid
-Status: open (nachzügler zu task23)
+Status: ✅ done 2026-04-10
 Feature: feat01 (Webui), feat13 (Plugin-Metadaten aus GitHub)
 Entdeckt: 2026-04-09 (Johannes)
+Erledigt: 2026-04-10
+
+**Umgesetzt:** `/configs` und `/api/configs` in `src/index.ts` teilen sich jetzt
+einen gemeinsamen `configsHandler`, der jede Config um ein `iconUrl`-Feld
+anreichert (parallel via `Promise.all` über `github.resolvePluginIconUrl`).
+Die Icon-Lookups sind bereits 24h in-memory gecacht (siehe `github.ts`), daher
+ist der /configs-Call nach dem ersten Hit O(#configs) ohne Netzwerk.
+
+Im Portal (`webui/demo-portal.html`) rendert die Card-Factory nun ein `<img>`
+mit `onerror`-Fallback auf das Emoji aus der Config, damit Plugins ohne
+`pix/monologo.*` im Repo weiterhin den Emoji-Fallback zeigen. Der Fallback
+ersetzt das Bild-Element atomar via `this.parentElement.textContent='${p.icon}'`,
+kein verwaistes `<img>`.
+
+**Verify nach Deploy**
+
+1. Portal öffnen, LeitnerFlow-Card anschauen: muss das echte Moodle-Plugin-Icon
+   aus `pix/monologo.svg` statt des 🃏-Emojis zeigen.
+2. Plugin ohne Icon in Config hinzufügen: Fallback-Emoji muss weiterhin erscheinen.
+3. Network-Tab: `/api/configs`-Response prüfen — jede Config hat `iconUrl: string|null`.
 
 **Kontext:** task23 (done 2026-04-09) hat bereits `resolvePluginIconUrl()` in `src/services/github.ts` gebaut und die Plugin-Detail-Seite zieht das Icon aus dem Repo. Johannes hat jetzt gemerkt, dass das **Demo-Portal-Grid** (`webui/demo-portal.html`) noch das Emoji aus `configs.json` verwendet — also pro Plugin-Card steht da ein 🧠/📄/... statt dem echten Plugin-Icon.
 
@@ -1083,10 +1166,67 @@ Sobald der GitHub-Actions-Deploy durch ist:
 
 ---
 
-### task37b `local_runbotadmin` Stage 2 — Download, Upload, Delete, Plugin-Management, Metadata
-Status: open (Folgetask zu task37 MVP)
+### task37b `local_runbotadmin` Stage 2 — Download, Delete, Set-Default (Snapshots-Tab fertig)
+Status: ✅ partial done 2026-04-10 — Snapshot-Aktionen (Download, Delete, Set-Default) implementiert.
+       Upload, Plugin-Management-Tab und Metadata-Tab wandern in task37c (siehe unten).
 Feature: feat08 (Snapshot-System) + feat09 (Plugin-Katalog) + feat02 (Provisioning)
 Entdeckt: 2026-04-10
+Erledigt: 2026-04-10 (partial)
+
+**Implementiert**
+
+Backend (`src/api/internal.ts`):
+- `GET /snapshot/list` liefert jetzt zusätzlich `defaultSnapshot`, `configId`, pro Snapshot
+  `isDefault` + `downloadUrl`. So kann die PHP-UI die Default-Badge und den Download-Link
+  ohne zweiten Roundtrip rendern.
+- `GET /snapshot/download/:id` — `res.sendFile()` mit Content-Disposition-Attachment.
+  Path-Containment-Check gegen SNAPSHOT_DIR und Slug-Check (Snapshot muss zur aufrufenden
+  Instanz gehören) verhindern Cross-Tenant-Download und Path-Traversal.
+- `POST /snapshot/delete` — löscht `.sql.gz` + `.json`. Der aktuell als Default markierte
+  Snapshot darf nicht gelöscht werden (409 Conflict) — sonst würden neue Demo-Starts
+  nach `configs.json` ins Leere zeigen.
+- `POST /config/set-default` — schreibt `snapshotId` in `configs.json` via neuer
+  `updateConfig(id, mutator)`-Helper in `src/services/config.ts` (atomic tmp-file+rename).
+
+PHP-Plugin (`moodle-plugins/local_runbotadmin/`):
+- `classes/api_client.php`: neue Methoden `delete_snapshot()`, `set_default_snapshot()`,
+  `stream_snapshot_download()`. Die Download-Methode streamt 1:1 durch curl
+  (CURLOPT_WRITEFUNCTION / CURLOPT_HEADERFUNCTION), damit Content-Disposition +
+  Content-Length vom Backend an den Browser durchgereicht werden.
+- `index.php`: komplett umgebautes Action-Routing. `action=download` läuft VOR
+  `$OUTPUT->header()`, damit der Binary-Stream nicht von Moodle-HTML verschmutzt wird.
+  Die Tabelle zeigt eine Default-Badge für den eingestellten Snapshot, plus
+  Download/Set-Default/Delete-Buttons. Delete nutzt einen JS-`confirm()`-Dialog mit
+  Label-Interpolation (json_encode für sichere String-Escaping).
+- `styles.css`: Badge-Styling (eLeDia-Grün #3aadaa) und Aktions-Spalten-Layout.
+- Lang-Strings DE+EN: alle neuen Aktions-Labels und Erfolgs-/Fehler-Meldungen.
+- `version.php`: `2026041001` / `0.2.0-snapshot-actions`.
+
+**Offen → wandert nach task37c**
+
+- Upload einzelner Snapshots (braucht `multer` + PHP `upload_max_filesize`/`post_max_size`
+  hochsetzen + Drag&Drop-UI)
+- Plugin-Management-Tab (GitHub-URL-Install, Upgrade, Deinstall, ~4-5h)
+- Metadata-Tab mit GitHub-Auto-Fetch (~3-4h)
+- Rate-Limiting und Audit-Logging auf `/api/internal/*`
+
+**Verify nach Deploy**
+
+1. `leitnerflow` Demo starten, admin-Login, Site-Administration → Server → eLeDia Runbot Admin.
+2. Snapshot erstellen (`manual-test-1`) — sollte Default-Snapshot NICHT sein (Badge fehlt).
+3. „Als Standard" klicken → Flash-Erfolg, Badge wandert zum neuen Snapshot, der alte
+   Default verliert die Badge.
+4. Download-Button klicken → Browser lädt `leitnerflow-manual-test-1.sql.gz` herunter.
+5. Löschen-Button am ALT-Default → JS-Confirm → Erfolg, Zeile verschwindet.
+6. Versuch den Default zu löschen → Backend liefert 409, UI zeigt Fehler-Flash.
+7. VPS-Check: `cat /opt/runbot/configs.json | jq '.[] | select(.id=="leitnerflow") | .snapshotId'`
+   muss den neuen Default enthalten.
+8. Cross-Tenant-Security: Aus einer `cohortbridge`-Demo via curl den
+   `download/leitnerflow-*` abrufen — muss 404 liefern.
+
+**Historie: ursprüngliches task37b-Scope**
+
+Alles was im MVP (task37) bewusst ausgeklammert wurde:
 
 Alles was im MVP (task37) bewusst ausgeklammert wurde:
 
@@ -1118,13 +1258,28 @@ Alles was im MVP (task37) bewusst ausgeklammert wurde:
 Jedes Feature hat seinen eigenen Flow — siehe Detail-Verify jeweils im Subtask, wenn task37b aufgespalten wird.
 
 **Aufwand-Schätzung**
-- Download: 1h
-- Upload: 2-3h (wegen PHP-Limits und Fehlerpfaden)
-- Delete: 30min
-- Plugin-Management-Tab: 4-5h
-- Metadata-Tab: 3-4h
-- Infrastruktur (Rate-Limit, Audit): 1-2h
-- Gesamt: ~12-15h
+- Download: 1h ✅
+- Upload: 2-3h → task37c
+- Delete: 30min ✅
+- Set-Default: 30min ✅ (war nicht separat geschätzt)
+- Plugin-Management-Tab: 4-5h → task37c
+- Metadata-Tab: 3-4h → task37c
+- Infrastruktur (Rate-Limit, Audit): 1-2h → task37c
+- Gesamt: ~12-15h (davon ~2h erledigt, ~10-13h offen in task37c)
+
+---
+
+### task37c `local_runbotadmin` Stage 3 — Upload, Plugin-Management, Metadata
+Status: open (Folgetask zu task37b, siehe dort für Scope-Details)
+Feature: feat08 (Snapshot-System) + feat09 (Plugin-Katalog) + feat02 (Provisioning)
+Entdeckt: 2026-04-10
+
+Siehe Scope-Block in task37b oben. Nicht im Stage-2-MVP implementiert, weil:
+- Upload braucht PHP-Limit-Änderungen in config.php UND multer im Backend UND
+  eine vernünftige Drag&Drop-UI mit Progress-Bar — lohnt sich als eigener Task.
+- Plugin-Management-Tab ist die größte Einzelposition (~5h) mit nicht-trivialen
+  Docker-Interaktionen (`docker cp` in Webserver-Container, `upgrade.php --non-interactive`).
+- Metadata-Tab braucht GitHub-Auto-Fetch-Logik + Live-Preview des Portal-Cards.
 
 ---
 

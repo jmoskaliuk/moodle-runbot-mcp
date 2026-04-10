@@ -29,6 +29,19 @@ $string['snap_col_created']   = 'Created';
 $string['snap_col_size']      = 'Size';
 $string['snap_col_actions']   = 'Actions';
 
+// Snapshot row actions (task37b)
+$string['snap_act_download']     = 'Download';
+$string['snap_act_delete']       = 'Delete';
+$string['snap_act_setdefault']   = 'Set as default';
+$string['snap_is_default']       = 'Default';
+$string['snap_default_hint']     = 'New demo sessions start from this snapshot.';
+$string['snap_delete_confirm']   = 'Really delete snapshot "{$a}"? This cannot be undone.';
+$string['snap_deleted']          = 'Snapshot "{$a}" deleted.';
+$string['snap_delete_failed']    = 'Failed to delete snapshot: {$a}';
+$string['snap_set_default_ok']   = 'Snapshot "{$a}" is now the default for new demos.';
+$string['snap_set_default_failed'] = 'Failed to set default snapshot: {$a}';
+$string['snap_download_failed']  = 'Failed to download snapshot: {$a}';
+
 // Errors
 $string['err_not_in_runbot']  = 'This page only works inside a Runbot-managed demo instance. The $CFG->runbot_instance_id configuration is missing.';
 $string['err_api_token']      = 'Runbot API token missing or invalid in $CFG->runbot_api_token.';

@@ -5,13 +5,12 @@
 //   1. Require admin login (is_siteadmin + capability check)
 //   2. Read instance context from $CFG->runbot_instance_id (set by
 //      Runbot-Server's patchConfigForProduction())
-//   3. If the current request is a form POST (Create Snapshot),
-//      dispatch to the API client and show a success/error banner
+//   3. Dispatch POST actions: create | delete | setdefault | download
 //   4. Render the page: intro + create-snapshot form + list of existing
 //      snapshots (fetched live from the backend)
 //
-// This MVP implements only the Snapshots tab. Plugin-Management and
-// Metadata tabs are stubs that will be filled in task37b.
+// task37b — Snapshots tab now supports Download, Delete, and Set-Default
+// actions. Plugin-Management and Metadata tabs remain stubs (future).
 
 require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
@@ -35,15 +34,36 @@ if (empty($CFG->runbot_instance_id)) {
     exit;
 }
 
-// ── Handle POST: create snapshot ─────────────────────────────────────────────
-$flash = null;        // ['type' => 'success'|'error', 'msg' => string]
+// ── Handle actions ───────────────────────────────────────────────────────────
+//
+// We route GET?action=download separately (before Moodle's output starts)
+// because it streams binary data and must not be preceded by a rendered
+// page header. All other actions run inside the normal page lifecycle.
+
 $action = optional_param('action', '', PARAM_ALPHA);
 
+// --- action=download (GET, streams binary) ---
+if ($action === 'download' && confirm_sesskey()) {
+    $snapshotid = required_param('snapshotId', PARAM_TEXT);
+    try {
+        $client = new \local_runbotadmin\api_client();
+        $client->stream_snapshot_download($snapshotid);
+    } catch (\Throwable $e) {
+        // Wenn das hier schief geht ist der Body evtl. schon teilweise
+        // ausgegeben — wir können nur noch abbrechen.
+        http_response_code(500);
+        echo 'Download failed: ' . s($e->getMessage());
+    }
+    exit;
+}
+
+$flash = null;  // ['type' => 'success'|'error', 'msg' => string]
+
+// --- action=create ---
 if ($action === 'create' && confirm_sesskey()) {
     $label       = trim(required_param('label', PARAM_RAW));
     $description = trim(optional_param('description', '', PARAM_RAW));
 
-    // Label sanity check — letters, digits, hyphens only.
     if (!preg_match('/^[a-zA-Z0-9\-]+$/', $label)) {
         $flash = ['type' => 'error', 'msg' => get_string('err_label_invalid', 'local_runbotadmin')];
     } else {
@@ -64,12 +84,51 @@ if ($action === 'create' && confirm_sesskey()) {
     }
 }
 
+// --- action=delete ---
+if ($action === 'delete' && confirm_sesskey()) {
+    $snapshotid = required_param('snapshotId', PARAM_TEXT);
+    try {
+        $client = new \local_runbotadmin\api_client();
+        $client->delete_snapshot($snapshotid);
+        $flash = [
+            'type' => 'success',
+            'msg'  => get_string('snap_deleted', 'local_runbotadmin', s($snapshotid)),
+        ];
+    } catch (\Throwable $e) {
+        $flash = [
+            'type' => 'error',
+            'msg'  => get_string('snap_delete_failed', 'local_runbotadmin', s($e->getMessage())),
+        ];
+    }
+}
+
+// --- action=setdefault ---
+if ($action === 'setdefault' && confirm_sesskey()) {
+    $snapshotid = required_param('snapshotId', PARAM_TEXT);
+    try {
+        $client = new \local_runbotadmin\api_client();
+        $client->set_default_snapshot($snapshotid);
+        $flash = [
+            'type' => 'success',
+            'msg'  => get_string('snap_set_default_ok', 'local_runbotadmin', s($snapshotid)),
+        ];
+    } catch (\Throwable $e) {
+        $flash = [
+            'type' => 'error',
+            'msg'  => get_string('snap_set_default_failed', 'local_runbotadmin', s($e->getMessage())),
+        ];
+    }
+}
+
 // ── Fetch current snapshot list for display ──────────────────────────────────
 $snapshots = [];
-$listerr   = null;
+$defaultSnapshotId = null;
+$listerr = null;
 try {
     $client = new \local_runbotadmin\api_client();
-    $snapshots = $client->list_snapshots();
+    $listResponse = $client->list_snapshots();
+    $snapshots = $listResponse['snapshots'] ?? [];
+    $defaultSnapshotId = $listResponse['defaultSnapshot'] ?? null;
 } catch (\Throwable $e) {
     $listerr = $e->getMessage();
 }
@@ -86,11 +145,11 @@ if ($flash !== null) {
 
 echo '<div class="runbotadmin-intro">' . get_string('page_intro', 'local_runbotadmin') . '</div>';
 
-// Tabs scaffold — MVP only Snapshots is functional.
+// Tabs scaffold — Snapshots functional; Plugins/Metadata still deferred.
 echo '<ul class="runbotadmin-tabs">';
 echo '  <li class="active">'. get_string('nav_snapshots', 'local_runbotadmin') .'</li>';
-echo '  <li class="disabled" title="task37b">'. get_string('nav_plugins', 'local_runbotadmin') .'</li>';
-echo '  <li class="disabled" title="task37b">'. get_string('nav_metadata', 'local_runbotadmin') .'</li>';
+echo '  <li class="disabled" title="task37c">'. get_string('nav_plugins', 'local_runbotadmin') .'</li>';
+echo '  <li class="disabled" title="task37c">'. get_string('nav_metadata', 'local_runbotadmin') .'</li>';
 echo '</ul>';
 
 // Snapshots tab content
@@ -122,7 +181,7 @@ if ($listerr !== null) {
 } else if (empty($snapshots)) {
     echo '  <p class="runbotadmin-muted">'. get_string('snap_empty', 'local_runbotadmin') .'</p>';
 } else {
-    echo '  <table class="generaltable">';
+    echo '  <table class="generaltable runbotadmin-snaps">';
     echo '    <thead><tr>';
     echo '      <th>'. get_string('snap_col_label', 'local_runbotadmin') .'</th>';
     echo '      <th>'. get_string('snap_col_created', 'local_runbotadmin') .'</th>';
@@ -130,14 +189,62 @@ if ($listerr !== null) {
     echo '      <th>'. get_string('snap_col_actions', 'local_runbotadmin') .'</th>';
     echo '    </tr></thead>';
     echo '    <tbody>';
+
+    $deletestr     = get_string('snap_act_delete', 'local_runbotadmin');
+    $downloadstr   = get_string('snap_act_download', 'local_runbotadmin');
+    $setdefstr     = get_string('snap_act_setdefault', 'local_runbotadmin');
+    $defaultbadge  = get_string('snap_is_default', 'local_runbotadmin');
+
     foreach ($snapshots as $s) {
-        $size = isset($s['sizeBytes']) ? display_size((int)$s['sizeBytes']) : '—';
+        $snapid = $s['snapshotId'] ?? '';
+        $label  = $s['label'] ?? $snapid;
+        $size   = isset($s['sizeBytes']) ? display_size((int)$s['sizeBytes']) : '—';
         $created = isset($s['createdAt']) ? userdate(strtotime($s['createdAt'])) : '—';
+        $isdefault = !empty($s['isDefault']) || ($defaultSnapshotId !== null && $snapid === $defaultSnapshotId);
+
         echo '      <tr>';
-        echo '        <td>'. s($s['label'] ?? $s['snapshotId'] ?? '—') .'</td>';
+        echo '        <td>';
+        echo            s($label);
+        if ($isdefault) {
+            echo '        <span class="badge badge-success runbotadmin-default-badge" title="'. s(get_string('snap_default_hint', 'local_runbotadmin')) .'">'. s($defaultbadge) .'</span>';
+        }
+        echo '        </td>';
         echo '        <td>'. s($created) .'</td>';
         echo '        <td>'. s($size) .'</td>';
-        echo '        <td class="runbotadmin-muted">task37b</td>';
+        echo '        <td class="runbotadmin-actions">';
+
+        // Download (GET) — opens in a new tab so the current page doesn't
+        // get replaced if the browser chooses to render instead of save.
+        $dlurl = new moodle_url('/local/runbotadmin/index.php', [
+            'action'     => 'download',
+            'snapshotId' => $snapid,
+            'sesskey'    => sesskey(),
+        ]);
+        echo '          <a class="btn btn-sm btn-secondary" href="'. $dlurl->out(false) .'" target="_blank" rel="noopener">'. s($downloadstr) .'</a> ';
+
+        // Set as default (POST, only if not already default)
+        if (!$isdefault) {
+            echo '          <form method="post" action="index.php" style="display:inline">';
+            echo '            <input type="hidden" name="sesskey" value="'. sesskey() .'">';
+            echo '            <input type="hidden" name="action" value="setdefault">';
+            echo '            <input type="hidden" name="snapshotId" value="'. s($snapid) .'">';
+            echo '            <button type="submit" class="btn btn-sm btn-secondary">'. s($setdefstr) .'</button>';
+            echo '          </form> ';
+        }
+
+        // Delete (POST with JS confirm) — disabled for the current default,
+        // otherwise the confirmation prompt is rendered via onsubmit.
+        if (!$isdefault) {
+            $confirmmsg = get_string('snap_delete_confirm', 'local_runbotadmin', $label);
+            echo '          <form method="post" action="index.php" style="display:inline" onsubmit="return confirm('. json_encode($confirmmsg) .');">';
+            echo '            <input type="hidden" name="sesskey" value="'. sesskey() .'">';
+            echo '            <input type="hidden" name="action" value="delete">';
+            echo '            <input type="hidden" name="snapshotId" value="'. s($snapid) .'">';
+            echo '            <button type="submit" class="btn btn-sm btn-danger">'. s($deletestr) .'</button>';
+            echo '          </form>';
+        }
+
+        echo '        </td>';
         echo '      </tr>';
     }
     echo '    </tbody>';

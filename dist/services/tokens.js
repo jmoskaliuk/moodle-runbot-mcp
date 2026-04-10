@@ -176,6 +176,26 @@ export async function setPhase(token, phase, errorMessage) {
             tokens[token].phaseError = errorMessage;
     });
 }
+/**
+ * task29: Setzt einen Demo-Request auf „expired/stopped", wenn seine Instanz
+ * beendet wird. Ohne diesen Call bleibt die Token-Tabelle dauerhaft auf
+ * `phase='running'` für längst abgeräumte Instanzen — irreführend im
+ * Admin-Dashboard.
+ *
+ * Reverse-Lookup via `instanceId`, weil der Stop-Pfad nur die Instance-ID
+ * kennt, nicht den Token selbst. Mehrfach-Expires sind idempotent.
+ */
+export async function expireByInstance(instanceId) {
+    await update(tokens => {
+        for (const t of Object.values(tokens)) {
+            if (t.instanceId === instanceId && t.status !== "expired") {
+                t.status = "expired";
+                delete t.phase;
+                delete t.phaseError;
+            }
+        }
+    });
+}
 export async function listRequests() {
     const tokens = await load();
     return Object.values(tokens)

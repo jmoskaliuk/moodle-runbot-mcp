@@ -271,6 +271,59 @@ async function waitForDatabase(instance, timeoutSecs) {
     throw new Error(`[docker] Database not ready after ${timeoutSecs}s`);
 }
 /**
+ * task33: Setzt den Moodle-Site-Namen (Front-Page-Kurs ID 1) direkt in der
+ * DB. Wird nach `startContainers()` (Fresh-Install) oder `restoreSnapshot()`
+ * aufgerufen, je nachdem welcher Pfad aktiv ist.
+ *
+ * Warum DB statt `$CFG->sitename`? Moodle hält den Site-Namen kanonisch im
+ * Front-Page-Kurs (`mdl_course` id=1, Felder `fullname` + `shortname`).
+ * `$CFG->sitename`-Overrides werden an vielen Stellen ignoriert. Der
+ * direkte DB-Weg ist robust und greift sofort ohne Cache-Purge.
+ *
+ * Escaping: Wir werfen Hochkomma + Backslash weg statt zu quoten, weil wir
+ * den String als SQL-Literal inlinen (kein Prepared Statement via
+ * docker exec). Moodle-Labels sind ohnehin ASCII-sauber; Johannes' Konvention
+ * ist "Demo | <PluginName>".
+ */
+export async function setSiteName(instance, siteName) {
+    // Kein gefährliches Zeichen: entfernen statt quoten, dann in ' ' wrappen.
+    const clean = siteName.replace(/['"\\`;]/g, "").slice(0, 200);
+    if (!clean) {
+        console.error(`[docker] setSiteName: leerer Name für ${instance.id}, skip`);
+        return;
+    }
+    const env = envString(composeEnv(instance));
+    const compose = path.join(instance.moodleDockerDir, "bin", "moodle-docker-compose");
+    // Shortname ist in Moodle UNIQUE. Um Kollisionen zu vermeiden hängen wir
+    // einen Kurz-Hash aus der Instance-ID an — so bleibt jede Instanz einzigartig
+    // und trotzdem lesbar ("Demo | LeitnerFlow" bzw. shortname mit Suffix).
+    const shortHashSuffix = instance.id.slice(-6);
+    const shortname = `${clean}-${shortHashSuffix}`.slice(0, 255);
+    const sql = instance.db === "pgsql"
+        ? `UPDATE mdl_course SET fullname='${clean}', shortname='${shortname}' WHERE id=1;`
+        : `UPDATE mdl_course SET fullname='${clean}', shortname='${shortname}' WHERE id=1;`;
+    try {
+        if (instance.db === "pgsql") {
+            await execAsync(`${env} ${compose} exec -T db psql -U moodle -d moodle -c "${sql}"`, { cwd: instance.moodleDockerDir, maxBuffer: 1 * 1024 * 1024 });
+        }
+        else {
+            await execAsync(`${env} ${compose} exec -T db mysql -u root -proot moodle -e "${sql}"`, { cwd: instance.moodleDockerDir, maxBuffer: 1 * 1024 * 1024 });
+        }
+        console.error(`[docker] setSiteName OK: ${instance.id} → "${clean}"`);
+    }
+    catch (e) {
+        console.error(`[docker] setSiteName FAIL for ${instance.id}:`, e.message?.slice(0, 300));
+        // Nicht fatal — der Default-Name ist nur kosmetisch.
+    }
+    // Caches purgen damit der neue Name sofort im Header erscheint.
+    try {
+        await execAsync(`${env} ${compose} exec -T webserver php admin/cli/purge_caches.php`, { cwd: instance.moodleDockerDir, maxBuffer: 2 * 1024 * 1024 });
+    }
+    catch {
+        // best-effort
+    }
+}
+/**
  * Stop and destroy containers + volumes for an instance.
  */
 export async function stopContainers(instance) {

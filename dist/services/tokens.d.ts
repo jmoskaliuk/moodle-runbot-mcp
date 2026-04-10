@@ -31,6 +31,16 @@ export declare function markStarted(token: string, instanceId: string): Promise<
  * Warteseite den echten Status pollen kann (feat09).
  */
 export declare function setPhase(token: string, phase: DemoPhase, errorMessage?: string): Promise<void>;
+/**
+ * task29: Setzt einen Demo-Request auf „expired/stopped", wenn seine Instanz
+ * beendet wird. Ohne diesen Call bleibt die Token-Tabelle dauerhaft auf
+ * `phase='running'` für längst abgeräumte Instanzen — irreführend im
+ * Admin-Dashboard.
+ *
+ * Reverse-Lookup via `instanceId`, weil der Stop-Pfad nur die Instance-ID
+ * kennt, nicht den Token selbst. Mehrfach-Expires sind idempotent.
+ */
+export declare function expireByInstance(instanceId: string): Promise<void>;
 export declare function listRequests(): Promise<DemoRequest[]>;
 export declare function cleanupExpired(): Promise<number>;
 //# sourceMappingURL=tokens.d.ts.map

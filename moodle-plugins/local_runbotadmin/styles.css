@@ -117,3 +117,29 @@
     background: #8f165f;
     border-color: #8f165f;
 }
+
+/* ── task37b — Snapshot-Liste: Aktions-Spalte + Default-Badge ─────────── */
+
+.runbotadmin-snaps .runbotadmin-actions {
+    white-space: nowrap;
+}
+.runbotadmin-snaps .runbotadmin-actions .btn {
+    margin-right: 4px;
+}
+.runbotadmin-snaps .runbotadmin-actions .btn:last-child {
+    margin-right: 0;
+}
+
+.runbotadmin-default-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 10px;
+    background: #3aadaa;
+    color: #fff;
+    vertical-align: middle;
+}

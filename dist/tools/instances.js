@@ -7,6 +7,7 @@ import * as registry from "../services/registry.js";
 import * as docker from "../services/docker.js";
 import * as nginx from "../services/nginx.js";
 import * as snapshotSvc from "../services/snapshot.js";
+import * as tokens from "../services/tokens.js";
 const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
 const PORT_START = parseInt(process.env.PORT_START ?? "8100");
 const PORT_END = parseInt(process.env.PORT_END ?? "8199");
@@ -174,6 +175,11 @@ Returns:
         await docker.stopContainers(instance);
         await docker.cleanupInstanceDir(instance);
         await registry.deleteInstance(instanceId);
+        // task29: falls zu dieser Instanz ein Demo-Request-Token existiert,
+        // auf expired setzen. Best-effort.
+        await tokens.expireByInstance(instanceId).catch((e) => {
+            console.error(`[instance_stop] WARN expire token for ${instanceId}:`, e);
+        });
         const result = { instanceId, status: "stopped" };
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
     });

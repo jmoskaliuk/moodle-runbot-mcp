@@ -23,4 +23,5 @@ export interface DemoConfig {
 }
 export declare function loadConfigs(): Promise<DemoConfig[]>;
 export declare function getConfig(id: string): Promise<DemoConfig | undefined>;
+export declare function updateConfig(id: string, mutator: (config: DemoConfig) => void): Promise<DemoConfig>;
 //# sourceMappingURL=config.d.ts.map

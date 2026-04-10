@@ -24,6 +24,22 @@ export declare function installPlugin(instance: MoodleInstance, pluginSrcPath: s
  */
 export declare function startContainers(instance: MoodleInstance, snapshotFile?: string): Promise<void>;
 /**
+ * task33: Setzt den Moodle-Site-Namen (Front-Page-Kurs ID 1) direkt in der
+ * DB. Wird nach `startContainers()` (Fresh-Install) oder `restoreSnapshot()`
+ * aufgerufen, je nachdem welcher Pfad aktiv ist.
+ *
+ * Warum DB statt `$CFG->sitename`? Moodle hält den Site-Namen kanonisch im
+ * Front-Page-Kurs (`mdl_course` id=1, Felder `fullname` + `shortname`).
+ * `$CFG->sitename`-Overrides werden an vielen Stellen ignoriert. Der
+ * direkte DB-Weg ist robust und greift sofort ohne Cache-Purge.
+ *
+ * Escaping: Wir werfen Hochkomma + Backslash weg statt zu quoten, weil wir
+ * den String als SQL-Literal inlinen (kein Prepared Statement via
+ * docker exec). Moodle-Labels sind ohnehin ASCII-sauber; Johannes' Konvention
+ * ist "Demo | <PluginName>".
+ */
+export declare function setSiteName(instance: MoodleInstance, siteName: string): Promise<void>;
+/**
  * Stop and destroy containers + volumes for an instance.
  */
 export declare function stopContainers(instance: MoodleInstance): Promise<void>;

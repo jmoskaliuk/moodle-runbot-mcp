@@ -17,6 +17,7 @@ import path from 'path';
 import { getAllInstances, saveInstance, deleteInstance } from './registry.js';
 import { stopContainers, cleanupInstanceDir } from './docker.js';
 import { unregisterInstance } from './nginx.js';
+import { expireByInstance } from './tokens.js';
 const execAsync = promisify(exec);
 const MAX_AGE_MS = parseInt(process.env.DEMO_MAX_AGE_MINUTES ?? '60') * 60 * 1000;
 const INACTIVITY_MS = parseInt(process.env.DEMO_INACTIVITY_MINUTES ?? '15') * 60 * 1000;
@@ -76,6 +77,11 @@ async function runCleanup() {
                 await stopContainers(inst);
                 await cleanupInstanceDir(inst);
                 await deleteInstance(inst.id);
+                // task29: Zugehörigen Demo-Request-Token auf expired setzen,
+                // damit das Admin-Dashboard die Instanz nicht mehr als „running"
+                // anzeigt. Best-effort — Fehler hier dürfen den Cleanup nicht
+                // abbrechen.
+                await expireByInstance(inst.id).catch(e => console.error(`[cleanup] WARN expire token for ${inst.id}:`, e));
                 console.error(`[cleanup] ✓ ${inst.id} removed`);
             }
             catch (e) {

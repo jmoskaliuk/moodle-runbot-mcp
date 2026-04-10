@@ -60,11 +60,78 @@ class api_client {
      * GET /api/internal/snapshot/list
      * Lists all snapshots that belong to this instance's plugin slug.
      *
-     * @return array List of snapshot meta objects
+     * @return array Response with keys `snapshots`, `defaultSnapshot`, `configId`
      */
     public function list_snapshots(): array {
-        $res = $this->request('GET', '/api/internal/snapshot/list', null);
-        return $res['snapshots'] ?? [];
+        return $this->request('GET', '/api/internal/snapshot/list', null);
+    }
+
+    /**
+     * POST /api/internal/snapshot/delete (task37b)
+     *
+     * @param string $snapshotid
+     * @return array Response with `ok` + `snapshotId`
+     */
+    public function delete_snapshot(string $snapshotid): array {
+        return $this->request('POST', '/api/internal/snapshot/delete', [
+            'snapshotId' => $snapshotid,
+        ]);
+    }
+
+    /**
+     * POST /api/internal/config/set-default (task37b)
+     *
+     * @param string $snapshotid
+     * @return array Response with `ok` + `configId` + `snapshotId`
+     */
+    public function set_default_snapshot(string $snapshotid): array {
+        return $this->request('POST', '/api/internal/config/set-default', [
+            'snapshotId' => $snapshotid,
+        ]);
+    }
+
+    /**
+     * GET /api/internal/snapshot/download/{id} (task37b)
+     *
+     * Streams the binary .sql.gz directly to the browser. This does NOT
+     * use the JSON `request()` helper — we need to pipe the response
+     * body straight through instead of parsing it.
+     *
+     * @param string $snapshotid
+     * @return void
+     */
+    public function stream_snapshot_download(string $snapshotid): void {
+        $url = $this->baseurl . '/api/internal/snapshot/download/' . rawurlencode($snapshotid);
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'X-Runbot-Instance-Id: ' . $this->instanceid,
+            'X-Runbot-Api-Token: '   . $this->token,
+        ]);
+        // Wir streamen den Body 1:1 an den Browser.
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $chunk) {
+            echo $chunk;
+            return strlen($chunk);
+        });
+        // Header-Durchleitung: wir übernehmen Content-Disposition und
+        // Content-Length vom Backend, damit der Browser einen echten
+        // Dateinamen + Progress-Bar bekommt.
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $header) {
+            $h = trim($header);
+            if (stripos($h, 'Content-Type:') === 0 ||
+                stripos($h, 'Content-Length:') === 0 ||
+                stripos($h, 'Content-Disposition:') === 0) {
+                header($h);
+            }
+            return strlen($header);
+        });
+        curl_exec($ch);
+        curl_close($ch);
     }
 
     /**

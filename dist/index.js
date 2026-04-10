@@ -125,16 +125,29 @@ async function runHTTP() {
     });
     // Configs endpoint — vom Portal direkt aufgerufen (kein MCP-Overhead nötig)
     // GET /configs → alle sichtbaren Demo-Konfigurationen als JSON (visible !== false)
-    app.get("/configs", async (_req, res) => {
+    //
+    // task35: Jede Config bekommt zusätzlich ein `iconUrl`-Feld, das via
+    // github.resolvePluginIconUrl() auf das originale Plugin-Icon aus dem
+    // Moodle-Repo zeigt (pix/monologo.svg etc.). Die Lookup-Ergebnisse sind
+    // 24h in-memory gecacht (siehe github.ts), somit ist der /configs-Call
+    // nach dem ersten Hit O(#configs) ohne Netzwerk-Roundtrips.
+    const configsHandler = async (_req, res) => {
         try {
             const all = await loadConfigs();
-            const configs = all.filter(c => c.visible !== false);
+            const visible = all.filter(c => c.visible !== false);
+            const configs = await Promise.all(visible.map(async (c) => {
+                const iconUrl = c.githubRepo
+                    ? await github.resolvePluginIconUrl(c.githubRepo).catch(() => null)
+                    : null;
+                return { ...c, iconUrl };
+            }));
             res.json({ count: configs.length, configs });
         }
         catch (e) {
             res.status(500).json({ error: String(e) });
         }
-    });
+    };
+    app.get("/configs", configsHandler);
     // MCP endpoint — stateless, new transport per request
     app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
         const t = new StreamableHTTPServerTransport({
@@ -290,6 +303,13 @@ async function runHTTP() {
                     await tokens.setPhase(token, "restoring_snapshot");
                     await snapshotSvc.restoreSnapshot(instance, snap.file);
                 }
+                // task33: Moodle-Site-Name auf „Demo | <Plugin-Titel>" setzen.
+                // Nach dem Start (Fresh oder Snapshot-Restore), weil der Restore
+                // sonst unseren Wert wieder aus dem Dump überschreiben würde.
+                // Kosmetisch — bei Fehler nicht den Demo-Start abbrechen.
+                await dockerSvc
+                    .setSiteName(instance, `Demo | ${config.name}`)
+                    .catch((e) => console.error(`[confirm] setSiteName WARN:`, e));
                 // Keine Nutzer-Anlage mehr — der Snapshot enthält bereits die drei
                 // vordefinierten Accounts (admin, teacher, student) mit identischem
                 // Passwort (DEMO_PASSWORD). Der Interessent loggt sich direkt mit
@@ -495,16 +515,8 @@ async function runHTTP() {
     // Alias für nginx-Stripping — siehe Kommentar oben.
     app.get("/plugininfo/:id", pluginInfoHandler);
     // GET /api/configs — alias so the portal's /api/configs URL works
-    app.get("/api/configs", async (_req, res) => {
-        try {
-            const all = await loadConfigs();
-            const configs = all.filter(c => c.visible !== false);
-            res.json({ count: configs.length, configs });
-        }
-        catch (e) {
-            res.status(500).json({ error: String(e) });
-        }
-    });
+    // Teilt Handler mit /configs (task35 fügt iconUrl-Anreicherung hinzu).
+    app.get("/api/configs", configsHandler);
     // ── Admin-Dashboard (task25) ────────────────────────────────────────────────
     // Alle /admin/* Routen hinter Basic Auth.
     // Nginx-Konvention: Der Browser spricht /api/admin/*, nginx strippt /api/
@@ -600,6 +612,11 @@ async function runHTTP() {
                 console.error(`[admin] WARN cleanup dir ${id}:`, e);
             });
             await deleteInstance(id);
+            // task29: Token-Eintrag auf expired setzen (falls einer existiert —
+            // manuell via MCP gestartete Instanzen haben keinen DemoRequest).
+            await tokens.expireByInstance(id).catch((e) => {
+                console.error(`[admin] WARN expire token for ${id}:`, e);
+            });
             console.error(`[admin] Manually deleted instance ${id}`);
             res.json({ ok: true, instanceId: id });
         }

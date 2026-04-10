@@ -10,7 +10,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_runbotadmin';
-$plugin->version   = 2026041000;   // YYYYMMDDXX
+$plugin->version   = 2026041001;   // YYYYMMDDXX — task37b: download/delete/set-default
 $plugin->requires  = 2023100900;   // Moodle 4.3+ (Hooks API)
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.0-mvp';
+$plugin->release   = '0.2.0-snapshot-actions';

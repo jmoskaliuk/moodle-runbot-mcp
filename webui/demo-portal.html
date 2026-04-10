@@ -585,9 +585,16 @@ function render(f='all'){
     const bd=i&&i.status!=='running'?'disabled':'';
     // snapshotId zeigt ob Demo-Daten vorhanden sind
     const hasDemoData=p.snapshotId?t('demo_data'):t('fresh_install');
+    // task35: Plugin-Icon aus GitHub (pix/monologo.svg etc.) bevorzugen,
+    // Fallback auf Emoji wenn entweder keine iconUrl geliefert wurde oder
+    // das Bild beim Laden fehlschlägt (onerror). Der Emoji-Fallback wird
+    // via textContent gesetzt, damit kein verwaistes <img> stehen bleibt.
+    const iconInner=p.iconUrl
+      ?`<img src="${p.iconUrl}" alt="" onerror="this.parentElement.textContent='${p.icon}'" style="width:32px;height:32px;object-fit:contain">`
+      :p.icon;
     return`<div class="card fade-up">
       <div class="card-top">
-        <div class="p-icon" style="background:${p.iconBg}">${p.icon}</div>
+        <div class="p-icon" style="background:${p.iconBg}">${iconInner}</div>
         <div class="p-cat">${p.categoryLabel}</div>
         <div class="p-name">${p.name}</div>
         <div class="p-desc">${p.description}</div>

@@ -29,6 +29,19 @@ $string['snap_col_created']   = 'Erstellt';
 $string['snap_col_size']      = 'Größe';
 $string['snap_col_actions']   = 'Aktionen';
 
+// Snapshot Zeilen-Aktionen (task37b)
+$string['snap_act_download']       = 'Herunterladen';
+$string['snap_act_delete']         = 'Löschen';
+$string['snap_act_setdefault']     = 'Als Standard';
+$string['snap_is_default']         = 'Standard';
+$string['snap_default_hint']       = 'Neue Demo-Sitzungen starten aus diesem Snapshot.';
+$string['snap_delete_confirm']     = 'Snapshot „{$a}" wirklich löschen? Das kann nicht rückgängig gemacht werden.';
+$string['snap_deleted']            = 'Snapshot „{$a}" gelöscht.';
+$string['snap_delete_failed']      = 'Snapshot konnte nicht gelöscht werden: {$a}';
+$string['snap_set_default_ok']     = 'Snapshot „{$a}" ist jetzt der Standard für neue Demos.';
+$string['snap_set_default_failed'] = 'Standard-Snapshot konnte nicht gesetzt werden: {$a}';
+$string['snap_download_failed']    = 'Snapshot konnte nicht heruntergeladen werden: {$a}';
+
 // Fehler
 $string['err_not_in_runbot']  = 'Diese Seite funktioniert nur innerhalb einer Runbot-verwalteten Demo-Instanz. Die Konfiguration $CFG->runbot_instance_id fehlt.';
 $string['err_api_token']      = 'Runbot-API-Token fehlt oder ist ungültig in $CFG->runbot_api_token.';
