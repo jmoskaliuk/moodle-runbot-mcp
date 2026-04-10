@@ -1,0 +1,119 @@
+/* local_runbotadmin — eLeDia Runbot Admin-Konsole Styles.
+ * Lightweight, no dependencies. Uses Moodle's theme variables where possible.
+ */
+
+.runbotadmin-intro {
+    font-size: 14px;
+    color: #5b6477;
+    margin: 0 0 24px 0;
+    max-width: 720px;
+}
+
+.runbotadmin-tabs {
+    display: flex;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px 0;
+    border-bottom: 1px solid #e2e5ec;
+}
+.runbotadmin-tabs li {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #5b6477;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+.runbotadmin-tabs li.active {
+    color: #ab1d79;
+    border-bottom-color: #ab1d79;
+}
+.runbotadmin-tabs li.disabled {
+    color: #a3a8b4;
+    cursor: not-allowed;
+    position: relative;
+}
+.runbotadmin-tabs li.disabled::after {
+    content: "soon";
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-left: 8px;
+    color: #a3a8b4;
+    font-weight: 600;
+}
+
+.runbotadmin-panel {
+    padding: 20px 0;
+}
+.runbotadmin-panel h3 {
+    font-size: 18px;
+    margin: 0 0 8px 0;
+}
+.runbotadmin-panel h4 {
+    font-size: 15px;
+    margin: 28px 0 10px 0;
+    color: #23272f;
+}
+
+.runbotadmin-muted {
+    color: #8791a4;
+    font-size: 13px;
+}
+
+.runbotadmin-error {
+    background: #fdecec;
+    color: #9c1f1f;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin: 12px 0;
+}
+
+.runbotadmin-create-form {
+    background: #f7f8fb;
+    padding: 18px 20px;
+    border-radius: 10px;
+    margin: 16px 0 28px 0;
+    max-width: 640px;
+}
+.runbotadmin-create-form .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.runbotadmin-create-form .row:last-child {
+    margin-bottom: 0;
+}
+.runbotadmin-create-form label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #5b6477;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 110px;
+    margin: 0;
+}
+.runbotadmin-create-form input[type="text"] {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #d8dbe3;
+    border-radius: 6px;
+    background: #fff;
+    color: #23272f;
+}
+.runbotadmin-create-form input[type="text"]:focus {
+    outline: none;
+    border-color: #ab1d79;
+}
+.runbotadmin-create-form .btn-primary {
+    background: #ab1d79;
+    border-color: #ab1d79;
+}
+.runbotadmin-create-form .btn-primary:hover {
+    background: #8f165f;
+    border-color: #8f165f;
+}

@@ -22,6 +22,7 @@ import * as dockerSvc from "./services/docker.js";
 import * as nginxSvc from "./services/nginx.js";
 import { randomBytes } from "crypto";
 import path from "path";
+import { buildInternalRouter } from "./api/internal.js";
 // ── Server setup ──────────────────────────────────────────────────────────────
 const server = new McpServer({
     name: "moodle-runbot-mcp-server",
@@ -250,6 +251,12 @@ async function runHTTP() {
                 const BASE_DOMAIN = process.env.BASE_DOMAIN ?? "";
                 const port = await allocatePort(PORT_START, PORT_END);
                 const instanceDir = path.join(WORK_DIR, id);
+                // task37: Per-Instance API-Token für das local_runbotadmin Plugin.
+                // 32 Bytes Random = 64 Hex-Zeichen. Token wird in config.php
+                // geschrieben (via patchConfigForProduction) und vom Backend in
+                // authMiddleware() gegen den Registry-Eintrag geprüft. Er lebt
+                // nur für die Lebensdauer dieser Instanz.
+                const apiToken = randomBytes(32).toString("hex");
                 const instance = {
                     id, prId: "demo", branch: "main",
                     pluginDir: config.plugin?.srcPath ?? "",
@@ -264,6 +271,9 @@ async function runHTTP() {
                     composeProject,
                     moodleDockerDir: path.join(instanceDir, "moodle-docker"),
                     moodleDir: path.join(instanceDir, "moodle"),
+                    // task37 fields
+                    apiToken,
+                    configId: request.configId,
                 };
                 await saveInstance(instance);
                 await dockerSvc.provisionInstance(instance);
@@ -601,6 +611,14 @@ async function runHTTP() {
     app.get("/plugin/:id", (_req, res) => {
         res.sendFile(path.join(process.cwd(), "webui", "plugin-detail.html"));
     });
+    // task37 — Internal API for the in-Moodle local_runbotadmin plugin.
+    // Auth via per-instance X-Runbot-Instance-Id + X-Runbot-Api-Token headers
+    // (see src/api/internal.ts). Mounted BEFORE express.static so the router
+    // has first refusal on /api/internal/*. Also mounted under /internal for
+    // the nginx-strip path variant (same reason as demoStatusHandler above).
+    const internalRouter = buildInternalRouter();
+    app.use("/api/internal", internalRouter);
+    app.use("/internal", internalRouter); // nginx strips /api/ prefix
     // Serve static files from webui/ (demo-portal.html, assets, etc.)
     app.use(express.static(path.join(process.cwd(), "webui")));
     // ─────────────────────────────────────────────────────────────────────────

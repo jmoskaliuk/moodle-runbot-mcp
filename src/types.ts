@@ -44,6 +44,17 @@ export interface MoodleInstance {
   // angepinnte Langläufer (z.B. Dauer-Demo für Messen).
   pinned?:    boolean;
   pinReason?: string;       // menschenlesbar, z.B. "snapshot_build:exam2pdf-v1"
+
+  // task37: In-Moodle Admin-Plugin (local_runbotadmin)
+  // `apiToken` wird beim Instanz-Start generiert und als env-Variable in den
+  // Moodle-Container injiziert. Das local_runbotadmin-Plugin liest ihn aus
+  // $CFG->runbot_api_token und schickt ihn als X-Runbot-Api-Token Header
+  // bei Calls gegen /api/internal/* mit. Der Backend-Middleware matcht den
+  // Token gegen den Registry-Eintrag dieser Instanz — Mismatch → 401.
+  // `configId` ist die Plugin-Config-ID aus configs.json (z.B. "leitnerflow")
+  // und wird für Snapshot-Filterung und Metadaten-Lookups gebraucht.
+  apiToken?: string;
+  configId?: string;
 }
 
 export interface TestRun {

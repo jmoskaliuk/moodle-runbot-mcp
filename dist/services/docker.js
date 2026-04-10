@@ -93,6 +93,26 @@ export async function provisionInstance(instance) {
     if (BASE_DOMAIN) {
         await patchConfigForProduction(configPath, instance, BASE_DOMAIN);
     }
+    // 5. task37 — in-Moodle Admin-Plugin local_runbotadmin einspielen.
+    // Das Plugin wird bei jeder Provisionierung mit in den Moodle-Tree
+    // kopiert, bevor `install_database.php` läuft. Moodle's Upgrade-
+    // Pipeline registriert es dann automatisch in mdl_config_plugins.
+    // Source liegt im moodle-runbot-mcp Repo unter moodle-plugins/.
+    // Wenn der Ordner fehlt (z.B. älterer Checkout), loggen wir eine
+    // Warnung und machen ohne Plugin weiter — kein fataler Fehler.
+    const runbotAdminSrc = path.join(process.cwd(), "moodle-plugins", "local_runbotadmin");
+    const runbotAdminDst = path.join(instance.moodleDir, "local", "runbotadmin");
+    try {
+        const { stat } = await import("fs/promises");
+        await stat(runbotAdminSrc);
+        await fs.mkdir(path.dirname(runbotAdminDst), { recursive: true });
+        await run(`cp -r ${runbotAdminSrc} ${runbotAdminDst}`);
+        console.error(`[docker] task37: local_runbotadmin plugin installed into ${runbotAdminDst}`);
+    }
+    catch (e) {
+        console.error(`[docker] WARN task37: local_runbotadmin source not found at ${runbotAdminSrc} — skipping. ` +
+            `In-Moodle admin GUI will not be available for this instance. (${String(e).slice(0, 120)})`);
+    }
 }
 /**
  * Fügt einen Override-Block in config.php ein, der $CFG->wwwroot auf die
@@ -107,6 +127,23 @@ export async function provisionInstance(instance) {
  */
 async function patchConfigForProduction(configPath, instance, baseDomain) {
     const wwwroot = `https://${instance.id}.${baseDomain}`;
+    // task37: Runbot-API-Kontext für das in-Moodle Plugin local_runbotadmin.
+    // Wir schreiben Instance-Id, API-Token und API-URL direkt als String-
+    // Literals in die config.php — kein Umweg über Container-env-Vars.
+    // Rationale: moodle-docker-compose forwardet keine beliebigen env-Vars
+    // an den Webserver-Container, und ein docker-compose.override.yml zu
+    // schreiben wäre brüchig. config.php liegt ohnehin im WWWROOT-Mount,
+    // wird bei jedem Request geladen und ist einfacher zu debuggen.
+    //
+    // Token ist ein per Instance generierter Random-Hex (64 Zeichen, siehe
+    // instances.ts + index.ts). Er rotiert bei jedem Instance-Start und ist
+    // nur innerhalb des laufenden Containers + auf dem VPS sichtbar.
+    const runbotApiUrl = process.env.RUNBOT_PUBLIC_API_URL ?? (baseDomain ? `https://${baseDomain}` : "http://localhost:3000");
+    // Token/ConfigId können fehlen (z.B. CI, alte Dev-Instanzen vor task37).
+    // In dem Fall schreiben wir einen leeren Token — das Plugin zeigt dann
+    // "err_api_token" statt zu crashen.
+    const runbotToken = instance.apiToken ?? "";
+    const runbotConfigId = instance.configId ?? "";
     const overrideBlock = `
 // ── eLeDia Runbot overrides ─────────────────────────────────────
 // Auto-generiert von src/services/docker.ts — nicht manuell bearbeiten.
@@ -120,6 +157,16 @@ $CFG->sslproxy = true;
 $CFG->tool_replace_allowdb = true; // admin/tool/replace/cli/replace.php für Snapshot-URL-Rewrite freigeben
 $CFG->debug        = 0;            // Keine PHP-Notices/-Warnings im Browser (Demo-Nutzer sollen keinen Debug-Output sehen)
 $CFG->debugdisplay = 0;
+
+// task37: Context für local_runbotadmin. Das Plugin liest diese Werte
+// aus $CFG und macht damit HTTP-Calls gegen /api/internal/* auf dem
+// Runbot-MCP-Server. Token ist per Instance einzigartig (siehe
+// instance_start) und landet nur in dieser config.php.
+$CFG->runbot_instance_id = '${instance.id}';
+$CFG->runbot_config_id   = '${runbotConfigId}';
+$CFG->runbot_api_token   = '${runbotToken}';
+$CFG->runbot_api_url     = '${runbotApiUrl}';
+
 unset($CFG->behat_wwwroot); // Behat nutzt eigenen Host, nicht überschreiben
 // ────────────────────────────────────────────────────────────────
 `;

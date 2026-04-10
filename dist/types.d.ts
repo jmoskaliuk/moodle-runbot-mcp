@@ -28,6 +28,8 @@ export interface MoodleInstance {
     };
     pinned?: boolean;
     pinReason?: string;
+    apiToken?: string;
+    configId?: string;
 }
 export interface TestRun {
     id: string;

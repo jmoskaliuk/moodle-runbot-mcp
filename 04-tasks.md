@@ -911,8 +911,8 @@ Entdeckt: 2026-04-09 (Johannes)
 
 ---
 
-### task37 Konzept: `local_runbotadmin` — In-Moodle Admin-Plugin als Alternative zum externen Snapshot-Build
-Status: open (Konzept, noch nicht implementiert)
+### task37 `local_runbotadmin` — In-Moodle Admin-Plugin als Alternative zum externen Snapshot-Build
+Status: ⚙️ MVP done 2026-04-10 — vor-Deploy, noch nicht live-verifiziert. Folgetask: task37b für die ausstehenden Features.
 Feature: feat08 (Snapshot-System) + feat09 (Plugin-Katalog) + feat02 (Provisioning)
 Entdeckt: 2026-04-09 (Johannes)
 Priorität: hoch-mittel — strategische Alternative zum fragilen externen `snapshot_build`
@@ -1025,6 +1025,106 @@ Parallel zur Task-Queue (task31–task36) als größere Investition einplanen. N
 - Erwartung: Erfolgsmeldung, Snapshot taucht im Listing auf, in `/var/lib/moodle-runbot/snapshots/` liegt neue `.sql.gz` + `.json`
 - Zweiter Test: `instance_start` mit dem neuen Snapshot → Instance hochfahren, prüfen ob Zustand korrekt restauriert
 - Dritter Test: Upload eines lokalen Snapshots via Browser → muss in Liste auftauchen und nutzbar sein
+
+**MVP Implementation (2026-04-10, commit TBD)**
+
+Was in dieser Session fertig wurde:
+
+1. **Plugin-Skeleton `moodle-plugins/local_runbotadmin/`**
+   - `version.php`, `settings.php`, `db/access.php` (Capability `local/runbotadmin:manage`)
+   - `lang/en/`, `lang/de/` vollständige Übersetzungen (mit privacy:metadata)
+   - `classes/api_client.php` — curl-basierter HTTP-Client gegen `/api/internal/*`, liest Token aus `$CFG->runbot_api_token`
+   - `classes/privacy/provider.php` — `null_provider` (Plugin speichert keine personenbezogenen Daten)
+   - `index.php` — Hauptseite mit drei Tabs (Snapshots aktiv, Plugins + Metadata als "soon"-Stubs), Snapshot-Form + Snapshot-Listing
+   - `styles.css` — eLeDia-Branding (Akzentfarbe #ab1d79, system-font-stack)
+
+2. **Backend `src/api/internal.ts`** — Express-Router mit zwei Endpoints:
+   - `POST /api/internal/snapshot/create` — Body: `{label, description}`, validiert Label-Format (nur `[A-Za-z0-9-]+`), ruft `createSnapshot(instance, <slug>-<label>, ...)` aus dem bestehenden Snapshot-Service, returnt `{snapshotId, label, sizeBytes, createdAt}`
+   - `GET /api/internal/snapshot/list` — filtert `listSnapshots()` auf den Plugin-Slug der aufrufenden Instanz (via `instance.configId` oder aus `instance.id` geparst)
+   - `authMiddleware()` liest `X-Runbot-Instance-Id` + `X-Runbot-Api-Token` Header, lädt Instanz aus Registry, vergleicht Token; Mismatch → 401, geloggt als `[internal] Token mismatch for instance …`
+   - Router wird in `src/index.ts` unter `/api/internal` UND `/internal` gemountet (gleicher nginx-Strip-Workaround wie andere Routes)
+
+3. **Token-Generation** — neue Felder `apiToken?: string` und `configId?: string` auf `MoodleInstance`. Beide Code-Pfade setzen sie:
+   - Demo-Flow in `src/index.ts` /confirm Handler: `apiToken = randomBytes(32).toString('hex')`, `configId = request.configId`
+   - MCP `instance_start` Tool in `src/tools/instances.ts`: `apiToken` wird ebenfalls gesetzt (ConfigId nicht, weil das Tool keine kennt)
+
+4. **`patchConfigForProduction` erweitert** — schreibt drei neue Werte als String-Literals in die config.php VOR `require_once('/lib/setup.php')`:
+   ```php
+   $CFG->runbot_instance_id = '${instance.id}';
+   $CFG->runbot_config_id   = '${runbotConfigId}';
+   $CFG->runbot_api_token   = '${runbotToken}';
+   $CFG->runbot_api_url     = '${runbotApiUrl}';
+   ```
+   **Rationale für den String-Literal-Ansatz** statt env-Vars: moodle-docker forwardet keine beliebigen env-Vars an den Webserver-Container, und ein `docker-compose.override.yml` zu schreiben wäre brüchig. config.php liegt im WWWROOT-Mount, wird bei jedem Request geladen, ist einfacher zu debuggen und rotiert automatisch bei jedem Instance-Start.
+
+5. **`provisionInstance` erweitert** — kopiert `moodle-plugins/local_runbotadmin/` nach `$MOODLE/local/runbotadmin/` VOR dem DB-Install-Schritt. Moodle's Upgrade-Pipeline registriert es dann automatisch in `mdl_config_plugins`. Wenn der Source-Ordner fehlt (z.B. älterer Checkout): nur Warnung, kein Fehler.
+
+**Was NICHT im MVP ist** (→ task37b)
+
+- Download einzelner Snapshots (Stream aus `.sql.gz` an den Browser)
+- Upload lokaler Snapshots via drag&drop (PHP `upload_max_filesize` + streaming)
+- Delete einzelner Snapshots (aktueller Stub zeigt nur "task37b" in der Actions-Spalte)
+- „Als Default setzen" — schreibt `defaultSnapshot` in `configs.json`
+- Plugin-Management-Tab (GitHub-URL-Install, Upgrade, Deinstall)
+- Metadata-Tab mit GitHub-Auto-Fetch (README, Icon, Repo-Description)
+- Token-Rotation-Strategy bei Plugin-Upgrades
+- CSRF-Schutz über normalen `confirm_sesskey()` hinaus (z.B. zusätzliches Secret-Double-Submit)
+
+**Verify nach Deploy**
+
+Sobald der GitHub-Actions-Deploy durch ist:
+1. `leitnerflow` Demo starten, admin-Account einloggen
+2. Site-Administration → Server → eLeDia Runbot Admin (neuer Eintrag)
+3. Formular ausfüllen: Label `manual-test-1`, Beschreibung „erster In-Moodle Snapshot"
+4. „Aktuellen Zustand als Snapshot speichern" klicken
+5. Erwartung: Erfolgsmeldung oben, Tabelle zeigt den neuen Eintrag `leitnerflow-manual-test-1` mit Größe und Zeitstempel
+6. Auf VPS verifizieren: `ls /opt/snapshots/ | grep leitnerflow-manual-test-1` → `.sql.gz` + `.json` vorhanden
+7. Fehlerpfad: bei falschem Token oder fehlender Instance-Id muss das Backend 401 zurückgeben
+
+---
+
+### task37b `local_runbotadmin` Stage 2 — Download, Upload, Delete, Plugin-Management, Metadata
+Status: open (Folgetask zu task37 MVP)
+Feature: feat08 (Snapshot-System) + feat09 (Plugin-Katalog) + feat02 (Provisioning)
+Entdeckt: 2026-04-10
+
+Alles was im MVP (task37) bewusst ausgeklammert wurde:
+
+**Snapshots-Tab Erweiterungen**
+1. **Download** — Streaming-Endpoint `GET /api/internal/snapshot/download/:id` mit `res.sendFile()`. Plugin-seitig ein Download-Button pro Tabellen-Zeile; der Browser startet den Download direkt ohne JS-Gymnastik.
+2. **Upload** — `POST /api/internal/snapshot/upload` mit `multer` oder einer lightweight alternative, `upload_max_filesize = 200M` + `post_max_size = 200M` in config.php via zusätzlichem Override-Block. Drag&Drop-Zone mit progress-bar.
+3. **Delete** — `POST /api/internal/snapshot/delete` mit Bestätigungs-Dialog (Moodle `confirm_action()` JS-Modul). Nutzt `deleteSnapshot()` aus `snapshot.ts`.
+4. **„Als Default setzen"** — schreibt `defaultSnapshot` in `configs.json`. Neuer Backend-Endpoint `POST /api/internal/config/set-default` der atomisch in die JSON schreibt (lock + rename).
+
+**Plugin-Management-Tab**
+1. Liste installierter Plugins aus `mdl_config_plugins` über ein Moodle-internes SQL (direktes `$DB->get_records_sql()`, nicht via Backend-Call).
+2. `POST /api/internal/plugin/install` — Body: `{githubUrl, branch?}`. Backend: `git clone` in einen Temp-Dir, dann via `docker cp` in den Webserver-Container, dann `admin/cli/upgrade.php --non-interactive` aufrufen.
+3. Upgrade-Button pro Plugin: `git pull` auf dem Plugin-Source im Host, dann wieder `docker cp` + upgrade.php.
+4. Deinstall-Button: `admin/cli/uninstall_plugins.php --plugins=<frankenstyle> --run`.
+
+**Metadata-Tab**
+1. Formular mit Feldern Titel, Kurzbeschreibung, Langbeschreibung, GitHub-URL, Icon-URL, Kategorie, Tags.
+2. „Aus GitHub auto-fetchen"-Button: Backend-Endpoint `POST /api/internal/plugin/fetch-metadata` mit `{githubUrl}`. Liest via GitHub API: Repo-Description (→ Kurzbeschreibung), README.md erster Absatz (→ Langbeschreibung), `pix/icon.svg` oder `pix/icon.png` (→ Icon-URL).
+3. Live-Preview wie der Eintrag im Portal-Grid aussieht (kleines HTML-Snippet mit dem eLeDia-Card-Styling).
+4. Speichern schreibt direkt in `configs.json` für die aktuelle `$CFG->runbot_config_id`. Optional: Commit + Push nach GitHub wenn ein `GITHUB_TOKEN` vorhanden ist.
+
+**Infrastruktur-Themen**
+- PHP `upload_max_filesize` + `post_max_size` auf 200M hochsetzen (config.php-Override oder `.user.ini` im Webroot).
+- Token-Rotation bei Plugin-Upgrades (falls der Admin das Plugin neuinstalliert, soll der alte Token invalid sein — aber der neue Token landet ohnehin nur in der neuen config.php, also passiert das implizit).
+- Rate-Limiting auf `/api/internal/*` damit ein kompromittierter Token nicht endlos pg_dumps triggern kann.
+- Logging-Kanal für Audit: jeder POST gegen `/api/internal/*` landet in einem eigenen Log-File mit Instance-ID + Timestamp.
+
+**Verify**
+Jedes Feature hat seinen eigenen Flow — siehe Detail-Verify jeweils im Subtask, wenn task37b aufgespalten wird.
+
+**Aufwand-Schätzung**
+- Download: 1h
+- Upload: 2-3h (wegen PHP-Limits und Fehlerpfaden)
+- Delete: 30min
+- Plugin-Management-Tab: 4-5h
+- Metadata-Tab: 3-4h
+- Infrastruktur (Rate-Limit, Audit): 1-2h
+- Gesamt: ~12-15h
 
 ---
 

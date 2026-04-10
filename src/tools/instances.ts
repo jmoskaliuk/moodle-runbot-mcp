@@ -98,6 +98,11 @@ Examples:
         return { content: [{ type: "text", text: `Error: ${String(e)}` }] };
       }
 
+      // task37: Per-Instance API-Token für local_runbotadmin.
+      // 32 Bytes Hex. Wird in config.php gelegt und vom internal-API
+      // Middleware gegen den Registry-Eintrag geprüft.
+      const apiToken = randomBytes(32).toString("hex");
+
       const instance: MoodleInstance = {
         id,
         prId,
@@ -114,6 +119,7 @@ Examples:
         composeProject,
         moodleDockerDir: path.join(instanceDir, "moodle-docker"),
         moodleDir: path.join(instanceDir, "moodle"),
+        apiToken,
         ...(pinned ? { pinned: true, pinReason: pinReason ?? "manually pinned" } : {}),
       };
       instance.url = instanceUrl(instance);
