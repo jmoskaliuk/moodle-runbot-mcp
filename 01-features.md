@@ -221,8 +221,9 @@ Der Interessent bekommt einen personalisierten Nutzer-Account in seiner Demo-Ins
 - Kein Auto-Login (SSO/Token-basierter direkter Zugang)
 
 **Decisions**
-- Passwort: `demo1234` (hardcoded)
-- Passwort wird aktuell **nicht** in der "Demo bereit"-E-Mail mitgeschickt → offen (bug03)
+- Default-Passwort: `demo1234` (via `DEMO_PASSWORD` Env konfigurierbar)
+- Passwort wird auf der Warteseite + in der "Demo bereit"-E-Mail angezeigt (gefixt in task22 via feat09)
+- **Obsolet seit feat10 (2026-04-09):** Der per-Interessent-Nutzer aus der E-Mail-Adresse wird nicht mehr angelegt — stattdessen liefert der Snapshot drei fertige Accounts `admin`/`teacher`/`student` mit. Siehe feat10.
 
 ---
 

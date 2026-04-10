@@ -92,14 +92,147 @@ Du hast den Browser geschlossen und möchtest weitermachen.
 
 ---
 
-## Demo-Zugang (feat07)
+## Demo-Zugang — drei Accounts pro Demo (feat07 + feat10)
 
 **Was macht es?**
-Du bekommst einen eigenen Nutzer-Account in deiner Demo-Instanz.
+Jede Demo-Instanz bringt drei fertige Testnutzer mit: `admin`, `teacher` und `student`.
+Alle drei teilen dasselbe Passwort und sind im selben Demo-Kurs eingeschrieben —
+mit den jeweils passenden Moodle-Rollen.
+
+**Warum drei Accounts statt einem?**
+Viele Plugins zeigen ihren Mehrwert erst im Zusammenspiel mehrerer Rollen
+("Admin legt etwas an → Teacher weist dem Kurs zu → Student erlebt es"). Mit
+drei vorbereiteten Accounts kannst du diesen Ablauf in einer einzigen Demo
+durchspielen, ohne dich aus- und wieder einloggen zu müssen — Moodles "Login
+as"-Funktion hilft beim schnellen Rollenwechsel aus der Admin-Sicht.
 
 **Expected Result**
-- Nutzer mit deinem Namen und deiner E-Mail-Adresse ist in Moodle angelegt
-- Du bist in den Demo-Kurs eingeschrieben
+- Drei Accounts sind in Moodle vorhanden: `admin`, `teacher`, `student`
+- Alle drei sind im Demo-Kurs enrolled (Admin als Manager, Teacher als Lehrkraft, Student als Kursteilnehmer)
+- Das Passwort steht sowohl auf der Warteseite als auch in der "Demo bereit"-E-Mail
+- Default-Passwort: `demo1234` (serverseitig via `DEMO_PASSWORD` konfigurierbar)
 
 **Notes**
-- Login-Daten (Passwort) kommen in der "Demo bereit"-E-Mail *(TODO: Passwort aktuell nicht in E-Mail — offen)*
+- Deine eigene E-Mail-Adresse taucht in Moodle **nicht** mehr als Username auf —
+  sie wird nur für die Bestätigungs- und "Demo-bereit"-Mail gebraucht.
+- Wenn ein Plugin-Snapshot keinen Mehrwert aus dem Multi-User-Modus zieht,
+  kann er pro Config via `multiUser: false` auf einen einzelnen Admin
+  reduziert werden. Default ist `multiUser: true`.
+
+---
+
+## Live-Status auf der Warteseite (feat09)
+
+**Was macht es?**
+Nach dem Klick auf den Bestätigungslink siehst du eine Warteseite, die **echten**
+Fortschritt zeigt (nicht nur einen Timer). Sobald die Demo bereit ist, kannst
+du sie direkt mit einem Klick öffnen — ohne Umweg über die zweite E-Mail.
+
+**Schritt-für-Schritt**
+
+1. Du klickst auf den Bestätigungslink aus der E-Mail
+2. Die Warteseite öffnet sich und zeigt die aktuelle Phase:
+   - "Container werden gestartet"
+   - "Demo-Daten werden geladen"
+   - "Accounts werden vorbereitet"
+3. Der Browser-Tab zeigt den Status ebenfalls (`document.title`), damit du in
+   einem anderen Tab weiterarbeiten und die Demo im Augenwinkel im Blick haben
+   kannst.
+4. Sobald die Demo bereit ist, erscheint eine Box mit den drei Account-Namen,
+   dem Passwort und einem grünen **"Demo jetzt öffnen"**-Button. Klick öffnet
+   die Demo in einem neuen Tab.
+5. Die zweite E-Mail ("Demo bereit") läuft parallel, für den Fall dass du die
+   Warteseite geschlossen hast.
+
+**Polling**
+Die Seite fragt den Server alle 3 Sekunden nach dem aktuellen Status. Kein
+manuelles Reload nötig.
+
+**Edge Cases**
+- Wenn du die Warteseite schließt und später den Bestätigungslink erneut öffnest,
+  zeigt sie den Stand an, an dem sie gerade ist.
+- Bei einem Fehler beim Demo-Start zeigt die Seite eine freundliche
+  Fehlermeldung mit "Neue Demo anfordern"-Link.
+
+---
+
+## Demo verlängern mit Code (feat12)
+
+**Was macht es?**
+Eine Demo läuft im Normalfall 60 Minuten. Wer auf einer Messe oder in einer
+Schulung von eLeDia einen Verlängerungscode bekommt, kann damit seine eigene
+Demo auf 1 Tag verlängern — ohne dass eLeDia manuell eingreifen muss.
+
+**Wann benutze ich es?**
+- Du bist auf einer Messe, hast einen Code-Zettel vom eLeDia-Stand bekommen
+- Du bist in einer eLeDia-Schulung und der Trainer hat einen Code ausgegeben
+- Du brauchst länger als 60 Minuten, um ein Szenario komplett durchzuspielen
+
+**Schritt-für-Schritt**
+
+1. Auf der Warteseite (oder direkt in der laufenden Demo) gibt es ein kleines
+   Eingabefeld "Verlängerungscode eingeben"
+2. Code eintippen (z.B. `EDUMA2026`), "Verlängern" klicken
+3. Du bekommst eine Bestätigung: "Demo verlängert bis 2026-04-11 16:30"
+
+**Notes**
+- Ein Code kann von mehreren Interessenten parallel genutzt werden (er ist
+  kein Einmal-Code). Pro Demo-Instanz aber nur einmal anwendbar.
+- Alle Codes verlängern einheitlich auf 1 Tag (1440 Minuten) — es gibt aktuell
+  keine Pro-Code-Laufzeit.
+- Ohne Code endet deine Demo wie gewohnt nach 60 Minuten oder nach 15 Minuten
+  Inaktivität.
+- Wenn dein Token schon abgelaufen ist, hilft auch kein Code mehr — dann musst
+  du eine neue Demo anfordern.
+
+---
+
+## Admin-Dashboard (feat11, eLeDia-intern)
+
+**Zielgruppe**
+Nur für eLeDia-Mitarbeiter. Öffentliche Nutzer sehen diesen Bereich nicht.
+
+**Was macht es?**
+Interne Übersicht aller gerade laufenden Demo-Instanzen und aktiven Tokens.
+Erlaubt das manuelle Verlängern und sofortige Löschen einzelner Instanzen —
+ohne SSH auf den Server.
+
+**Zugang**
+- URL: `https://demo.eledia.ai/admin`
+- Login: HTTP Basic Auth (Browser-Popup). Username: `admin`, Passwort aus
+  der internen Runbot-Doku (`ADMIN_PASSWORD`-Env).
+- Logout: Browser-Tab schließen (Session wird nicht serverseitig getrackt).
+
+**Was man sieht**
+- Tabelle aller laufenden Instanzen: `ID · Config · Requester · Gestartet · Verbleibend · Status · Aktionen`
+- Aktionen pro Zeile: "+1 Std verlängern", "Sofort löschen", "Logs anzeigen" (letzte 50 Zeilen)
+- Tabelle aller aktiven Tokens aus `tokens.json` mit Status + Ablaufzeit
+- Refresh-Button (kein Live-Polling — bewusst schlicht gehalten)
+
+**Nicht enthalten (MVP)**
+- Keine Statistik-Ansichten, keine Historie, kein Audit-Log, kein 2FA
+- Kein GitHub-OAuth / SSO (ist für Phase 2 geplant, wenn das Dashboard mehr Funktionen bekommt)
+
+---
+
+## Plugin-Icons und Metadaten im Portal (feat13)
+
+**Was macht es?**
+Das Demo-Portal zeigt bei jedem Plugin das echte Icon aus dem zugehörigen
+GitHub-Repo — nicht nur ein generisches Emoji. Das macht die Plugin-Übersicht
+auf einen Blick verständlicher und wirkt als Vertrauenssignal.
+
+**Was man sieht**
+- Auf der Portal-Startseite zeigt jede Plugin-Karte oben links das Plugin-Icon
+  aus dem GitHub-Repo (`pix/monologo.svg` oder `pix/icon.png` aus dem
+  Default-Branch)
+- Fehlt ein Icon im Repo, fällt die Karte still auf das Config-Emoji zurück —
+  kein kaputtes Bild
+- In Plugin-Detailseiten werden zusätzlich Stars + letztes Release angezeigt
+  (cached für 24 h, damit das GitHub-API-Rate-Limit nicht gesprengt wird)
+
+**Notes**
+- Die Icons werden direkt von `raw.githubusercontent.com` geladen — wir hosten
+  nichts mit.
+- Damit das funktioniert, muss im Config-Eintrag `githubRepo: "owner/repo"`
+  gesetzt sein.
