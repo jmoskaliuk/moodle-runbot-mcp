@@ -529,9 +529,15 @@ footer a:hover{color:var(--ink)}
             </label>
             <input id="fEmail" type="email" autocomplete="email" required aria-required="true" placeholder="ihre@email.de"
               style="width:100%;padding:10px 14px;border:1px solid #e8eaee;border-radius:8px;font-family:inherit;font-size:14px;color:#0f1117;background:#fafaf8;transition:border-color .15s"
-              onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#e8eaee'"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='#e8eaee'"
               onkeydown="if(event.key==='Enter')submitForm()">
           </div>
+          <!-- task31: prominent Demo-starten-Button direkt neben der E-Mail-Eingabe -->
+          <button type="button" id="mSubmitBtnInline" onclick="submitForm()"
+            style="width:100%;margin-top:6px;padding:13px 18px;background:var(--accent);color:#fff;border:0;border-radius:8px;font-family:inherit;font-size:15px;font-weight:500;letter-spacing:.2px;cursor:pointer;transition:background .15s,transform .1s"
+            onmouseover="this.style.background='var(--accent-h)'" onmouseout="this.style.background='var(--accent)'">
+            Demo starten →
+          </button>
         </div>
         <p style="font-size:11px;color:#7a8090;margin-top:10px;line-height:1.5">
           Ihre E-Mail wird nur für diese Demo verwendet.
@@ -553,7 +559,7 @@ footer a:hover{color:var(--ink)}
     </div>
     <div class="modal-foot">
       <button class="btn-ghost2" id="mCancelBtn" onclick="closeModal()">Abbrechen</button>
-      <button class="btn-primary2" id="mSubmitBtn" onclick="submitForm()">Bestätigungslink senden →</button>
+      <button class="btn-primary2" id="mSubmitBtn" onclick="submitForm()">Demo starten →</button>
     </div>
   </div>
 </div>
@@ -700,8 +706,11 @@ function openModal(){
   document.getElementById('mSub').textContent='Bestätigungslink anfordern';
   const submitBtn=document.getElementById('mSubmitBtn');
   submitBtn.disabled=false;
-  submitBtn.textContent='Bestätigungslink senden →';
+  submitBtn.textContent='Demo starten →';
   submitBtn.style.display='';
+  // task31: Inline-Button im Formular
+  const inlineBtn=document.getElementById('mSubmitBtnInline');
+  if(inlineBtn){inlineBtn.disabled=false;inlineBtn.textContent='Demo starten →';inlineBtn.style.display='';}
   const cancelBtn=document.getElementById('mCancelBtn');
   if(cancelBtn) cancelBtn.textContent='Abbrechen';
   const err=document.getElementById('fError');
@@ -725,8 +734,10 @@ async function submitForm(){
   }
 
   const btn=document.getElementById('mSubmitBtn');
+  const btnInline=document.getElementById('mSubmitBtnInline');
   btn.disabled=true;
   btn.textContent='Wird gesendet…';
+  if(btnInline){btnInline.disabled=true;btnInline.textContent='Wird gesendet…';}
 
   try{
     const r=await fetch(API+'/request-demo',{
@@ -742,6 +753,7 @@ async function submitForm(){
     document.getElementById('mSub').textContent='E-Mail wurde gesendet';
     document.getElementById('mResult').classList.add('show');
     btn.style.display='none';
+    if(btnInline)btnInline.style.display='none';
     // „Abbrechen" wird semantisch zu „Schließen", sobald die Mail raus ist.
     const cancelBtn=document.getElementById('mCancelBtn');
     if(cancelBtn) cancelBtn.textContent='Schließen';
@@ -749,6 +761,7 @@ async function submitForm(){
   }catch(e){
     btn.disabled=false;
     btn.textContent='Nochmal versuchen';
+    if(btnInline){btnInline.disabled=false;btnInline.textContent='Nochmal versuchen';}
     // Fehlermeldung unter dem Formular (erzeugen falls nicht vorhanden).
     let err=document.getElementById('fError');
     if(!err){

@@ -791,7 +791,7 @@ Der `/api/`-Präfix bleibt solange die nginx-Config nicht aufgeräumt ist. Der s
 ---
 
 ### task31 Button „Demo starten" neben E-Mail-Eingabe
-Status: open
+Status: ✅ done 2026-04-10
 Feature: feat01 (Webui)
 Entdeckt: 2026-04-09 (Johannes)
 
@@ -850,7 +850,7 @@ Entdeckt: 2026-04-09 (Johannes)
 ---
 
 ### task34 „Demos aktiv"-Zähler: Zufallszahl 3–17
-Status: open
+Status: ✅ done 2026-04-10
 Feature: feat01 (Webui)
 Entdeckt: 2026-04-09 (Johannes)
 

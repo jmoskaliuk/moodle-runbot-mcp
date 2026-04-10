@@ -335,6 +335,11 @@ footer{border-top:1px solid var(--rule);padding:56px clamp(24px,6vw,80px) 32px;b
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--rule)'"
               onkeydown="if(event.key==='Enter')submitForm()">
           </div>
+          <!-- task31: prominent Demo-starten-Button direkt neben der E-Mail-Eingabe -->
+          <button type="button" id="mBtnInline" onclick="submitForm()"
+            style="width:100%;margin-top:6px;padding:13px 18px;background:var(--accent);color:#fff;border:0;border-radius:8px;font-family:var(--sans);font-size:15px;font-weight:500;letter-spacing:.2px;cursor:pointer;transition:background .15s,transform .1s"
+            onmouseover="this.style.background='var(--accent-h,#8f1666)'" onmouseout="this.style.background='var(--accent)'"
+            data-i18n="btn_submit">Demo starten →</button>
         </div>
         <p style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5" data-i18n="form_note">
           Ihre E-Mail wird nur für diese Demo verwendet.
@@ -398,7 +403,8 @@ const T={
     label_name:'Name',label_name_opt:'(optional)',label_email:'E-Mail',
     placeholder_name:'Ihr Name',placeholder_email:'ihre@email.de',
     form_note:'Ihre E-Mail wird nur für diese Demo verwendet.',
-    btn_cancel:'Abbrechen',btn_close:'Schließen',btn_submit:'Bestätigungslink senden →',
+    btn_cancel:'Abbrechen',btn_close:'Schließen',btn_submit:'Demo starten →',
+    btn_start_demo:'Demo starten',
     btn_retry:'Erneut versuchen',btn_sending:'Wird gesendet…',
     result_title:'E-Mail wurde gesendet.',
     result_text:'Prüfen Sie Ihr Postfach und klicken Sie den Bestätigungslink.<br>Danach startet Ihre Demo automatisch.',
@@ -441,7 +447,8 @@ const T={
     label_name:'Name',label_name_opt:'(optional)',label_email:'E-mail',
     placeholder_name:'Your name',placeholder_email:'your@email.com',
     form_note:'Your email is only used for this demo.',
-    btn_cancel:'Cancel',btn_close:'Close',btn_submit:'Send confirmation link →',
+    btn_cancel:'Cancel',btn_close:'Close',btn_submit:'Start demo →',
+    btn_start_demo:'Start demo',
     btn_retry:'Try again',btn_sending:'Sending…',
     result_title:'Email sent.',
     result_text:'Check your inbox and click the confirmation link.<br>Your demo will start automatically.',
@@ -644,6 +651,8 @@ function openModal(){
   document.getElementById('mProg').style.display='none';
   document.getElementById('mBtn').disabled=false;
   document.getElementById('mBtn').textContent=t('btn_submit');
+  const _inline=document.getElementById('mBtnInline');
+  if(_inline){_inline.disabled=false;_inline.style.display='';_inline.textContent=t('btn_submit');}
   url=null;
   _lastFocus=document.activeElement;
   document.getElementById('ov').classList.add('open');
@@ -666,8 +675,10 @@ async function submitForm(){
   }
 
   const btn=document.getElementById('mBtn');
+  const btnInline=document.getElementById('mBtnInline');
   btn.disabled=true;
   btn.textContent=t('btn_sending');
+  if(btnInline){btnInline.disabled=true;btnInline.textContent=t('btn_sending');}
 
   try{
     const r=await fetch(API+'/request-demo',{
@@ -683,6 +694,7 @@ async function submitForm(){
     document.getElementById('mSub').textContent=t('modal_email_sent');
     document.getElementById('mRes').classList.add('show');
     btn.style.display='none';
+    if(btnInline)btnInline.style.display='none';
     // "Abbrechen" → "Schließen" sobald E-Mail gesendet
     const cancelBtn=document.querySelector('.btn-o');
     if(cancelBtn) cancelBtn.textContent=t('btn_close');
@@ -690,6 +702,7 @@ async function submitForm(){
   }catch(e){
     btn.disabled=false;
     btn.textContent=t('btn_retry');
+    if(btnInline){btnInline.disabled=false;btnInline.textContent=t('btn_retry');}
     // Fehlermeldung unter dem Formular
     let err=document.getElementById('fError');
     if(!err){
@@ -707,10 +720,16 @@ const obs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target);}});
 },{threshold:.1});
 
+// ── task34: „Demos aktiv"-Zähler als Pseudo-Social-Proof ──────────
+// Fester Zufallswert 3–17, einmal pro Seitenaufruf berechnet, damit
+// er beim Re-Render (Filter, Sprachwechsel) stabil bleibt.
+const _activeDemosCount=Math.floor(Math.random()*15)+3;
+
 // ── Boot ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.fade-up').forEach(el=>obs.observe(el));
   const fy=document.getElementById('fyear');if(fy)fy.textContent=new Date().getFullYear();
+  const _sa=document.getElementById('statActive');if(_sa) _sa.textContent=_activeDemosCount;
   loadConfigs(); // Configs vom Server laden, dann rendern
 });
 </script>
