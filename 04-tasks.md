@@ -141,6 +141,72 @@ Robustheits-Ergänzung.
 
 ---
 
+### task39 exam2pdf Demo-Bereitschaft: Plugin-Clone + Snapshot auf VPS
+Status: open
+Feature: feat04
+Voraussetzung: task38 done (Config aktiviert)
+
+Die Demo-Karte für `local_eledia_exam2pdf` ist seit Commit `32339ad`
+(2026-04-12) in `configs.json` aktiviert (`visible: true`). Damit die Demo
+tatsächlich startbar ist, müssen auf dem VPS noch zwei Schritte erfolgen:
+
+**1. Plugin-Repo klonen**
+```bash
+ssh root@178.104.171.153
+git clone https://github.com/jmoskaliuk/local_eledia_exam2pdf.git /opt/plugins/local_eledia_exam2pdf
+```
+
+**2. Snapshot `exam2pdf-v1` erstellen**
+- Seed-Instanz starten (analog task19-Runbook für leitnerflow):
+  ```bash
+  curl -sX POST http://localhost:3000/mcp/call \
+    -H "Authorization: Bearer $MCP_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"instance_start","arguments":{"configId":"exam2pdf","owner":"seed@eledia.ai"}}' | jq .
+  ```
+- Im Browser auf der Seed-Instanz Demo-Daten anlegen:
+  - Quiz mit 5–10 Beispielfragen (Mix aus MC, Wahr/Falsch, Freitext)
+  - Als Student ein Quiz bestehen → PDF wird automatisch erzeugt
+  - Plugin-Settings konfigurieren (Ausgabemodus, optionale Felder)
+- Snapshot erstellen:
+  ```bash
+  INSTANCE_ID="..."  # aus Schritt 1
+  curl -sX POST http://localhost:3000/mcp/call \
+    -H "Authorization: Bearer $MCP_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"snapshot_create\",\"arguments\":{\"instanceId\":\"$INSTANCE_ID\",\"snapshotId\":\"exam2pdf-v1\",\"description\":\"exam2pdf Demo mit Beispiel-Quiz und PDF-Zertifikat\"}}" | jq .
+  ```
+- Seed-Instanz stoppen
+- E2E-Test: Über https://demo.eledia.ai eine exam2pdf-Demo anfordern, prüfen ob Quiz + PDF-Download funktioniert
+
+**Aufwand:** ~1–2 h (inkl. Demo-Daten-Erstellung)
+
+---
+
+### task40 Kategorie-Filter "Prüfungen" im Demo-Portal
+Status: open
+Feature: feat04
+Voraussetzung: task38 done
+
+Die exam2pdf-Karte hat die Kategorie `pruefungen` / "Prüfungen & Compliance".
+Im Portal-Frontend existieren aktuell nur Filter für: Alle, Lernen, Verwaltung,
+Reporting. Der Filter "Prüfungen" fehlt — die Karte wird zwar bei "Alle"
+angezeigt, ist aber nicht einzeln filterbar.
+
+**Fix:**
+1. In `demo-portal.html` → `<div id="catFilters">` einen neuen Button ergänzen:
+   ```html
+   <button class="fbtn" onclick="filter('pruefungen',this)" data-i18n="filter_exam">Prüfungen</button>
+   ```
+2. i18n-Strings ergänzen:
+   - DE: `filter_exam: 'Prüfungen'`
+   - EN: `filter_exam: 'Exams'`
+3. FALLBACK_CONFIGS um exam2pdf-Eintrag ergänzen (analog LeitnerFlow)
+
+**Aufwand:** ~15 min
+
+---
+
 ## 🔄 Active
 
 *(Tasks die gerade aktiv bearbeitet werden)*
@@ -163,6 +229,15 @@ Deployed via commit `b4cb814` (2026-04-10). Im Browser prüfen:
 5. Set-Default auf anderen Snapshot ändert `configs.json` atomar, Badge wandert
 6. Delete auf Nicht-Default löscht File + Metadata; Bestätigungs-Dialog erscheint
 7. Delete auf aktuellen Default → 409 mit freundlicher Fehlermeldung
+
+### task38 exam2pdf-Karte — verify auf Portal
+Status: open (pending deploy + verify)
+
+Deployed via commit `32339ad` (2026-04-12). Prüfen:
+
+1. https://demo.eledia.ai → exam2pdf-Karte sichtbar mit 📄-Icon und Beschreibung
+2. Kategorie "Prüfungen & Compliance" wird korrekt angezeigt
+3. "Demo starten" → E-Mail-Modal öffnet sich (Demo wird erst nach task39 tatsächlich starten können)
 
 ### Weitere offene Verify-Items
 
@@ -214,7 +289,7 @@ Deployed via commit `b4cb814` (2026-04-10). Im Browser prüfen:
 - task29 Token-Status nach Instanz-Stop auf EXPIRED — `tokens.markExpired()`, Cleanup-Scheduler-Integration (commit `b4cb814`)
 - task31 "Demo starten"-Button neben E-Mail-Eingabe — prominenter CTA (commit `94177d3`)
 - task32 E-Mail-Layout: Logo + Website-Schrift — `emailTemplates.ts` Refactor, Brevo-SMTP (commit `b4cb814`)
-- task33 Moodle-Site-Name auf "Demo | &lt;Plugin-Titel&gt;" — `docker.ts` Site-Name-Patch (commit `b4cb814`)
+- task33 Moodle-Site-Name auf "Demo | <Plugin-Titel>" — `docker.ts` Site-Name-Patch (commit `b4cb814`)
 - task34 "Demos aktiv"-Zähler: Fake-Range 3–17 — `statActive` im Portal (commit `94177d3`)
 - task35 Plugin-Icon aus GitHub im Portal-Grid — `configsHandler` enrichment via `resolvePluginIconUrl()` (commit `b4cb814`)
 - task36 Moodle-Debug-Anzeige deaktivieren nach Instance-Start — `$CFG->debug = 0` (commit `795b819`)
@@ -222,6 +297,9 @@ Deployed via commit `b4cb814` (2026-04-10). Im Browser prüfen:
 **In-Moodle Admin Plugin (task37, task37b)**
 - task37 `local_runbotadmin` MVP — Stage 1: Create + List (commit `5a634cd`)
 - task37b `local_runbotadmin` Stage 2 — Download, Delete, Set-Default, atomic `updateConfig()`, binary-streaming (commit `b4cb814`)
+
+**Plugin-Demos (task38)**
+- task38 exam2pdf Demo-Karte aktivieren — `configs.json` updated: `visible: true`, Kategorie "Prüfungen & Compliance", Metadaten aktualisiert (commit `32339ad`, 2026-04-12)
 
 ---
 
