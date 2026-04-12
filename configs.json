@@ -30,19 +30,19 @@
     "id": "exam2pdf",
     "type": "plugin",
     "name": "Quiz PDF Certificate",
-    "category": "reporting",
-    "categoryLabel": "Reporting",
+    "category": "pruefungen",
+    "categoryLabel": "Prüfungen & Compliance",
     "icon": "📄",
-    "iconBg": "#fef3c7",
-    "description": "Automatische PDF-Zertifikate nach bestandenen Moodle-Quizzes — mit Fragen & Antworten, E-Mail-Versand und konfigurierbarer Aufbewahrungsfrist",
+    "iconBg": "#fef3e0",
+    "description": "Erzeugt nach bestandenem Quizversuch automatisch ein PDF-Zertifikat als Compliance-Nachweis",
     "features": [
-      "PDF-Zertifikat nach bestandener Prüfung",
-      "Automatischer E-Mail-Versand",
-      "Konfigurierbar pro Quiz",
-      "DSGVO-konform (Löschfrist einstellbar)"
+      "Automatische PDF-Erzeugung nach bestandenem Quiz",
+      "Fragen & Antworten mit Richtig/Falsch-Markierung",
+      "Download, E-Mail-Versand oder beides",
+      "Per-Quiz-Overrides für alle Settings"
     ],
     "db": "pgsql",
-    "phpVersion": "8.2",
+    "phpVersion": "8.3",
     "moodleVersion": "5.0",
     "plugin": {
       "srcPath": "/opt/plugins/local_eledia_exam2pdf",
@@ -51,6 +51,7 @@
     },
     "githubRepo": "jmoskaliuk/local_eledia_exam2pdf",
     "snapshotId": "exam2pdf-v1",
-    "visible": false
+    "licenseUrl": "https://eledia.de/kontakt/",
+    "visible": true
   }
 ]
