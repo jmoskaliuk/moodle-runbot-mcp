@@ -15,7 +15,10 @@ const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_CACHE_DIR = process.env.MOODLE_CACHE_DIR ?? "/opt/moodle-cache";
 const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
 
-// ── Branch name → Moodle git branch ────────────────────────────
+// ── Branch name → Moodle git branch ─────────────────────────────
+// "dev" → main (aktueller Entwicklungsstand aus https://github.com/moodle/moodle).
+// Download-URLs auf moodle.org beziehen sich auf die gleichen Branches:
+// https://download.moodle.org/releases/development/ → main
 
 const MOODLE_BRANCH_MAP: Record<MoodleVersion, string> = {
   "4.3": "MOODLE_403_STABLE",
@@ -23,6 +26,7 @@ const MOODLE_BRANCH_MAP: Record<MoodleVersion, string> = {
   "4.5": "MOODLE_405_STABLE",
   "5.0": "MOODLE_500_STABLE",
   "5.1": "MOODLE_501_STABLE",
+  "dev": "main",
 };
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -94,7 +98,9 @@ export async function provisionInstance(instance: MoodleInstance): Promise<void>
     const cachedMoodle = `${MOODLE_CACHE_DIR}/${cacheKey}`;
     const { stat } = await import("fs/promises");
     const cacheExists = await stat(cachedMoodle).then(() => true).catch(() => false);
-    if (cacheExists) {
+    // Für "dev" (main-Branch) nie cachen — der Branch bewegt sich täglich,
+    // ein veralteter Cache wäre irreführend. Immer frisch klonen.
+    if (cacheExists && instance.moodleVersion !== "dev") {
       await run(`cp -r ${cachedMoodle} ${instance.moodleDir}`);
     } else {
       await run(

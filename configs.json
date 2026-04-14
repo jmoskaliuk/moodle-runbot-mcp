@@ -53,5 +53,71 @@
     "snapshotId": "exam2pdf-v1",
     "licenseUrl": "https://eledia.de/kontakt/",
     "visible": true
+  },
+  {
+    "id": "vanilla-4.5",
+    "type": "vanilla",
+    "name": "Moodle 4.5 LTS",
+    "category": "referenz",
+    "categoryLabel": "Moodle-Version",
+    "icon": "🏔",
+    "iconBg": "#f8fafc",
+    "description": "Saubere Moodle 4.5 LTS ohne Zusatzplugins — zum Vergleichen und Testen",
+    "features": [
+      "Moodle 4.5 Long Term Support",
+      "Alle Standard-Aktivitäten",
+      "PHP 8.2 + PostgreSQL",
+      "Ohne Zusatzplugins"
+    ],
+    "db": "pgsql",
+    "phpVersion": "8.2",
+    "moodleVersion": "4.5",
+    "plugin": null,
+    "snapshotId": null,
+    "visible": true
+  },
+  {
+    "id": "vanilla-5.1",
+    "type": "vanilla",
+    "name": "Moodle 5.1",
+    "category": "referenz",
+    "categoryLabel": "Moodle-Version",
+    "icon": "🏔",
+    "iconBg": "#f8fafc",
+    "description": "Saubere Moodle 5.1 ohne Zusatzplugins — aktuelle Major-Version zum Testen",
+    "features": [
+      "Moodle 5.1 (aktueller Stable-Branch)",
+      "Alle Standard-Aktivitäten",
+      "PHP 8.3 + PostgreSQL",
+      "Ohne Zusatzplugins"
+    ],
+    "db": "pgsql",
+    "phpVersion": "8.3",
+    "moodleVersion": "5.1",
+    "plugin": null,
+    "snapshotId": null,
+    "visible": true
+  },
+  {
+    "id": "vanilla-dev",
+    "type": "vanilla",
+    "name": "Moodle Dev (main)",
+    "category": "referenz",
+    "categoryLabel": "Moodle-Version",
+    "icon": "🧪",
+    "iconBg": "#fef3f2",
+    "description": "Aktueller Moodle-Entwicklungsstand aus dem main-Branch — instabil, nur für Testzwecke",
+    "features": [
+      "main-Branch von moodle/moodle",
+      "Täglich neue Commits",
+      "PHP 8.4 + PostgreSQL",
+      "⚠️ Nicht für Produktion geeignet"
+    ],
+    "db": "pgsql",
+    "phpVersion": "8.4",
+    "moodleVersion": "dev",
+    "plugin": null,
+    "snapshotId": null,
+    "visible": true
   }
 ]
