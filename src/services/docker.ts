@@ -15,17 +15,17 @@ const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_CACHE_DIR = process.env.MOODLE_CACHE_DIR ?? "/opt/moodle-cache";
 const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
 
-// ── Branch name → Moodle git branch ──────────────────────────────────────────
+// ── Branch name → Moodle git branch ────────────────────────────
 
 const MOODLE_BRANCH_MAP: Record<MoodleVersion, string> = {
   "4.3": "MOODLE_403_STABLE",
   "4.4": "MOODLE_404_STABLE",
   "4.5": "MOODLE_405_STABLE",
   "5.0": "MOODLE_500_STABLE",
-  "5.1": "main",
+  "5.1": "MOODLE_501_STABLE",
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────
 
 async function run(cmd: string, cwd?: string): Promise<{ stdout: string; stderr: string }> {
   try {
@@ -64,7 +64,7 @@ function envString(env: Record<string, string>): string {
     .join(" ");
 }
 
-// ── Core operations ───────────────────────────────────────────────────────────
+// ── Core operations ─────────────────────────────────────────────────
 
 /**
  * Clone moodle-docker und moodle core für eine neue Instanz. Patcht config.php
@@ -176,7 +176,7 @@ async function patchConfigForProduction(
   const runbotConfigId = instance.configId ?? "";
 
   const overrideBlock = `
-// ── eLeDia Runbot overrides ─────────────────────────────────────
+// ── eLeDia Runbot overrides ───────────────────────────────
 // Auto-generiert von src/services/docker.ts — nicht manuell bearbeiten.
 // Gründe für den Override:
 //   1. moodle-docker Template hängt MOODLE_DOCKER_WEB_PORT an wwwroot an,
@@ -186,8 +186,19 @@ async function patchConfigForProduction(
 $CFG->wwwroot  = '${wwwroot}';
 $CFG->sslproxy = true;
 $CFG->tool_replace_allowdb = true; // admin/tool/replace/cli/replace.php für Snapshot-URL-Rewrite freigeben
-$CFG->debug        = 0;            // Keine PHP-Notices/-Warnings im Browser (Demo-Nutzer sollen keinen Debug-Output sehen)
-$CFG->debugdisplay = 0;
+
+// task36: Debug-Anzeige komplett deaktivieren. Demo-Nutzer sollen keinerlei
+// Debug-/Performance-/SQL-Infos sehen. Die Werte hier überschreiben die DB-
+// Werte aus mdl_config (auch bei restaurierten Snapshots, die vor task36
+// gebaut wurden). In der Admin-UI erscheinen die Settings dann als
+// "Forced in config.php" und sind nicht mehr editierbar.
+$CFG->debug           = 0;   // DEBUG_NONE — keine PHP-Notices/-Warnings im Browser
+$CFG->debugdisplay    = 0;   // Error-Output ausblenden (wird stattdessen in Error-Log geschrieben)
+$CFG->debugsmtp       = 0;   // SMTP-Debug unterdrücken
+$CFG->debugpageinfo   = 0;   // Keine Performance-Info-Zeile am Seitenende
+$CFG->debugvalidators = 0;   // Keine HTML/CSS/Accessibility-Validator-Links
+$CFG->debugstringids  = 0;   // Keine Language-String-ID-Debug-Ausgabe
+$CFG->perfdebug       = 0;   // Kein Performance-Overlay (SQL-Queries, Memory, etc.)
 
 // task37: Context für local_runbotadmin. Das Plugin liest diese Werte
 // aus $CFG und macht damit HTTP-Calls gegen /api/internal/* auf dem
@@ -199,7 +210,7 @@ $CFG->runbot_api_token   = '${runbotToken}';
 $CFG->runbot_api_url     = '${runbotApiUrl}';
 
 unset($CFG->behat_wwwroot); // Behat nutzt eigenen Host, nicht überschreiben
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 `;
 
   let cfg = await fs.readFile(configPath, "utf-8");
@@ -493,7 +504,7 @@ export async function runBehat(
   };
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// ── Utilities ──────────────────────────────────────────────────────
 
 async function exists(p: string): Promise<boolean> {
   try {
