@@ -207,6 +207,28 @@ angezeigt, ist aber nicht einzeln filterbar.
 
 ---
 
+### task42 Bestehende Snapshots auf Moodle 5.1 neu bauen
+Status: open
+Feature: feat05
+Voraussetzung: task41 deployed
+
+task41 hat Moodle von 5.0 auf 5.1 angehoben. Die existierenden Snapshots
+(`leitnerflow-v1`, ggf. `exam2pdf-v1`) wurden aber gegen Moodle 5.0
+erzeugt. Beim Restore in eine 5.1-Instanz triggert Moodle automatisch
+den Upgrade-Pfad — das dauert mehrere Minuten und ist bei Demo-Cold-Starts
+unbrauchbar.
+
+**Fix:** Seed-Instanzen mit Moodle 5.1 neu bauen, fresh Snapshot erstellen,
+alte Snapshots als `.v0`-Backup archivieren und `configs.json` → `snapshotId`
+auf die neuen Files zeigen lassen.
+
+**Runbook analog task19 (leitnerflow) und task39 (exam2pdf).**
+
+**Aufwand:** ~30–60 min pro Snapshot (Seed-Daten existieren bereits, nur neu
+provisionieren + Snapshot ziehen).
+
+---
+
 ## 🔄 Active
 
 *(Tasks die gerade aktiv bearbeitet werden)*
@@ -238,6 +260,20 @@ Deployed via commit `32339ad` (2026-04-12). Prüfen:
 1. https://demo.eledia.ai → exam2pdf-Karte sichtbar mit 📄-Icon und Beschreibung
 2. Kategorie "Prüfungen & Compliance" wird korrekt angezeigt
 3. "Demo starten" → E-Mail-Modal öffnet sich (Demo wird erst nach task39 tatsächlich starten können)
+
+### task41 Moodle 5.1 + Debug-Härtung — verify auf neuer Instanz
+Status: open (pending deploy + verify)
+
+Deployed via commit `ba3cd01` (2026-04-14). Prüfen:
+
+1. Neue Demo anfordern (leitnerflow oder exam2pdf) → wenn der leitnerflow-v1-Snapshot aktiv ist, läuft Moodle automatisch den 5.0→5.1 Upgrade-Pfad beim ersten Request. Das ist langsam, aber einmalig. Für saubere Cold-Starts muss task42 (Snapshot-Neubau) erfolgen.
+2. In der laufenden Instanz: Admin → Site administration → Notifications → Version sollte `5.1.x+ (Build: 202604xx)` anzeigen
+3. Admin → Site administration → Development → Debugging:
+   - "Debug messages" sollte auf **NONE** stehen und mit Lock-Symbol als "Forced in config.php" markiert sein
+   - "Display debug messages" deaktiviert + forced
+   - "Performance info" deaktiviert + forced
+4. Seitenende: keine Performance-/SQL-Debug-Zeile mehr sichtbar
+5. config.php im Container: `grep -E "debug|perfdebug" /var/www/html/config.php` zeigt 7 Override-Zeilen
 
 ### Weitere offene Verify-Items
 
@@ -300,6 +336,9 @@ Deployed via commit `32339ad` (2026-04-12). Prüfen:
 
 **Plugin-Demos (task38)**
 - task38 exam2pdf Demo-Karte aktivieren — `configs.json` updated: `visible: true`, Kategorie "Prüfungen & Compliance", Metadaten aktualisiert (commit `32339ad`, 2026-04-12)
+
+**Moodle-Version + Debug-Härtung (task41, 2026-04-14)**
+- task41 Moodle 5.0 → 5.1 upgrade + Debug-Settings härten — `MOODLE_BRANCH_MAP["5.1"]` auf `MOODLE_501_STABLE` (war fälschlich `main`), `configs.json` `moodleVersion` 5.0→5.1 für beide Demos, `patchConfigForProduction()` um 5 zusätzliche `$CFG`-Overrides ergänzt (`debugsmtp`, `debugpageinfo`, `debugvalidators`, `debugstringids`, `perfdebug`). Erzwingt DEBUG_NONE auch bei restaurierten Snapshots mit alten DB-Werten. Commit `ba3cd01`.
 
 ---
 
