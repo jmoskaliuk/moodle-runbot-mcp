@@ -55,12 +55,13 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .btn-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
-.modal{background:var(--white);border-radius:12px;width:min(800px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal{background:var(--white);border-radius:12px;width:min(800px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .modal-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--rule);gap:12px}
 .modal-title{font-size:14px;font-weight:600;flex:1}
 .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px}
 .modal-close:hover{color:var(--ink)}
 .modal-body{flex:1;overflow:auto;padding:16px 20px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--rule);background:#fafaf8;display:flex;justify-content:flex-end;gap:8px}
 pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;color:#e2e8f0;background:#0f1117;border-radius:8px;padding:16px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 .rebuild-status{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px 16px;background:#fafaf8;border:1px solid var(--rule);border-radius:8px;font-size:13px}
 .rebuild-status .spinner-mini{width:14px;height:14px;border:2px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;flex-shrink:0}
@@ -93,6 +94,27 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
 .edit-banner{display:flex;flex-direction:column;gap:6px;padding:8px 10px;background:var(--blue-pale);border:1px solid #93c5fd;border-radius:6px;font-size:12px}
 .edit-banner-head{display:flex;align-items:center;gap:6px;color:#1e3a8a;font-weight:500}
 .edit-banner-actions{display:flex;gap:6px;flex-wrap:wrap}
+/* Wizard (task43 Stage 1D) */
+.wz-row{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.wz-row label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.wz-row label .req{color:var(--red)}
+.wz-row input,.wz-row textarea,.wz-row select{font-family:var(--sans);font-size:13px;padding:7px 10px;border:1px solid var(--rule);border-radius:6px;color:var(--ink);background:var(--white);width:100%}
+.wz-row input:focus,.wz-row textarea:focus,.wz-row select:focus{outline:none;border-color:var(--accent)}
+.wz-row .hint{font-size:11px;color:var(--muted);font-weight:300;margin-top:2px}
+.wz-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.wz-grid-2{display:grid;grid-template-columns:1fr 2fr;gap:12px}
+@media(max-width:640px){.wz-grid-3,.wz-grid-2{grid-template-columns:1fr}}
+.wz-git-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px}
+.wz-git-row .wz-row{flex:1;margin-bottom:0}
+.wz-detected{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;font-size:12px;color:#065f46;margin-bottom:16px}
+.wz-detected-row{display:flex;gap:10px;margin-bottom:3px}
+.wz-detected-row:last-child{margin-bottom:0}
+.wz-detected-label{font-weight:600;min-width:90px;color:#047857}
+.wz-detected-val{font-family:'SF Mono','Menlo',monospace;color:#064e3b;word-break:break-all}
+.wz-section-title{font-family:var(--serif);font-size:15px;font-weight:400;color:var(--ink);margin-bottom:12px;padding-top:14px;border-top:1px solid var(--rule)}
+.wz-section-title:first-child{padding-top:0;border-top:none}
+.wz-error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:12px}
+.wz-analyzing{font-size:12px;color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
@@ -110,6 +132,8 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
     <button class="btn refresh-btn" onclick="refresh()">⟳ Aktualisieren</button>
     <span class="last-update" id="lastUpdate">—</span>
     <span class="auto-badge">AUTO 30s</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-primary" onclick="openPluginWizard()">+ Plugin hinzufügen</button>
   </div>
 
   <div class="section">
@@ -134,6 +158,121 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
 
 <div class="modal-overlay" id="editModal" onclick="closeEdit(event)"><div class="modal"><div class="modal-head"><span class="modal-title" id="editTitle">Edit-Session…</span><button class="modal-close" onclick="closeEditDirect()">✕</button></div><div class="modal-body"><div class="rebuild-status" id="editStatus"><div class="spinner-mini"></div><div class="check-mini">✓</div><div class="err-mini">!</div><span id="editPhase">Wird vorbereitet…</span></div><pre class="logs" id="editLog">Warte auf Session-Start…</pre></div></div></div>
 
+<!-- Plugin-Wizard-Modal (task43 Stage 1D) -->
+<div class="modal-overlay" id="wizardModal" onclick="closeWizard(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">+ Neues Plugin als Demo-Kachel hinzufügen</span>
+      <button class="modal-close" onclick="closeWizardDirect()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="wz-section-title">1. Plugin von GitHub klonen</div>
+      <div class="wz-git-row">
+        <div class="wz-row">
+          <label for="wz-gitUrl">GitHub-URL <span class="req">*</span></label>
+          <input type="url" id="wz-gitUrl" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false">
+          <span class="hint">Nur öffentliche HTTPS-GitHub-URLs. Der Repo wird nach /opt/plugins/&lt;repo-name&gt; geklont.</span>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="analyzeGitUrl()" style="height:36px">🔍 Analysieren</button>
+      </div>
+      <div id="wz-analyze-result"></div>
+
+      <div id="wizardStep2" style="display:none">
+        <div class="wz-section-title">2. Metadaten für die Portal-Kachel</div>
+        <div class="wz-grid-2">
+          <div class="wz-row">
+            <label for="wz-id">ID <span class="req">*</span></label>
+            <input type="text" id="wz-id" placeholder="mein-plugin" pattern="[a-z0-9][a-z0-9._-]*">
+            <span class="hint">URL-safe. Lowercase, Bindestriche OK.</span>
+          </div>
+          <div class="wz-row">
+            <label for="wz-name">Name <span class="req">*</span></label>
+            <input type="text" id="wz-name" placeholder="Mein Plugin">
+            <span class="hint">Wird als Kachel-Titel angezeigt.</span>
+          </div>
+        </div>
+
+        <div class="wz-row">
+          <label for="wz-description">Description <span class="req">*</span></label>
+          <input type="text" id="wz-description" placeholder="Ein Satz, was das Plugin macht — erscheint auf der Kachel.">
+        </div>
+
+        <div class="wz-grid-3">
+          <div class="wz-row">
+            <label for="wz-category">Kategorie</label>
+            <select id="wz-category" onchange="onCategoryChange()">
+              <option value="lernen">Lernen</option>
+              <option value="aktivitaet">Aktivität</option>
+              <option value="pruefungen">Prüfungen &amp; Compliance</option>
+              <option value="reporting">Reporting</option>
+              <option value="verwaltung">Verwaltung</option>
+              <option value="referenz">Moodle-Version</option>
+              <option value="__custom">Andere (custom)</option>
+            </select>
+          </div>
+          <div class="wz-row">
+            <label for="wz-categoryLabel">Kategorie-Label</label>
+            <input type="text" id="wz-categoryLabel" placeholder="(auto)">
+            <span class="hint">Leer lassen für Standard.</span>
+          </div>
+          <div class="wz-row">
+            <label for="wz-icon">Icon (Emoji)</label>
+            <input type="text" id="wz-icon" value="🧩" maxlength="4">
+          </div>
+        </div>
+
+        <div class="wz-row">
+          <label for="wz-features">Features (eine Zeile pro Feature)</label>
+          <textarea id="wz-features" rows="4" placeholder="5-Box Leitner-System&#10;Integration mit Question Bank&#10;Fortschritts-Dashboard"></textarea>
+        </div>
+
+        <div class="wz-grid-3">
+          <div class="wz-row">
+            <label for="wz-moodleVersion">Moodle-Version</label>
+            <select id="wz-moodleVersion">
+              <option value="4.3">4.3</option>
+              <option value="4.4">4.4</option>
+              <option value="4.5">4.5 LTS</option>
+              <option value="5.0" selected>5.0</option>
+              <option value="5.1">5.1</option>
+              <option value="dev">dev (main)</option>
+            </select>
+          </div>
+          <div class="wz-row">
+            <label for="wz-phpVersion">PHP-Version</label>
+            <select id="wz-phpVersion">
+              <option value="8.1">8.1</option>
+              <option value="8.2">8.2</option>
+              <option value="8.3" selected>8.3</option>
+              <option value="8.4">8.4</option>
+            </select>
+          </div>
+          <div class="wz-row">
+            <label for="wz-db">Datenbank</label>
+            <select id="wz-db">
+              <option value="pgsql" selected>PostgreSQL</option>
+              <option value="mariadb">MariaDB</option>
+              <option value="mysql">MySQL</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="wz-row">
+          <label for="wz-iconBg">Icon-Hintergrundfarbe</label>
+          <input type="text" id="wz-iconBg" value="#f1f5f9" placeholder="#f1f5f9">
+          <span class="hint">Hex-Farbe für den Icon-Hintergrund auf der Kachel.</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeWizardDirect()">Abbrechen</button>
+      <button id="wizardSubmitBtn" class="btn btn-success" onclick="submitPluginWizard()" style="display:none">✓ Config erstellen</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -151,7 +290,7 @@ async function deleteInst(id){if(!confirm(`Instanz ${id} wirklich stoppen und l�
 async function showLogs(id){document.getElementById('logTitle').textContent=`Logs — ${id}`;document.getElementById('logContent').textContent='Lade…';document.getElementById('logModal').classList.add('open');try{const r=await fetch(`${API}/api/admin/instances/${id}/logs`);if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();document.getElementById('logContent').textContent=d.logs||'(leer)';}catch(e){document.getElementById('logContent').textContent='Fehler: '+e.message;}}
 function closeLog(e){if(e.target===document.getElementById('logModal'))closeLogDirect();}
 function closeLogDirect(){document.getElementById('logModal').classList.remove('open');}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLogDirect();closeRebuildDirect();closeEditDirect();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLogDirect();closeRebuildDirect();closeEditDirect();closeWizardDirect();}});
 async function loadTokens(){const r=await fetch(`${API}/api/admin/tokens`);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
 function renderTokens(requests){document.getElementById('tokCount').textContent=requests.length;const tbody=document.getElementById('tokBody');if(!requests.length){tbody.innerHTML='<tr><td colspan="8" class="empty">Keine Anfragen gefunden.</td></tr>';return;}const sorted=[...requests].sort((a,b)=>new Date(b.requestedAt)-new Date(a.requestedAt));tbody.innerHTML=sorted.map(req=>{const tok=req.token.slice(0,8)+'…';const inst=req.instanceId?`<span class="mono">${esc(req.instanceId.slice(0,16))}</span>`:'—';return`<tr><td class="mono" title="${esc(req.token)}">${esc(tok)}</td><td>${esc(req.email)}</td><td>${esc(req.name)}</td><td>${esc(req.configId)}</td><td>${pill(req.status)}</td><td>${req.phase?pill(req.phase,true):'—'}</td><td title="${esc(req.requestedAt)}">${absTime(req.requestedAt)}</td><td>${inst}</td></tr>`;}).join('');}
 
@@ -176,7 +315,6 @@ function renderSnapshots(snapshots,configs){
     const plugins=(s.plugins??[]).length?s.plugins.map(p=>`<span class="mono" style="display:block">${esc(p)}</span>`).join(''):'<span style="color:var(--muted);font-size:11px">vanilla</span>';
     const versions=`<div class="snap-versions"><span class="pill pill-version">Moodle ${esc(s.moodleVersion)}</span><span class="pill pill-version">PHP ${esc(s.phpVersion)}</span><span class="pill pill-version">${esc(s.dbType)}</span></div>`;
 
-    // task43 Stage 1C: Wenn Edit-Session aktiv → Banner statt normaler Actions
     let actions;
     if(s.editSession){
       const ses=s.editSession;
@@ -225,128 +363,185 @@ function closeRebuildDirect(){document.getElementById('rebuildModal').classList.
 
 // ── Edit-Live (Stage 1C) ──
 let editPollHandle=null;
-
-async function startEditLive(snapshotId){
-  const sel=document.getElementById('setdef-'+snapshotId);
-  const configId=sel?.value;
-  if(!configId){toast('Bitte erst eine Config aus dem Dropdown auswählen','err');return;}
-  const sopt=sel.options[sel.selectedIndex];
-  const configLabel=sopt?.textContent??configId;
-
-  if(!confirm(
-    `Edit-Live-Session für Snapshot "${snapshotId}" starten?\n\n`+
-    `Config: ${configLabel}\n\n`+
-    `Ablauf:\n`+
-    `1. Seed-Instanz wird hochgefahren (5–10 Min)\n`+
-    `2. Du öffnest die URL in einem neuen Tab und editierst manuell\n`+
-    `3. "💾 Snapshot speichern" → Überschreibt den alten Dump + stoppt Instanz\n`+
-    `   ODER "✗ Verwerfen" → stoppt Instanz ohne Speichern\n\n`+
-    `Die Seed-Instanz läuft so lange wie du brauchst (kein Cleanup-Timer).`
-  ))return;
-
-  try{
-    const r=await fetch(`${API}/api/admin/snapshots/${snapshotId}/edit`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({configId})
-    });
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.error??'HTTP '+r.status);
-
-    document.getElementById('editTitle').textContent=`Edit-Session — ${snapshotId}`;
-    document.getElementById('editPhase').textContent='Session gestartet…';
-    document.getElementById('editLog').textContent='';
-    document.getElementById('editStatus').classList.remove('done','error');
-    document.getElementById('editModal').classList.add('open');
-
-    pollEditSession(d.sessionId);
-  }catch(e){toast(`Fehler: ${e.message}`,'err');}
-}
-
-async function showEditSessionLog(sessionId){
-  document.getElementById('editTitle').textContent=`Edit-Session Log — ${sessionId.slice(0,8)}…`;
-  document.getElementById('editPhase').textContent='Lade…';
-  document.getElementById('editLog').textContent='';
-  document.getElementById('editStatus').classList.remove('done','error');
-  document.getElementById('editModal').classList.add('open');
-  pollEditSession(sessionId);
-}
-
-async function pollEditSession(sessionId){
-  if(editPollHandle){clearInterval(editPollHandle);editPollHandle=null;}
-  async function tick(){
-    try{
-      const r=await fetch(`${API}/api/admin/snapshots/edit-sessions/${sessionId}`);
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      const s=await r.json();
-      const stateLabel=PHASE_LABEL[s.state]??s.state;
-      let phaseHtml=`<strong>${esc(stateLabel)}</strong>`;
-      if(s.state==='ready'&&s.url){
-        phaseHtml+=` — <a href="${esc(s.url)}" target="_blank" style="color:var(--blue);font-weight:500">↗ Demo öffnen</a>`;
-      }else if(s.state==='saved'&&s.newSnapshot){
-        phaseHtml+=` — Neue Größe: <span class="mono">${esc(formatBytes(s.newSnapshot.sizeBytes))}</span>`;
-      }else if(s.state==='error'){
-        phaseHtml+=` — ${esc((s.error??'').slice(0,200))}`;
-      }
-      document.getElementById('editPhase').innerHTML=phaseHtml;
-      document.getElementById('editLog').textContent=(s.log??[]).join('\n')||'(noch keine Log-Einträge)';
-      const statusEl=document.getElementById('editStatus');
-      statusEl.classList.toggle('done',s.state==='saved'||s.state==='ready');
-      statusEl.classList.toggle('error',s.state==='error');
-      // Polling beenden bei Endzuständen (saved, discarded, error). "ready" —
-      // weiterpollen, falls der Admin extern Save/Discard auslöst.
-      if(s.state==='saved'||s.state==='discarded'||s.state==='error'){
-        clearInterval(editPollHandle);editPollHandle=null;
-        await refresh();
-      }
-    }catch(e){console.error('pollEditSession:',e);}
-  }
-  await tick();
-  editPollHandle=setInterval(tick,3000);
-}
-
-async function saveEditSession(snapshotId){
-  if(!confirm(
-    `Snapshot "${snapshotId}" mit den gemachten Änderungen überschreiben?\n\n`+
-    `Ablauf:\n`+
-    `1. DB der Seed-Instanz wird als neuer Snapshot gedumpt\n`+
-    `2. Alter Snapshot wird überschrieben\n`+
-    `3. Seed-Instanz wird gestoppt + aufgeräumt\n\n`+
-    `Kann nicht rückgängig gemacht werden.`
-  ))return;
-  try{
-    const r=await fetch(`${API}/api/admin/snapshots/${snapshotId}/save`,{method:'POST'});
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.error??'HTTP '+r.status);
-    toast(`✓ Save läuft… (Polling im Modal)`,'ok');
-    pollEditSession(d.sessionId);
-    document.getElementById('editTitle').textContent=`Save — ${snapshotId}`;
-    document.getElementById('editStatus').classList.remove('done','error');
-    document.getElementById('editModal').classList.add('open');
-  }catch(e){toast(`Fehler: ${e.message}`,'err');}
-}
-
-async function discardEditSession(snapshotId){
-  if(!confirm(
-    `Edit-Session für "${snapshotId}" verwerfen?\n\n`+
-    `Die Seed-Instanz wird gestoppt, alle gemachten Änderungen gehen verloren.\n`+
-    `Der Snapshot bleibt unverändert.`
-  ))return;
-  try{
-    const r=await fetch(`${API}/api/admin/snapshots/${snapshotId}/discard`,{method:'POST'});
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.error??'HTTP '+r.status);
-    toast(`✓ Edit-Session verworfen`,'ok');
-    await refresh();
-  }catch(e){toast(`Fehler: ${e.message}`,'err');}
-}
-
+async function startEditLive(snapshotId){const sel=document.getElementById('setdef-'+snapshotId);const configId=sel?.value;if(!configId){toast('Bitte erst eine Config aus dem Dropdown auswählen','err');return;}const sopt=sel.options[sel.selectedIndex];const configLabel=sopt?.textContent??configId;if(!confirm(`Edit-Live-Session für Snapshot "${snapshotId}" starten?\n\nConfig: ${configLabel}\n\nAblauf:\n1. Seed-Instanz wird hochgefahren (5–10 Min)\n2. Du öffnest die URL in einem neuen Tab und editierst manuell\n3. "💾 Snapshot speichern" → Überschreibt den alten Dump + stoppt Instanz\n   ODER "✗ Verwerfen" → stoppt Instanz ohne Speichern\n\nDie Seed-Instanz läuft so lange wie du brauchst (kein Cleanup-Timer).`))return;try{const r=await fetch(`${API}/api/admin/snapshots/${snapshotId}/edit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({configId})});const d=await r.json();if(!r.ok)throw new Error(d.error??'HTTP '+r.status);document.getElementById('editTitle').textContent=`Edit-Session — ${snapshotId}`;document.getElementById('editPhase').textContent='Session gestartet…';document.getElementById('editLog').textContent='';document.getElementById('editStatus').classList.remove('done','error');document.getElementById('editModal').classList.add('open');pollEditSession(d.sessionId);}catch(e){toast(`Fehler: ${e.message}`,'err');}}
+async function showEditSessionLog(sessionId){document.getElementById('editTitle').textContent=`Edit-Session Log — ${sessionId.slice(0,8)}…`;document.getElementById('editPhase').textContent='Lade…';document.getElementById('editLog').textContent='';document.getElementById('editStatus').classList.remove('done','error');document.getElementById('editModal').classList.add('open');pollEditSession(sessionId);}
+async function pollEditSession(sessionId){if(editPollHandle){clearInterval(editPollHandle);editPollHandle=null;}async function tick(){try{const r=await fetch(`${API}/api/admin/snapshots/edit-sessions/${sessionId}`);if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();const stateLabel=PHASE_LABEL[s.state]??s.state;let phaseHtml=`<strong>${esc(stateLabel)}</strong>`;if(s.state==='ready'&&s.url){phaseHtml+=` — <a href="${esc(s.url)}" target="_blank" style="color:var(--blue);font-weight:500">↗ Demo öffnen</a>`;}else if(s.state==='saved'&&s.newSnapshot){phaseHtml+=` — Neue Größe: <span class="mono">${esc(formatBytes(s.newSnapshot.sizeBytes))}</span>`;}else if(s.state==='error'){phaseHtml+=` — ${esc((s.error??'').slice(0,200))}`;}document.getElementById('editPhase').innerHTML=phaseHtml;document.getElementById('editLog').textContent=(s.log??[]).join('\n')||'(noch keine Log-Einträge)';const statusEl=document.getElementById('editStatus');statusEl.classList.toggle('done',s.state==='saved'||s.state==='ready');statusEl.classList.toggle('error',s.state==='error');if(s.state==='saved'||s.state==='discarded'||s.state==='error'){clearInterval(editPollHandle);editPollHandle=null;await refresh();}}catch(e){console.error('pollEditSession:',e);}}await tick();editPollHandle=setInterval(tick,3000);}
+async function saveEditSession(snapshotId){if(!confirm(`Snapshot "${snapshotId}" mit den gemachten Änderungen überschreiben?\n\nKann nicht rückgängig gemacht werden.`))return;try{const r=await fetch(`${API}/api/admin/snapshots/${snapshotId}/save`,{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error??'HTTP '+r.status);toast(`✓ Save läuft…`,'ok');pollEditSession(d.sessionId);document.getElementById('editTitle').textContent=`Save — ${snapshotId}`;document.getElementById('editStatus').classList.remove('done','error');document.getElementById('editModal').classList.add('open');}catch(e){toast(`Fehler: ${e.message}`,'err');}}
+async function discardEditSession(snapshotId){if(!confirm(`Edit-Session für "${snapshotId}" verwerfen?\n\nDie Seed-Instanz wird gestoppt, alle gemachten Änderungen gehen verloren.`))return;try{const r=await fetch(`${API}/api/admin/snapshots/${snapshotId}/discard`,{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error??'HTTP '+r.status);toast(`✓ Edit-Session verworfen`,'ok');await refresh();}catch(e){toast(`Fehler: ${e.message}`,'err');}}
 function closeEdit(e){if(e.target===document.getElementById('editModal'))closeEditDirect();}
-function closeEditDirect(){
-  document.getElementById('editModal').classList.remove('open');
-  // Polling läuft im Hintergrund weiter (siehe pollEditSession). Modal
-  // schließen heisst nur, dass der Admin nicht mehr aktiv zuschaut — die
-  // Session selbst läuft auf dem Server weiter.
+function closeEditDirect(){document.getElementById('editModal').classList.remove('open');}
+
+// ── Plugin-Wizard (Stage 1D) ──
+let wizardDetected = null;
+
+const CATEGORY_LABELS = {
+  lernen: 'Lernen',
+  aktivitaet: 'Aktivität',
+  pruefungen: 'Prüfungen & Compliance',
+  reporting: 'Reporting',
+  verwaltung: 'Verwaltung',
+  referenz: 'Moodle-Version',
+};
+
+function openPluginWizard() {
+  document.getElementById('wz-gitUrl').value = '';
+  document.getElementById('wz-analyze-result').innerHTML = '';
+  document.getElementById('wizardStep2').style.display = 'none';
+  document.getElementById('wizardSubmitBtn').style.display = 'none';
+  wizardDetected = null;
+  document.getElementById('wizardModal').classList.add('open');
+  setTimeout(() => document.getElementById('wz-gitUrl').focus(), 60);
+}
+
+function closeWizard(e) { if (e.target === document.getElementById('wizardModal')) closeWizardDirect(); }
+function closeWizardDirect() { document.getElementById('wizardModal').classList.remove('open'); }
+
+function onCategoryChange() {
+  const sel = document.getElementById('wz-category');
+  const labelEl = document.getElementById('wz-categoryLabel');
+  if (sel.value === '__custom') {
+    labelEl.placeholder = 'Eigene Bezeichnung eingeben…';
+    labelEl.value = '';
+    labelEl.focus();
+  } else {
+    labelEl.placeholder = CATEGORY_LABELS[sel.value] || '(auto)';
+    labelEl.value = '';
+  }
+}
+
+function titleCase(s) {
+  return s.split(/[_-]/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+async function analyzeGitUrl() {
+  const gitUrl = document.getElementById('wz-gitUrl').value.trim();
+  if (!gitUrl) { toast('Bitte Git-URL angeben', 'err'); return; }
+
+  const resultEl = document.getElementById('wz-analyze-result');
+  resultEl.innerHTML = '<div class="wz-analyzing">Klone Repo… (bis zu 2 Min bei großem Repo)</div>';
+
+  try {
+    const r = await fetch(`${API}/api/admin/plugins/install`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ gitUrl })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error ?? 'HTTP ' + r.status);
+    wizardDetected = d;
+
+    resultEl.innerHTML = `<div class="wz-detected">
+      <div class="wz-detected-row"><span class="wz-detected-label">Component:</span><span class="wz-detected-val">${esc(d.component)}</span></div>
+      <div class="wz-detected-row"><span class="wz-detected-label">Type:</span><span class="wz-detected-val">${esc(d.type)}</span></div>
+      <div class="wz-detected-row"><span class="wz-detected-label">Shortname:</span><span class="wz-detected-val">${esc(d.shortname)}</span></div>
+      <div class="wz-detected-row"><span class="wz-detected-label">Release:</span><span class="wz-detected-val">${esc(d.release)} (${esc(d.version)})</span></div>
+      <div class="wz-detected-row"><span class="wz-detected-label">Maturity:</span><span class="wz-detected-val">${esc(d.maturity || '—')}</span></div>
+      <div class="wz-detected-row"><span class="wz-detected-label">Pfad:</span><span class="wz-detected-val">${esc(d.srcPath)}</span></div>
+      <div class="wz-detected-row"><span class="wz-detected-label">GitHub:</span><span class="wz-detected-val">${esc(d.githubRepo)}</span></div>
+    </div>`;
+
+    // Vorbelegung der Metadaten
+    document.getElementById('wz-id').value = d.shortname.replace(/_/g, '-');
+    document.getElementById('wz-name').value = titleCase(d.shortname);
+
+    // Moodle-Version basierend auf $plugin->requires (2025092600 = 5.0, 2024100700 = 4.5)
+    const req = d.requires || 0;
+    let mv = '5.0';
+    if (req >= 2025092600) mv = '5.0';
+    else if (req >= 2024100700) mv = '4.5';
+    else if (req >= 2024042200) mv = '4.4';
+    else if (req >= 2023100900) mv = '4.3';
+    document.getElementById('wz-moodleVersion').value = mv;
+
+    // Category basierend auf Plugin-Type guessen
+    const typeToCategory = {
+      mod:    'aktivitaet',
+      local:  'verwaltung',
+      report: 'reporting',
+      qtype:  'pruefungen',
+      theme:  'referenz',
+      block:  'verwaltung',
+      auth:   'verwaltung',
+      enrol:  'verwaltung',
+      filter: 'verwaltung',
+    };
+    const cat = typeToCategory[d.type] || 'lernen';
+    document.getElementById('wz-category').value = cat;
+    onCategoryChange();
+
+    document.getElementById('wizardStep2').style.display = 'block';
+    document.getElementById('wizardSubmitBtn').style.display = 'inline-flex';
+    toast(`✓ Plugin erkannt: ${d.component} v${d.release}`, 'ok');
+  } catch (e) {
+    resultEl.innerHTML = `<div class="wz-error-box">Fehler: ${esc(e.message)}</div>`;
+    toast(`Fehler beim Analysieren: ${e.message}`, 'err');
+  }
+}
+
+async function submitPluginWizard() {
+  if (!wizardDetected) { toast('Erst das Plugin via "Analysieren" klonen', 'err'); return; }
+
+  const id = document.getElementById('wz-id').value.trim();
+  const name = document.getElementById('wz-name').value.trim();
+  const description = document.getElementById('wz-description').value.trim();
+  const catVal = document.getElementById('wz-category').value;
+  const category = catVal === '__custom' ? 'custom' : catVal;
+  const categoryLabelInput = document.getElementById('wz-categoryLabel').value.trim();
+  const categoryLabel = categoryLabelInput || CATEGORY_LABELS[catVal] || 'Andere';
+  const icon = document.getElementById('wz-icon').value.trim() || '🧩';
+  const iconBg = document.getElementById('wz-iconBg').value.trim() || '#f1f5f9';
+  const featuresRaw = document.getElementById('wz-features').value.trim();
+  const features = featuresRaw.split('\n').map(s => s.trim()).filter(Boolean);
+  const db = document.getElementById('wz-db').value;
+  const phpVersion = document.getElementById('wz-phpVersion').value;
+  const moodleVersion = document.getElementById('wz-moodleVersion').value;
+
+  if (!id || !name || !description) {
+    toast('ID, Name und Description sind Pflicht', 'err'); return;
+  }
+  if (!/^[a-z0-9][a-z0-9._-]*$/.test(id)) {
+    toast('ID: nur a-z, 0-9, Bindestriche — muss mit Buchstabe/Ziffer starten', 'err'); return;
+  }
+
+  const config = {
+    id,
+    type: 'plugin',
+    name,
+    category,
+    categoryLabel,
+    icon,
+    iconBg,
+    description,
+    features: features.length ? features : [`${wizardDetected.component}`, `Moodle ${moodleVersion}+`, `Release ${wizardDetected.release}`],
+    db,
+    phpVersion,
+    moodleVersion,
+    plugin: {
+      srcPath: wizardDetected.srcPath,
+      type: wizardDetected.type,
+      name: wizardDetected.shortname,
+    },
+    githubRepo: wizardDetected.githubRepo,
+    snapshotId: null,
+    visible: true,
+  };
+
+  try {
+    const r = await fetch(`${API}/api/admin/configs`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(config)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error ?? 'HTTP ' + r.status);
+    toast(`✓ Config "${id}" erstellt — Kachel erscheint im Portal`, 'ok');
+    closeWizardDirect();
+    await refresh();
+  } catch (e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
 }
 
 async function refresh(){try{const[instData,tokData,snapData]=await Promise.all([loadInstances(),loadTokens(),loadSnapshots()]);renderInstances(instData.instances??[]);renderTokens(tokData.requests??[]);renderSnapshots(snapData.snapshots??[],snapData.configs??[]);document.getElementById('lastUpdate').textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');}catch(e){toast('Fehler beim Laden: '+e.message,'err');}}
