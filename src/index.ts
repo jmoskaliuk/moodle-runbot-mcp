@@ -40,11 +40,13 @@ import * as email from "./services/email.js";
 import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
 import * as snapshotAdmin from "./services/snapshot-admin.js";
+import * as pluginInstall from "./services/plugin-install.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
 import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
 import * as nginxSvc from "./services/nginx.js";
 import { randomBytes } from "crypto";
+import fs from "fs/promises";
 import path from "path";
 import type { MoodleInstance } from "./types.js";
 import { buildInternalRouter } from "./api/internal.js";
@@ -98,6 +100,44 @@ const adminAuth = basicAuth({
   challenge: true,
   realm: "eLeDia Runbot Admin",
 });
+
+/**
+ * Fix 2026-04-15: Stellt sicher, dass config.plugin.srcPath auf Disk existiert.
+ * Wenn nicht, aber config.githubRepo ist gesetzt, klont das Plugin automatisch.
+ *
+ * Hintergrund: Manuelle Edits an configs.json (wie die Spinning-Wheel-Karte)
+ * setzen zwar den srcPath-Eintrag, klonen das Plugin aber nicht auf den VPS.
+ * Der Plugin-Wizard (/admin) macht den Clone beim Hinzufügen — aber nicht bei
+ * manuellen JSON-Edits. Dieser Fallback schließt die Lücke.
+ *
+ * Gibt true zurück wenn srcPath am Ende existiert, false bei Fehler.
+ */
+async function ensurePluginSrcPath(plugin: { srcPath: string }, githubRepo?: string): Promise<boolean> {
+  const exists = await fs.access(plugin.srcPath).then(() => true).catch(() => false);
+  if (exists) return true;
+  if (!githubRepo) {
+    console.error(`[confirm] Plugin srcPath ${plugin.srcPath} fehlt und kein githubRepo in config — kann nicht auto-klonen`);
+    return false;
+  }
+  const gitUrl = `https://github.com/${githubRepo}`;
+  console.error(`[confirm] Plugin srcPath ${plugin.srcPath} fehlt — auto-clone von ${gitUrl}`);
+  try {
+    await pluginInstall.clonePluginFromGithub(gitUrl);
+    // clonePluginFromGithub legt nach /opt/plugins/<repo> ab. Der repo-Name
+    // kommt aus der URL, nicht aus dem srcPath. Meistens passen die überein,
+    // sonst war der configs.json-Eintrag inkonsistent. Wir checken nochmal.
+    const nowExists = await fs.access(plugin.srcPath).then(() => true).catch(() => false);
+    if (nowExists) {
+      console.error(`[confirm] Auto-clone OK: ${plugin.srcPath} jetzt verfügbar`);
+      return true;
+    }
+    console.error(`[confirm] Auto-clone lief, aber srcPath ${plugin.srcPath} existiert trotzdem nicht — inkonsistenter configs.json-Eintrag?`);
+    return false;
+  } catch (e) {
+    console.error(`[confirm] Auto-clone fehlgeschlagen für ${gitUrl}:`, e);
+    return false;
+  }
+}
 
 async function runHTTP(): Promise<void> {
   const app = express();
@@ -275,6 +315,17 @@ async function runHTTP(): Promise<void> {
         await dockerSvc.provisionInstance(instance);
         if (config.plugin) {
           await tokens.setPhase(token, "installing_plugin");
+          // Fix 2026-04-15: Stelle sicher, dass Plugin auf Disk liegt.
+          // Falls manuell zu configs.json hinzugefügt, wurde es ggf. nie
+          // auf den VPS geklont. Wir klonen on-demand aus config.githubRepo.
+          const srcOK = await ensurePluginSrcPath(config.plugin, config.githubRepo);
+          if (!srcOK) {
+            throw new Error(
+              `Plugin-Quellverzeichnis ${config.plugin.srcPath} fehlt und konnte nicht ` +
+              `automatisch geklont werden. Admin muss den Plugin-Wizard in /api/admin ` +
+              `verwenden oder manuell per SSH klonen.`
+            );
+          }
           await dockerSvc.installPlugin(instance, config.plugin.srcPath, config.plugin.type, config.plugin.name);
         }
         const snap = config.snapshotId ? await snapshotSvc.getSnapshot(config.snapshotId) : undefined;
@@ -459,7 +510,6 @@ async function runHTTP(): Promise<void> {
 
   // ── Snapshot-Manager (task43) ───────────────────────────────────────────────
 
-  // Stage 1A: list / download / delete / set-default
   app.get("/admin/snapshots", adminAuth, async (_req, res) => {
     try {
       const snapshots = await snapshotSvc.listSnapshots();
@@ -511,7 +561,6 @@ async function runHTTP(): Promise<void> {
         });
         return;
       }
-      // Verhindern dass eine aktive Edit-Session den Snapshot unter sich verliert.
       const activeSession = snapshotAdmin.getEditSessionBySnapshot(id);
       if (activeSession) {
         res.status(409).json({
@@ -550,7 +599,6 @@ async function runHTTP(): Promise<void> {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // Stage 1B: Rebuild jobs
   app.post("/admin/snapshots/rebuild", adminAuth, async (req, res) => {
     const { snapshotId, configId } = (req.body ?? {}) as { snapshotId?: string; configId?: string };
     if (!snapshotId || !configId) {
@@ -578,7 +626,6 @@ async function runHTTP(): Promise<void> {
     res.json({ count: jobs.length, jobs });
   });
 
-  // Stage 1C: Edit sessions
   app.post("/admin/snapshots/:id/edit", adminAuth, async (req, res) => {
     const { id } = req.params;
     const { configId } = (req.body ?? {}) as { configId?: string };
@@ -732,11 +779,6 @@ if (transport === "http") {
       console.error("[moodle-runbot] Orphan cleanup encountered errors:", e);
     })
     .then(async () => {
-      // task43 Stage 1C: Aktive Edit-Sessions aus Registry rekonstruieren,
-      // damit der Admin-Workflow Server-Restarts überlebt. Muss NACH
-      // cleanupOrphans laufen, sonst könnten Edit-Session-Instanzen mit
-      // anderen Pin-Reasons als "orphan" abgeräumt werden — cleanupOrphans
-      // lässt pinned Instanzen aber bewusst in Ruhe.
       const recovered = await snapshotAdmin.recoverEditSessionsFromRegistry().catch((e) => {
         console.error("[admin] Recover edit sessions failed:", e);
         return 0;
