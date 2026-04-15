@@ -34,7 +34,7 @@ import {
   registerConfigGet,
 } from "./tools/configs.js";
 
-import { loadConfigs } from "./services/config.js";
+import { loadConfigs, updateConfig } from "./services/config.js";
 import * as tokens from "./services/tokens.js";
 import * as email from "./services/email.js";
 import * as github from "./services/github.js";
@@ -48,7 +48,7 @@ import path from "path";
 import type { MoodleInstance } from "./types.js";
 import { buildInternalRouter } from "./api/internal.js";
 
-// ── Server setup ──────────────────────────────────────────────────────────────
+// ── Server setup ─────────────────────────────────────────────────────
 
 const server = new McpServer({
   name: "moodle-runbot-mcp-server",
@@ -75,19 +75,11 @@ registerSnapshotBuild(server);
 registerConfigList(server);
 registerConfigGet(server);
 
-// ── Transport selection ───────────────────────────────────────────────────────
+// ── Transport selection ─────────────────────────────────────────────────
 
 const transport = process.env.TRANSPORT ?? "stdio";
 
-// ── Extend-Codes (task26 / feat12) ────────────────────────────────────────────
-// Komma-getrennte Liste von Codes, die auf der Warteseite / in der laufenden
-// Demo eingelöst werden können, um die Instanz auf `EXTEND_CODE_TTL_MINUTES`
-// (default 1440 Min = 1 Tag) zu verlängern. Normalisiert beim Start zu
-// Uppercase-Set, damit der Runtime-Lookup O(1) und case-insensitive ist.
-//
-// Beispiel-Env: `EXTEND_CODES=EDUMA2026,PRIVATE,TRAIN01`
-// Codes werden beim Start eingelesen — Änderungen erfordern einen
-// `systemctl restart moodle-runbot`.
+// ── Extend-Codes (task26 / feat12) ────────────────────────────────────
 const EXTEND_CODES: Set<string> = new Set(
   (process.env.EXTEND_CODES ?? "")
     .split(",")
@@ -104,9 +96,7 @@ if (EXTEND_CODES.size > 0) {
   );
 }
 
-// ── Admin-Dashboard (task25 / feat11) ─────────────────────────────────────────
-// HTTP Basic Auth — Server startet nicht ohne ADMIN_PASSWORD um versehentliches
-// Deployment ohne Auth zu verhindern.
+// ── Admin-Dashboard (task25 / feat11) ───────────────────────────────────
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
 if (!ADMIN_PASSWORD) {
   console.error("[admin] FEHLER: ADMIN_PASSWORD nicht gesetzt — Server wird nicht gestartet.");
@@ -123,19 +113,17 @@ async function runHTTP(): Promise<void> {
   const app = express();
   app.use(express.json());
 
-  // Rate-Limiting für Demo-Anfragen
   const demoLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 Minuten
-    max: 5,                    // max 5 Anfragen pro IP
+    windowMs: 15 * 60 * 1000,
+    max: 5,
     message: { error: "Zu viele Anfragen. Bitte warte 15 Minuten." },
     standardHeaders: true,
     legacyHeaders: false,
   });
 
-  // MCP-Endpunkt mit API-Key absichern
   const MCP_API_KEY = process.env.MCP_API_KEY ?? "";
   const mcpAuthMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (!MCP_API_KEY) { next(); return; } // Kein Key konfiguriert = offen (Dev-Modus)
+    if (!MCP_API_KEY) { next(); return; }
     const key = req.headers["x-api-key"] ?? req.query["api_key"];
     if (key !== MCP_API_KEY) {
       res.status(403).json({ error: "Forbidden: Invalid API key" });
@@ -144,33 +132,23 @@ async function runHTTP(): Promise<void> {
     next();
   };
 
-  // CORS — allow demo portal to call MCP from the browser
   const allowedOrigins = (process.env.CORS_ORIGINS ?? "*").split(",").map(s => s.trim());
   app.use((req, res, next) => {
     const origin = req.headers.origin ?? "*";
     const allowed = allowedOrigins.includes("*") || allowedOrigins.includes(origin);
     if (allowed) {
       res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     }
     if (req.method === "OPTIONS") { res.sendStatus(204); return; }
     next();
   });
 
-  // Health check endpoint
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", server: "moodle-runbot-mcp-server" });
   });
 
-  // Configs endpoint — vom Portal direkt aufgerufen (kein MCP-Overhead nötig)
-  // GET /configs → alle sichtbaren Demo-Konfigurationen als JSON (visible !== false)
-  //
-  // task35: Jede Config bekommt zusätzlich ein `iconUrl`-Feld, das via
-  // github.resolvePluginIconUrl() auf das originale Plugin-Icon aus dem
-  // Moodle-Repo zeigt (pix/monologo.svg etc.). Die Lookup-Ergebnisse sind
-  // 24h in-memory gecacht (siehe github.ts), somit ist der /configs-Call
-  // nach dem ersten Hit O(#configs) ohne Netzwerk-Roundtrips.
   const configsHandler = async (_req: express.Request, res: express.Response) => {
     try {
       const all = await loadConfigs();
@@ -190,7 +168,6 @@ async function runHTTP(): Promise<void> {
   };
   app.get("/configs", configsHandler);
 
-  // MCP endpoint — stateless, new transport per request
   app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
     const t = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -201,21 +178,18 @@ async function runHTTP(): Promise<void> {
     await t.handleRequest(req, res, req.body);
   });
 
-  // Activity ping — called by demo instances or nginx to extend inactivity timer
   app.post("/ping/:instanceId", async (req, res) => {
     await recordActivity(req.params.instanceId).catch(() => {});
     res.json({ ok: true });
   });
 
-  // ── Demo-Anfrage-Flow ─────────────────────────────────────────────────────
+  // ── Demo-Anfrage-Flow ──────────────────────────────────────────
 
-  // POST /request-demo — Kunde gibt E-Mail + Name ein, bekommt Bestätigungs-E-Mail
   app.post("/request-demo", demoLimiter, async (req, res) => {
     const { email: userEmail, name, configId } = req.body as {
       email?: string; name?: string; configId?: string;
     };
 
-    // Validierung
     if (!userEmail || !configId) {
       res.status(400).json({ error: "email und configId sind erforderlich" });
       return;
@@ -226,7 +200,6 @@ async function runHTTP(): Promise<void> {
       return;
     }
 
-    // Config prüfen
     const configs = await loadConfigs().catch(() => []);
     const config = configs.find(c => c.id === configId);
     if (!config) {
@@ -235,20 +208,17 @@ async function runHTTP(): Promise<void> {
     }
 
     try {
-      // Token anlegen
       const request = await tokens.createRequest(
         userEmail,
         name ?? "Demo-Nutzer",
         configId
       );
 
-      // Bestätigungs-E-Mail senden
       await email.sendConfirmationEmail(request, config.name);
 
       res.json({
         ok: true,
         message: "Bestätigungs-E-Mail wurde gesendet.",
-        // Token nur in Dev-Modus zurückgeben
         ...(process.env.NODE_ENV === "development" ? { token: request.token } : {}),
       });
     } catch (e) {
@@ -257,21 +227,11 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // GET /confirm/:token — Kunde klickt Link, Demo startet
-  //
-  // ACHTUNG Idempotenz: E-Mail-Clients (Gmail, Outlook, Corporate Link-
-  // Scanner) prefetchen den Link oft mehrfach bevor der Nutzer überhaupt
-  // klickt. Jeder GET darf den Loading-Page anzeigen, aber nur der ERSTE
-  // darf den Hintergrund-Provisioning-Job starten. Sonst bauen wir 2-3
-  // komplette Moodle-Instanzen für denselben Interessenten und er bekommt
-  // mehrere Ready-Mails. Die Reservierung läuft atomar in confirmRequest
-  // via phase="waiting".
   app.get("/confirm/:token", async (req, res) => {
     const { token } = req.params;
 
     const result = await tokens.confirmRequest(token);
     if (!result) {
-      // Token ungültig oder abgelaufen
       res.status(400).send(`
         <html><body style="font-family:sans-serif;text-align:center;padding:80px;color:#555">
           <h2>Link ungültig oder abgelaufen</h2>
@@ -283,7 +243,6 @@ async function runHTTP(): Promise<void> {
     }
     const { request, alreadyStarted } = result;
 
-    // Falls Demo bereits gestartet: direkt weiterleiten
     if (request.status === "started" && request.instanceId) {
       const inst = await getInstance(request.instanceId);
       if (inst?.status === "running") {
@@ -292,7 +251,6 @@ async function runHTTP(): Promise<void> {
       }
     }
 
-    // Config laden
     const configs = await loadConfigs().catch(() => []);
     const config = configs.find(c => c.id === request.configId);
     if (!config) {
@@ -300,9 +258,6 @@ async function runHTTP(): Promise<void> {
       return;
     }
 
-    // Loading-Seite anzeigen während Demo startet.
-    // Wichtig: Token wird in die Seite injected, damit das Frontend per
-    // /api/demo-status/:token den Live-Status pollen kann (feat09/task22).
     const loadingHtml = buildLoadingPage(
       request.name.split(" ")[0],
       config.name,
@@ -310,15 +265,11 @@ async function runHTTP(): Promise<void> {
     );
     res.send(loadingHtml);
 
-    // Nur beim ERSTEN Confirm-Treffer den Job starten. Alle weiteren GETs
-    // (Prefetch, Reload, zweiter Tab) beobachten den bestehenden Job über
-    // /api/demo-status.
     if (alreadyStarted) {
       console.log(`[confirm] Token ${token.slice(0,6)}… bereits confirmed — Loading Page ohne neuen Job`);
       return;
     }
 
-    // Demo im Hintergrund starten (nach Response-Send)
     setImmediate(async () => {
       try {
         await tokens.setPhase(token, "provisioning");
@@ -333,11 +284,6 @@ async function runHTTP(): Promise<void> {
         const port = await allocatePort(PORT_START, PORT_END);
         const instanceDir = path.join(WORK_DIR, id);
 
-        // task37: Per-Instance API-Token für das local_runbotadmin Plugin.
-        // 32 Bytes Random = 64 Hex-Zeichen. Token wird in config.php
-        // geschrieben (via patchConfigForProduction) und vom Backend in
-        // authMiddleware() gegen den Registry-Eintrag geprüft. Er lebt
-        // nur für die Lebensdauer dieser Instanz.
         const apiToken = randomBytes(32).toString("hex");
 
         const instance: MoodleInstance = {
@@ -354,7 +300,6 @@ async function runHTTP(): Promise<void> {
           composeProject,
           moodleDockerDir: path.join(instanceDir, "moodle-docker"),
           moodleDir: path.join(instanceDir, "moodle"),
-          // task37 fields
           apiToken,
           configId: request.configId,
         };
@@ -383,35 +328,22 @@ async function runHTTP(): Promise<void> {
           await snapshotSvc.restoreSnapshot(instance, snap.file);
         }
 
-        // task33: Moodle-Site-Name auf „Demo | <Plugin-Titel>" setzen.
-        // Nach dem Start (Fresh oder Snapshot-Restore), weil der Restore
-        // sonst unseren Wert wieder aus dem Dump überschreiben würde.
-        // Kosmetisch — bei Fehler nicht den Demo-Start abbrechen.
         await dockerSvc
           .setSiteName(instance, `Demo | ${config.name}`)
           .catch((e: unknown) => console.error(`[confirm] setSiteName WARN:`, e));
-
-        // Keine Nutzer-Anlage mehr — der Snapshot enthält bereits die drei
-        // vordefinierten Accounts (admin, teacher, student) mit identischem
-        // Passwort (DEMO_PASSWORD). Der Interessent loggt sich direkt mit
-        // einem dieser Accounts ein. Entscheidung Johannes, 2026-04-09:
-        // Login ≠ E-Mail — die E-Mail-Adresse sollte nirgends als
-        // Moodle-Username auftauchen.
 
         instance.status = "running";
         instance.lastActivity = new Date().toISOString();
         await saveInstance(instance);
         await nginxSvc.registerInstance(instance.id, instance.webPort);
-        await tokens.markStarted(token, instance.id); // setzt phase="running"
+        await tokens.markStarted(token, instance.id);
 
-        // "Demo bereit"-E-Mail senden
         await email.sendDemoReadyEmail(request, config.name, instance.url);
 
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[confirm] Demo-Start fehlgeschlagen:", e);
         await tokens.setPhase(token, "error", msg).catch(() => {});
-        // Nutzer über Fehler informieren
         await email.sendErrorEmail(request, config.name).catch((mailErr) => {
           console.error("[confirm] Fehler-E-Mail konnte nicht gesendet werden:", mailErr);
         });
@@ -420,25 +352,12 @@ async function runHTTP(): Promise<void> {
   });
 
   // ── Live-Status der Demo-Provisionierung (feat09) ────────────────────────
-  // Die Warteseite pollt diesen Endpoint alle 3s mit dem Request-Token.
-  // Token ist Auth — keine zusätzliche Authentifizierung nötig.
-  //
-  // ACHTUNG nginx-Routing: Der nginx vor diesem Server proxyt mit einem
-  // `proxy_pass http://127.0.0.1:3000/;` (Trailing-Slash) — dadurch wird
-  // der `/api/`-Präfix beim Forward GESTRIPPT. Express sieht also den
-  // Pfad OHNE `/api/`. Um den Browser-Request `/api/demo-status/:token`
-  // trotzdem zu matchen, registrieren wir hier BEIDE Pfade. Identischer
-  // Bug hat uns schon bei /configs und /plugin getroffen — historisch mit
-  // je einem Alias gelöst. TODO: irgendwann nginx reparieren und die
-  // Aliase entfernen (feat13/task31 im 04-tasks.md).
   const demoStatusHandler: express.RequestHandler = async (req, res) => {
     const { token } = req.params;
     let request;
     try {
       request = await tokens.getRequest(token);
     } catch (e) {
-      // Korruption / IO-Fehler: NIE 404 schicken (würde die Warteseite
-      // fälschlich als "abgelaufen" anzeigen). Stattdessen 503 + Retry.
       console.error(`[api/demo-status] getRequest failed for ${token.slice(0,6)}…:`, e);
       res.status(503).json({ status: "preparing", phase: "waiting", pluginName: "", retry: true });
       return;
@@ -454,16 +373,11 @@ async function runHTTP(): Promise<void> {
     const config = configs.find(c => c.id === request.configId);
     const pluginName = config?.name ?? request.configId;
 
-    // Phase → Status-Mapping
     const phase = request.phase ?? "waiting";
     let status: "preparing" | "ready" | "error" | "expired" = "preparing";
     if (phase === "running") status = "ready";
     else if (phase === "error") status = "error";
 
-    // URL + Accounts nur wenn wirklich ready.
-    // username ist KEINE E-Mail mehr — der Snapshot hat drei Accounts
-    // (admin/teacher/student) mit identischem Passwort (DEMO_PASSWORD).
-    // Die Warteseite zeigt alle drei an, das Frontend löst es selbst.
     let url: string | undefined;
     if (status === "ready" && request.instanceId) {
       const inst = await getInstance(request.instanceId);
@@ -483,23 +397,9 @@ async function runHTTP(): Promise<void> {
     });
   };
   app.get("/api/demo-status/:token", demoStatusHandler);
-  // Alias für nginx-Stripping (siehe Kommentar oben)
   app.get("/demo-status/:token", demoStatusHandler);
 
   // ── Extend-Code API (task26 / feat12) ─────────────────────────────────────
-  // Messe-/Trainings-Teilnehmer können mit einem vorgenerierten Code ihre
-  // Demo-Instanz auf 24h verlängern. Codes kommen aus `EXTEND_CODES` (Env,
-  // kommasepariert). Alle Codes haben dieselbe TTL (`EXTEND_CODE_TTL_MINUTES`,
-  // default 1440 Min = 1 Tag). Jede Instanz kann **maximal einmal** verlängert
-  // werden; wiederholte Einlösungen derselben Instanz oder eines bereits
-  // verbrauchten Codes sind no-ops bzw. werfen einen Fehler.
-  //
-  // Vergleich ist case-insensitive. Leading/trailing Whitespace wird
-  // getrimmt. Codes im Env-String werden beim Startup einmal geparst und
-  // im Set `EXTEND_CODES` gehalten.
-  //
-  // Auth: Token. Wer den Token hat, darf verlängern — derselbe Schutz wie
-  // beim Demo-Status-Polling.
   const extendCodeHandler: express.RequestHandler = async (req, res) => {
     const { token, code } = (req.body ?? {}) as { token?: string; code?: string };
     if (!token || !code) {
@@ -551,7 +451,7 @@ async function runHTTP(): Promise<void> {
     const now = new Date();
     inst.extendedBy    = { code: normalizedCode, at: now.toISOString() };
     inst.maxAgeMinutes = EXTEND_CODE_TTL_MINUTES;
-    inst.lastActivity  = now.toISOString(); // Idle-Counter zurücksetzen, sonst killt tooIdle
+    inst.lastActivity  = now.toISOString();
     await saveInstance(inst);
 
     const extendedUntil = new Date(now.getTime() + EXTEND_CODE_TTL_MINUTES * 60 * 1000);
@@ -567,20 +467,9 @@ async function runHTTP(): Promise<void> {
     });
   };
   app.post("/api/extend-code", extendCodeHandler);
-  app.post("/extend-code", extendCodeHandler); // nginx-Strip-Alias
+  app.post("/extend-code", extendCodeHandler);
 
-  // ── Plugin detail API ─────────────────────────────────────────────────────
-  // GET /api/plugininfo/:id → JSON: { config, github, iconUrl }
-  // Called by plugin-detail.html to populate the page dynamically.
-  // iconUrl wird best-effort aus pix/monologo.{svg,png}|icon.{svg,png} geholt
-  // (feat11/task23). Fehler = null, kein Blocker für den Rest.
-  //
-  // Name bewusst `plugininfo` (nicht `plugin`): Nginx strippt `/api/` vor
-  // dem Forward an Express. Ein Endpoint namens `/api/plugin/:id` würde
-  // darum als `/plugin/:id` bei Express ankommen und dort mit dem HTML-
-  // Handler für die Detail-Seite kollidieren. Der Bug war vorher da und
-  // still: `loadPluginData()` im Frontend hat HTML bekommen und den
-  // JSON.parse silent gefangen → GitHub-Daten fehlten wortlos.
+  // ── Plugin detail API ──────────────────────────────────────────────────
   const pluginInfoHandler: express.RequestHandler = async (req, res) => {
     try {
       const configs = await loadConfigs().catch(() => []);
@@ -608,27 +497,15 @@ async function runHTTP(): Promise<void> {
     }
   };
   app.get("/api/plugininfo/:id", pluginInfoHandler);
-  // Alias für nginx-Stripping — siehe Kommentar oben.
   app.get("/plugininfo/:id", pluginInfoHandler);
 
-  // GET /api/configs — alias so the portal's /api/configs URL works
-  // Teilt Handler mit /configs (task35 fügt iconUrl-Anreicherung hinzu).
   app.get("/api/configs", configsHandler);
 
-  // ── Admin-Dashboard (task25) ────────────────────────────────────────────────
-  // Alle /admin/* Routen hinter Basic Auth.
-  // Nginx-Konvention: Der Browser spricht /api/admin/*, nginx strippt /api/
-  // und Express sieht /admin/*. Daher keine /api/-Präfixe in Express.
-  //
-  // Zugang: https://demo.eledia.ai/api/admin  (nginx → GET /admin → admin.html)
-  // Env: ADMIN_PASSWORD=... in /etc/moodle-runbot.env
-
-  // GET /admin → serve admin.html
+  // ── Admin-Dashboard (task25) ─────────────────────────────────────────────────
   app.get("/admin", adminAuth, (_req, res) => {
     res.sendFile(path.join(process.cwd(), "webui", "admin.html"));
   });
 
-  // GET /admin/instances → Liste aller Instanzen aus Registry
   app.get("/admin/instances", adminAuth, async (_req, res) => {
     try {
       const instances = await getAllInstances();
@@ -638,7 +515,6 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // GET /admin/tokens → alle Token-Einträge
   app.get("/admin/tokens", adminAuth, async (_req, res) => {
     try {
       const requests = await tokens.listRequests();
@@ -648,7 +524,6 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // GET /admin/instances/:id/logs → docker compose logs --tail 100
   app.get("/admin/instances/:id/logs", adminAuth, async (req, res) => {
     try {
       const inst = await getInstance(req.params.id);
@@ -660,8 +535,6 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // POST /admin/instances/:id/extend → Laufzeit verlängern
-  // Body: { minutes: number }  (default 60)
   app.post("/admin/instances/:id/extend", adminAuth, async (req, res) => {
     try {
       const inst = await getInstance(req.params.id);
@@ -669,11 +542,11 @@ async function runHTTP(): Promise<void> {
       const minutes = Math.max(1, Math.min(10080, parseInt(req.body?.minutes ?? "60", 10) || 60));
       const now = new Date().toISOString();
       inst.maxAgeMinutes = minutes;
-      inst.lastActivity  = now; // tooIdle-Timer zurücksetzen
+      inst.lastActivity  = now;
       if (!inst.extendedBy) {
         inst.extendedBy = { code: "ADMIN", at: now };
       } else {
-        inst.extendedBy.at = now; // erneute Verlängerung → Uhr neu starten
+        inst.extendedBy.at = now;
       }
       await saveInstance(inst);
       const expiresAt = new Date(new Date(now).getTime() + minutes * 60000).toISOString();
@@ -683,7 +556,6 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // DELETE /admin/instances/:id → Instanz stoppen + aufräumen
   app.delete("/admin/instances/:id", adminAuth, async (req, res) => {
     const { id } = req.params;
     try {
@@ -691,7 +563,6 @@ async function runHTTP(): Promise<void> {
       if (!inst) { res.status(404).json({ error: "Instanz nicht gefunden" }); return; }
       inst.status = "stopping";
       await saveInstance(inst);
-      // Reihenfolge wie in cleanup.ts: nginx → docker → dir → registry
       await nginxSvc.unregisterInstance(id).catch((e: unknown) => {
         console.error(`[admin] WARN nginx unregister ${id}:`, e);
       });
@@ -702,8 +573,6 @@ async function runHTTP(): Promise<void> {
         console.error(`[admin] WARN cleanup dir ${id}:`, e);
       });
       await deleteInstance(id);
-      // task29: Token-Eintrag auf expired setzen (falls einer existiert —
-      // manuell via MCP gestartete Instanzen haben keinen DemoRequest).
       await tokens.expireByInstance(id).catch((e: unknown) => {
         console.error(`[admin] WARN expire token for ${id}:`, e);
       });
@@ -714,24 +583,125 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // GET /plugin/:id → serve plugin-detail.html (JS reads id from URL)
+  // ── Admin Snapshot-Manager (task43, Stage 1A) ─────────────────────────────
+  // Liste, Löschen, Set-Default, Download von Snapshots im zentralen Admin.
+  // Stage 1B (Rebuild) und 1C (Edit-Live) folgen separat.
+  //
+  // Auth: Re-uses adminAuth (HTTP Basic Auth, gleiche Credentials wie
+  // für /admin). Snapshot-Files liegen in SNAPSHOT_DIR (default /opt/snapshots).
+
+  app.get("/admin/snapshots", adminAuth, async (_req, res) => {
+    try {
+      const snapshots = await snapshotSvc.listSnapshots();
+      // Configs incl. invisible — wir brauchen die volle Liste, damit
+      // "Set as Default" auch für versteckte Configs funktioniert. loadConfigs()
+      // filtert visible:false raus.
+      const configs = await loadConfigs().catch(() => []);
+      const enriched = snapshots.map(s => ({
+        ...s,
+        sizeFormatted: snapshotSvc.formatBytes(s.sizeBytes),
+        usedBy: configs
+          .filter(c => c.snapshotId === s.id)
+          .map(c => ({ id: c.id, name: c.name })),
+      }));
+      // Configs minimal exportieren für das Set-Default-Dropdown im Frontend.
+      const configsLite = configs.map(c => ({
+        id: c.id,
+        name: c.name,
+        moodleVersion: c.moodleVersion,
+        snapshotId: c.snapshotId,
+      }));
+      res.json({ count: enriched.length, snapshots: enriched, configs: configsLite });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.get("/admin/snapshots/:id/download", adminAuth, async (req, res) => {
+    try {
+      const meta = await snapshotSvc.getSnapshot(req.params.id);
+      if (!meta) { res.status(404).json({ error: "Snapshot nicht gefunden" }); return; }
+      res.setHeader("Content-Type", "application/gzip");
+      res.setHeader("Content-Disposition", `attachment; filename="${meta.id}.sql.gz"`);
+      res.sendFile(meta.file);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.delete("/admin/snapshots/:id", adminAuth, async (req, res) => {
+    const { id } = req.params;
+    const force = req.query.force === "1";
+    try {
+      const meta = await snapshotSvc.getSnapshot(id);
+      if (!meta) { res.status(404).json({ error: "Snapshot nicht gefunden" }); return; }
+
+      // Default-Schutz: Wenn ein Config diesen Snapshot als snapshotId nutzt,
+      // verweigern — außer ?force=1. Verhindert versehentliches Löschen, das
+      // alle Demos kaputt macht.
+      const configs = await loadConfigs().catch(() => []);
+      const inUse = configs.find(c => c.snapshotId === id);
+      if (inUse && !force) {
+        res.status(409).json({
+          error: `Snapshot wird von Config '${inUse.id}' (${inUse.name}) als Default verwendet. Mit ?force=1 trotzdem löschen.`,
+          usedBy: { configId: inUse.id, configName: inUse.name },
+        });
+        return;
+      }
+
+      await snapshotSvc.deleteSnapshot(id);
+      console.error(`[admin] Snapshot deleted: ${id}${force ? " (forced)" : ""}`);
+      res.json({ ok: true, deleted: id });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.post("/admin/snapshots/:id/set-default", adminAuth, async (req, res) => {
+    const { id } = req.params;
+    const { configId } = (req.body ?? {}) as { configId?: string };
+    if (!configId) { res.status(400).json({ error: "configId erforderlich" }); return; }
+    try {
+      const meta = await snapshotSvc.getSnapshot(id);
+      if (!meta) { res.status(404).json({ error: "Snapshot nicht gefunden" }); return; }
+
+      // Warnung bei Versions-Mismatch — verhindert das nicht, aber loggt.
+      // Z.B. Snapshot auf Moodle 5.0, Config auf 5.1 → Demo wird beim ersten
+      // Request den Upgrade-Pfad triggern und ggf. crashen.
+      const cfg = (await loadConfigs().catch(() => []))
+        .find(c => c.id === configId);
+      if (cfg && cfg.moodleVersion !== meta.moodleVersion) {
+        console.error(
+          `[admin] WARN: snapshot ${id} (Moodle ${meta.moodleVersion}) wird Config ${configId} (Moodle ${cfg.moodleVersion}) zugewiesen — ` +
+          `Versions-Mismatch kann "Error reading from database" beim Restore verursachen.`
+        );
+      }
+
+      await updateConfig(configId, (c) => { c.snapshotId = id; });
+      console.error(`[admin] Set snapshot ${id} as default for config ${configId}`);
+      res.json({
+        ok: true,
+        configId,
+        snapshotId: id,
+        versionMismatch: cfg && cfg.moodleVersion !== meta.moodleVersion ? {
+          configMoodle: cfg.moodleVersion,
+          snapshotMoodle: meta.moodleVersion,
+        } : null,
+      });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
   app.get("/plugin/:id", (_req, res) => {
     res.sendFile(path.join(process.cwd(), "webui", "plugin-detail.html"));
   });
 
-  // task37 — Internal API for the in-Moodle local_runbotadmin plugin.
-  // Auth via per-instance X-Runbot-Instance-Id + X-Runbot-Api-Token headers
-  // (see src/api/internal.ts). Mounted BEFORE express.static so the router
-  // has first refusal on /api/internal/*. Also mounted under /internal for
-  // the nginx-strip path variant (same reason as demoStatusHandler above).
   const internalRouter = buildInternalRouter();
   app.use("/api/internal", internalRouter);
-  app.use("/internal", internalRouter); // nginx strips /api/ prefix
+  app.use("/internal", internalRouter);
 
-  // Serve static files from webui/ (demo-portal.html, assets, etc.)
   app.use(express.static(path.join(process.cwd(), "webui")));
-
-  // ─────────────────────────────────────────────────────────────────────────
 
   const port = parseInt(process.env.PORT ?? "3000");
   app.listen(port, () => {
@@ -747,15 +717,7 @@ async function runStdio(): Promise<void> {
   console.error("[moodle-runbot] MCP server running via stdio");
 }
 
-// ── Loading Page ──────────────────────────────────────────────────────────────
-//
-// Wartet auf den Live-Status via /api/demo-status/:token (feat09/task22).
-// Phase-Mapping: waiting|provisioning → s0, installing_plugin → s1,
-// starting_containers → s2, restoring_snapshot → s3,
-// running → alles done + Credentials-Box + "Demo öffnen" Button.
-// Hinweis: Der frühere creating_user-Step entfällt seit 2026-04-09 — die drei
-// Snapshot-Accounts (admin/teacher/student) kommen schon mit dem Snapshot.
-
+// ── Loading Page ──────────────────────────────────────────────────────────
 function buildLoadingPage(firstName: string, pluginName: string, token: string): string {
   return `<!DOCTYPE html>
 <html lang="de">
@@ -790,11 +752,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   .creds h3{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:400;color:#0f1117;margin-bottom:6px}
   .creds-hint{font-size:12px;color:#7a8090;line-height:1.5;margin:0 0 12px;font-weight:300}
   .cred-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
-  /* Nur die allerletzte Zeile innerhalb der Creds-Box (das ist die Passwort-
-     Zeile) darf den Bottom-Margin verlieren. Ein naives :last-child greift
-     sonst auch auf die letzte Account-Zeile (Teilnehmer/in) innerhalb von
-     #cred-accounts und klebt sie an die Passwort-Zeile — genau der Fehler
-     den Johannes 2026-04-09 im Screenshot markiert hat. */
   .creds > .cred-row:last-child{margin-bottom:0}
   .cred-label{color:#7a8090;min-width:96px}
   .cred-val{font-family:'SF Mono','Menlo',monospace;background:#fff;border:1px solid #e8eaee;border-radius:6px;padding:5px 10px;flex:1;color:#0f1117;font-size:12px;word-break:break-all}
@@ -807,7 +764,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   .err{display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px 20px;margin-top:20px;color:#b91c1c;font-size:13px;text-align:left}
   .err.show{display:block}
   .err a{color:#b91c1c;text-decoration:underline}
-  /* Extend-Code-Box (feat12/task26) — nur sichtbar im Ready-State */
   .extend{display:none;text-align:left;background:#fafaf8;border:1px solid #e8eaee;border-radius:10px;padding:14px 18px;margin-top:14px;font-size:12px;color:#7a8090;font-weight:300}
   .extend.show{display:block}
   .extend-head{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
@@ -871,10 +827,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
 <script>
   const TOKEN = ${JSON.stringify(token)};
   const STEP_COUNT = 4;
-  // DemoPhase → step index
-  // creating_user mapt auf 3 (Demo-Daten laden), weil seit 2026-04-09
-  // kein expliziter User-Create-Step mehr existiert — der Snapshot bringt
-  // admin/teacher/student schon mit. Alte In-Flight-Tokens bleiben kompatibel.
   const PHASE_TO_STEP = {
     waiting: 0,
     provisioning: 0,
@@ -920,11 +872,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     document.getElementById('headline').innerHTML = 'Ihre Demo<br>ist bereit!';
     document.getElementById('subtext').innerHTML = 'Ihre <strong>' + (data.pluginName || '${pluginName}') + '</strong>-Instanz läuft.<br>Klicken Sie unten auf <strong>"Demo öffnen"</strong>, um zu starten.';
     markAllDone();
-    // Accounts: pro Account eine eigene Zeile mit eigenem Kopieren-Button.
-    // Vorher war es eine einzige Zeile "admin · teacher · student", bei der
-    // der Kopieren-Button den kompletten String ins Clipboard gelegt hat —
-    // was unsinnig ist, weil man sich nur mit einem Account gleichzeitig
-    // einloggen kann. Johannes hat 2026-04-09 korrigiert.
     const accounts = Array.isArray(data.accounts) && data.accounts.length
       ? data.accounts
       : ['admin', 'teacher', 'student'];
@@ -944,15 +891,10 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
         '<span class="cred-label">' + label + ':</span>' +
         '<span class="cred-val" id="' + valId + '"></span>' +
         '<button class="copy-btn" type="button" data-copy="' + valId + '">Kopieren</button>';
-      // textContent erst nach innerHTML setzen, damit die Schreibweise nicht
-      // durch HTML-Entity-Encoding verändert wird
       row.querySelector('#' + valId).textContent = acc;
       accountsBox.appendChild(row);
     });
     if (data.password) document.getElementById('cred-pw').textContent = data.password;
-    // Nachdem die dynamischen Account-Zeilen gerendert sind, die Copy-Handler
-    // neu verdrahten — die ursprünglichen sind nur für die statisch gerenderten
-    // Elemente (Passwort-Zeile) aktiv.
     wireCopyButtons();
     document.getElementById('creds').classList.add('show');
     document.getElementById('extend').classList.add('show');
@@ -974,10 +916,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     document.getElementById('note').innerHTML = '<a href="/">Zurück zum Portal</a>';
   }
 
-  // Tolerant gegen transient-Fehler: wir zeigen "abgelaufen" erst nach
-  // 3 aufeinanderfolgenden 404s. Grund: beim ersten Poll direkt nach
-  // Seitenladung kann das Backend noch mit dem Write des Tokens beschäftigt
-  // sein — ein einzelnes 404 ist KEIN sicheres Signal für "abgelaufen".
   let consecutive404 = 0;
   const MAX_404 = 3;
 
@@ -990,10 +928,10 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
           showError('Ihre Demo-Anfrage ist abgelaufen. Bitte starten Sie einen neuen Versuch.');
           return false;
         }
-        return true; // nochmal versuchen
+        return true;
       }
       consecutive404 = 0;
-      if (!res.ok) return true; // transient, weiter pollen
+      if (!res.ok) return true;
       const data = await res.json();
 
       if (data.status === 'ready') {
@@ -1004,20 +942,15 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
         showError(data.error);
         return false;
       }
-      // preparing — Step aktualisieren
       const phase = data.phase || 'waiting';
       const stepIdx = PHASE_TO_STEP[phase];
       if (typeof stepIdx === 'number') setActiveStep(stepIdx);
       return true;
     } catch (e) {
-      // Netzwerkfehler sind transient — weiter pollen
       return true;
     }
   }
 
-  // Copy-to-clipboard — idempotent: per data-wired="1" markieren wir schon
-  // verdrahtete Buttons, sodass wireCopyButtons() nach dem dynamischen
-  // Einfügen der Account-Zeilen gefahrlos erneut aufgerufen werden kann.
   function wireCopyButtons() {
     document.querySelectorAll('.copy-btn').forEach(btn => {
       if (btn.getAttribute('data-wired') === '1') return;
@@ -1040,7 +973,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
   }
   wireCopyButtons();
 
-  // Extend-Code UI (feat12/task26): Aufklapp-Toggle + Submit
   (function(){
     const wrap  = document.getElementById('extend');
     const head  = document.getElementById('extend-toggle');
@@ -1100,8 +1032,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
     });
   })();
 
-  // Erst-Poll nach kurzer Delay (gibt dem Backend-setPhase Zeit zu schreiben),
-  // dann alle 3s.
   setTimeout(async () => {
     const keep = await poll();
     if (!keep) return;
@@ -1115,20 +1045,10 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
 </html>`;
 }
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-
+// ── Start ────────────────────────────────────────────────────────────────
 if (transport === "http") {
-  // Startup-Reihenfolge:
-  //   1. Orphan-Cleanup BEVOR der HTTP-Server Anfragen annimmt und bevor der
-  //      Cleanup-Scheduler läuft — so kollidiert die Waisen-Säuberung nicht
-  //      mit einem parallel laufenden `instance_start` und blockierte Ports
-  //      sind frei, bevor `allocatePort()` das erste Mal läuft.
-  //   2. HTTP-Server starten.
-  //   3. Periodischer Cleanup-Scheduler.
   cleanupOrphans()
     .catch((e) => {
-      // Nicht fatal — wenn der Cleanup fehlschlägt, startet der Server trotzdem.
-      // Die Fehler sind in `cleanupOrphans()` bereits geloggt.
       console.error("[moodle-runbot] Orphan cleanup encountered errors:", e);
     })
     .then(() => runHTTP())

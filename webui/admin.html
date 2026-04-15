@@ -22,7 +22,6 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14p
 a{color:var(--accent);text-decoration:none}
 a:hover{color:var(--accent2)}
 
-/* Nav */
 .nav{background:#1a1a2e;padding:0 32px;display:flex;align-items:center;height:52px;gap:24px}
 .nav-brand{font-family:var(--serif);font-size:17px;font-weight:300;color:#fff;letter-spacing:-.3px}
 .nav-brand span{color:var(--accent)}
@@ -31,18 +30,15 @@ a:hover{color:var(--accent2)}
 .nav-link:hover{color:#fff}
 .nav-spacer{flex:1}
 
-/* Layout */
 .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
 .page-title{font-family:var(--serif);font-size:26px;font-weight:300;color:var(--ink);margin-bottom:4px}
 .page-sub{font-size:13px;color:var(--muted);margin-bottom:32px}
 
-/* Section headers */
 .section{margin-bottom:40px}
 .section-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .section-title{font-size:13px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
 .badge-count{background:var(--accent-pale);color:var(--accent);font-size:11px;font-weight:600;border-radius:10px;padding:1px 8px}
 
-/* Card/Table container */
 .card{background:var(--white);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
 table{width:100%;border-collapse:collapse}
 thead th{font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:10px 14px;background:#fafaf8;border-bottom:1px solid var(--rule);text-align:left;white-space:nowrap}
@@ -52,7 +48,6 @@ tbody tr:hover{background:#fafaf8}
 td{padding:10px 14px;vertical-align:middle;font-size:13px}
 td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted)}
 
-/* Status pills */
 .pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:10px;padding:2px 8px}
 .pill-running{background:#d1fae5;color:#065f46}
 .pill-provisioning,.pill-installing_plugin,.pill-starting_containers,.pill-restoring_snapshot,.pill-creating_user,.pill-waiting{background:#fef3c7;color:#92400e}
@@ -60,18 +55,18 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .pill-error{background:#fee2e2;color:#991b1b}
 .pill-started,.pill-confirmed{background:#ede9fe;color:#5b21b6}
 .pill-pending,.pill-expired{background:#f1f5f9;color:var(--muted)}
+.pill-default{background:#fef3c7;color:#92400e}
+.pill-version{background:#e0e7ff;color:#3730a3}
 
-/* Action buttons */
-.btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:var(--sans);padding:4px 10px;border-radius:5px;border:1px solid var(--rule);background:var(--white);color:var(--ink);cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:var(--sans);padding:4px 10px;border-radius:5px;border:1px solid var(--rule);background:var(--white);color:var(--ink);cursor:pointer;transition:all .15s;white-space:nowrap;text-decoration:none}
 .btn:hover{background:#f3f4f6;border-color:#ccc}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-danger{border-color:#fca5a5;color:var(--red)}
 .btn-danger:hover{background:#fee2e2}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
-.btn-actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.btn-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 
-/* Log modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
 .modal{background:var(--white);border-radius:12px;width:min(800px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)}
@@ -82,25 +77,32 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .modal-body{flex:1;overflow:auto;padding:16px 20px}
 pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;color:#e2e8f0;background:#0f1117;border-radius:8px;padding:16px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 
-/* Extend input */
 .extend-inline{display:flex;align-items:center;gap:6px}
 .extend-inline input{font-family:var(--sans);font-size:11px;width:56px;padding:3px 7px;border:1px solid var(--rule);border-radius:4px;color:var(--ink)}
 .extend-inline input:focus{outline:none;border-color:var(--accent)}
 
-/* Empty state */
 .empty{padding:40px;text-align:center;color:var(--muted);font-size:13px}
 
-/* Refresh bar */
 .refresh-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .refresh-btn{font-size:12px}
 .last-update{font-size:11px;color:var(--muted)}
 .auto-badge{font-size:10px;font-weight:600;color:var(--accent);background:var(--accent-pale);border-radius:8px;padding:1px 6px}
 
-/* Toast */
 .toast{position:fixed;bottom:24px;right:24px;background:#0f1117;color:#e2e8f0;font-size:12px;padding:10px 16px;border-radius:8px;z-index:200;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;max-width:320px}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.ok{border-left:3px solid var(--green)}
 .toast.err{border-left:3px solid var(--red)}
+
+/* Snapshot-Manager-Spezifika (task43) */
+.snap-meta{display:flex;flex-direction:column;gap:2px}
+.snap-meta-label{font-size:13px;color:var(--ink);font-weight:500}
+.snap-meta-desc{font-size:11px;color:var(--muted);line-height:1.4}
+.snap-versions{display:flex;gap:4px;flex-wrap:wrap}
+.snap-used-by{display:flex;flex-direction:column;gap:2px}
+.snap-used-by .pill{font-size:9px}
+.snap-default-row{display:flex;align-items:center;gap:6px}
+.snap-default-row select{font-family:var(--sans);font-size:11px;padding:3px 7px;border:1px solid var(--rule);border-radius:4px;color:var(--ink);background:var(--white);max-width:160px}
+.snap-default-row select:focus{outline:none;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -113,7 +115,7 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
 
 <div class="wrap">
   <div class="page-title">Admin-Dashboard</div>
-  <div class="page-sub">Laufende Instanzen &amp; Demo-Anfragen — Live-Refresh alle 30 Sekunden</div>
+  <div class="page-sub">Laufende Instanzen, Demo-Anfragen &amp; Snapshots — Live-Refresh alle 30 Sekunden</div>
 
   <div class="refresh-bar">
     <button class="btn refresh-btn" onclick="refresh()">⟳ Aktualisieren</button>
@@ -174,6 +176,32 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
       </table>
     </div>
   </div>
+
+  <!-- Snapshots (task43, Stage 1A) -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-title">Snapshots</span>
+      <span class="badge-count" id="snapCount">—</span>
+    </div>
+    <div class="card">
+      <table id="snapTable">
+        <thead>
+          <tr>
+            <th>ID / Beschreibung</th>
+            <th>Moodle / PHP</th>
+            <th>Plugins</th>
+            <th>Größe</th>
+            <th>Erstellt</th>
+            <th>Verwendet von</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody id="snapBody">
+          <tr><td colspan="7" class="empty">Lade…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- Log Modal -->
@@ -195,7 +223,7 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
 <script>
 const API = window.location.origin;
 
-// ── Formatierungshelper ────────────────────────────────────────────────────────
+// ── Formatierungshelper ───────────────────────────────────────────────
 
 function relTime(iso) {
   if (!iso) return '—';
@@ -209,6 +237,12 @@ function relTime(iso) {
 function absTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
 }
 
 const PHASE_LABEL = {
@@ -225,19 +259,16 @@ const PHASE_LABEL = {
 function pill(status, isPhase = false) {
   const cls = `pill pill-${(status||'').replace(/[^a-z_]/g,'')}`;
   const label = isPhase ? (PHASE_LABEL[status] ?? status) : status;
-  return `<span class="${cls}">${label||'—'}</span>`;
+  return `<span class="${cls}">${esc(label||'—')}</span>`;
 }
 
-// task30: Pin-Indikator für Instanzen, die der Cleanup-Scheduler ignoriert.
-// Zeigt ein 📌-Icon mit Tooltip (pinReason), damit sofort klar ist, warum
-// die Instanz länger läuft als das übliche maxAge.
 function pinIndicator(inst) {
   if (!inst.pinned) return '';
   const reason = (inst.pinReason ?? 'pinned').replace(/"/g, '&quot;');
   return ` <span title="${reason}" style="font-size:11px" aria-label="Gepinnt: ${reason}">📌</span>`;
 }
 
-// ── Instanzen ──────────────────────────────────────────────────────────────────
+// ── Instanzen ───────────────────────────────────────────────────────────
 
 async function loadInstances() {
   const r = await fetch(`${API}/api/admin/instances`);
@@ -254,27 +285,27 @@ function renderInstances(instances) {
   }
   tbody.innerHTML = instances.map(inst => {
     const extended = inst.extendedBy
-      ? `<span title="Code: ${inst.extendedBy.code}" style="color:var(--green);font-size:11px">✓ ${inst.extendedBy.code}</span>`
+      ? `<span title="Code: ${esc(inst.extendedBy.code)}" style="color:var(--green);font-size:11px">✓ ${esc(inst.extendedBy.code)}</span>`
       : `—`;
     const urlLink = inst.url
-      ? `<a href="${inst.url}" target="_blank" style="font-size:11px;font-family:monospace">${inst.id}</a>`
-      : `<span class="mono">${inst.id}</span>`;
+      ? `<a href="${esc(inst.url)}" target="_blank" style="font-size:11px;font-family:monospace">${esc(inst.id)}</a>`
+      : `<span class="mono">${esc(inst.id)}</span>`;
     return `<tr>
-      <td class="mono">${inst.id}</td>
+      <td class="mono">${esc(inst.id)}</td>
       <td>${pill(inst.status, true)}${pinIndicator(inst)}</td>
-      <td>${inst.configId ?? inst.prId ?? '—'}</td>
-      <td title="${inst.createdAt}">${relTime(inst.createdAt)}</td>
-      <td title="${inst.lastActivity}">${relTime(inst.lastActivity)}</td>
+      <td>${esc(inst.configId ?? inst.prId ?? '—')}</td>
+      <td title="${esc(inst.createdAt)}">${relTime(inst.createdAt)}</td>
+      <td title="${esc(inst.lastActivity)}">${relTime(inst.lastActivity)}</td>
       <td>${extended}</td>
       <td>${urlLink}</td>
       <td>
         <div class="btn-actions">
-          <button class="btn" onclick="showLogs('${inst.id}')">📋 Logs</button>
+          <button class="btn" onclick="showLogs('${esc(inst.id)}')">📋 Logs</button>
           <div class="extend-inline">
-            <input type="number" id="ext-${inst.id}" value="60" min="1" max="1440" title="Minuten verlängern">
-            <button class="btn btn-primary" onclick="extendInst('${inst.id}')">+Zeit</button>
+            <input type="number" id="ext-${esc(inst.id)}" value="60" min="1" max="1440" title="Minuten verlängern">
+            <button class="btn btn-primary" onclick="extendInst('${esc(inst.id)}')">+Zeit</button>
           </div>
-          <button class="btn btn-danger" onclick="deleteInst('${inst.id}')">🗑 Stop</button>
+          <button class="btn btn-danger" onclick="deleteInst('${esc(inst.id)}')">🗑 Stop</button>
         </div>
       </td>
     </tr>`;
@@ -332,7 +363,7 @@ function closeLogDirect() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLogDirect(); });
 
-// ── Tokens ─────────────────────────────────────────────────────────────────────
+// ── Tokens ──────────────────────────────────────────────────────────────────
 
 async function loadTokens() {
   const r = await fetch(`${API}/api/admin/tokens`);
@@ -347,33 +378,166 @@ function renderTokens(requests) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty">Keine Anfragen gefunden.</td></tr>';
     return;
   }
-  // Neueste zuerst
   const sorted = [...requests].sort((a,b) => new Date(b.requestedAt) - new Date(a.requestedAt));
   tbody.innerHTML = sorted.map(req => {
     const tok = req.token.slice(0,8) + '…';
     const inst = req.instanceId
-      ? `<span class="mono">${req.instanceId.slice(0,16)}</span>`
+      ? `<span class="mono">${esc(req.instanceId.slice(0,16))}</span>`
       : '—';
     return `<tr>
-      <td class="mono" title="${req.token}">${tok}</td>
-      <td>${req.email}</td>
-      <td>${req.name}</td>
-      <td>${req.configId}</td>
+      <td class="mono" title="${esc(req.token)}">${esc(tok)}</td>
+      <td>${esc(req.email)}</td>
+      <td>${esc(req.name)}</td>
+      <td>${esc(req.configId)}</td>
       <td>${pill(req.status)}</td>
       <td>${req.phase ? pill(req.phase, true) : '—'}</td>
-      <td title="${req.requestedAt}">${absTime(req.requestedAt)}</td>
+      <td title="${esc(req.requestedAt)}">${absTime(req.requestedAt)}</td>
       <td>${inst}</td>
     </tr>`;
   }).join('');
 }
 
-// ── Refresh ────────────────────────────────────────────────────────────────────
+// ── Snapshots (task43, Stage 1A) ────────────────────────────────────────────
+
+async function loadSnapshots() {
+  const r = await fetch(`${API}/api/admin/snapshots`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function renderSnapshots(snapshots, configs) {
+  document.getElementById('snapCount').textContent = snapshots.length;
+  const tbody = document.getElementById('snapBody');
+  if (!snapshots.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Keine Snapshots vorhanden. Erstelle Snapshots via MCP-Tool <code>snapshot_build</code> oder Stage 1B-Button (kommt bald).</td></tr>';
+    return;
+  }
+
+  // Configs als Optionen für Set-Default-Dropdown vorbereiten.
+  // Wir zeigen nur Configs, deren Moodle-Version zum Snapshot passt (oder die
+  // schon den Snapshot nutzen). Versions-Mismatch ist die häufigste Ursache für
+  // "Error reading from database" — wir warnen aber blockieren nicht (Backend
+  // erlaubt es trotzdem mit Warning).
+  function configOptions(snap) {
+    return configs.map(c => {
+      const matches = c.moodleVersion === snap.moodleVersion;
+      const isCurrent = c.snapshotId === snap.id;
+      const tag = isCurrent
+        ? ' ★'
+        : (matches ? '' : ' ⚠️ Moodle ' + c.moodleVersion);
+      return `<option value="${esc(c.id)}"${isCurrent ? ' selected' : ''}>${esc(c.name)} (${esc(c.id)})${tag}</option>`;
+    }).join('');
+  }
+
+  tbody.innerHTML = snapshots.map(s => {
+    const usedBy = (s.usedBy ?? []).length
+      ? `<div class="snap-used-by">${s.usedBy.map(u =>
+          `<span class="pill pill-default" title="Default für ${esc(u.id)}">★ ${esc(u.name)}</span>`
+        ).join('')}</div>`
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+
+    const plugins = (s.plugins ?? []).length
+      ? s.plugins.map(p => `<span class="mono" style="display:block">${esc(p)}</span>`).join('')
+      : '<span style="color:var(--muted);font-size:11px">vanilla</span>';
+
+    const versions =
+      `<div class="snap-versions">` +
+      `<span class="pill pill-version">Moodle ${esc(s.moodleVersion)}</span>` +
+      `<span class="pill pill-version">PHP ${esc(s.phpVersion)}</span>` +
+      `<span class="pill pill-version">${esc(s.dbType)}</span>` +
+      `</div>`;
+
+    return `<tr>
+      <td>
+        <div class="snap-meta">
+          <span class="snap-meta-label"><span class="mono">${esc(s.id)}</span> — ${esc(s.label || '')}</span>
+          ${s.description ? `<span class="snap-meta-desc">${esc(s.description)}</span>` : ''}
+        </div>
+      </td>
+      <td>${versions}</td>
+      <td>${plugins}</td>
+      <td class="mono">${esc(s.sizeFormatted ?? '')}</td>
+      <td title="${esc(s.createdAt)}">${absTime(s.createdAt)}</td>
+      <td>${usedBy}</td>
+      <td>
+        <div class="btn-actions">
+          <a class="btn" href="${API}/api/admin/snapshots/${esc(s.id)}/download" download>⬇ Download</a>
+          <div class="snap-default-row">
+            <select id="setdef-${esc(s.id)}">${configOptions(s)}</select>
+            <button class="btn btn-primary" onclick="setSnapshotDefault('${esc(s.id)}')">★ Set Default</button>
+          </div>
+          <button class="btn btn-danger" onclick="deleteSnapshot('${esc(s.id)}')">🗑 Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function setSnapshotDefault(snapshotId) {
+  const sel = document.getElementById('setdef-' + snapshotId);
+  const configId = sel?.value;
+  if (!configId) {
+    toast('Bitte erst eine Config auswählen', 'err');
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/api/admin/snapshots/${snapshotId}/set-default`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ configId })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error ?? 'HTTP ' + r.status);
+    if (d.versionMismatch) {
+      toast(
+        `⚠️ Snapshot gesetzt, ABER: Snapshot ist Moodle ${d.versionMismatch.snapshotMoodle}, ` +
+        `Config nutzt ${d.versionMismatch.configMoodle}. Beim nächsten Demo-Start kann "Error reading from database" auftreten.`,
+        'err'
+      );
+    } else {
+      toast(`✓ Snapshot ${snapshotId} ist jetzt Default für ${configId}`, 'ok');
+    }
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function deleteSnapshot(snapshotId) {
+  if (!confirm(`Snapshot "${snapshotId}" wirklich löschen?\n\nDas löscht .sql.gz + .json physisch von der Disk.`)) return;
+  try {
+    let r = await fetch(`${API}/api/admin/snapshots/${snapshotId}`, { method: 'DELETE' });
+    if (r.status === 409) {
+      const d = await r.json();
+      const force = confirm(
+        `⚠️ ${d.error}\n\n` +
+        `Trotzdem löschen?\n\n` +
+        `Achtung: Demos für Config '${d.usedBy?.configId}' werden danach mit "Snapshot nicht gefunden" failen, ` +
+        `bis du eine andere snapshotId in configs.json setzt.`
+      );
+      if (!force) return;
+      r = await fetch(`${API}/api/admin/snapshots/${snapshotId}?force=1`, { method: 'DELETE' });
+    }
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`✓ Snapshot ${snapshotId} gelöscht`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+// ── Refresh ─────────────────────────────────────────────────────────────────
 
 async function refresh() {
   try {
-    const [instData, tokData] = await Promise.all([loadInstances(), loadTokens()]);
+    const [instData, tokData, snapData] = await Promise.all([
+      loadInstances(),
+      loadTokens(),
+      loadSnapshots(),
+    ]);
     renderInstances(instData.instances ?? []);
     renderTokens(tokData.requests ?? []);
+    renderSnapshots(snapData.snapshots ?? [], snapData.configs ?? []);
     document.getElementById('lastUpdate').textContent =
       'Zuletzt aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
   } catch(e) {
@@ -381,7 +545,7 @@ async function refresh() {
   }
 }
 
-// ── Toast ──────────────────────────────────────────────────────────────────────
+// ── Toast ───────────────────────────────────────────────────────────────────
 
 let toastTimer;
 function toast(msg, type = 'ok') {
@@ -389,10 +553,10 @@ function toast(msg, type = 'ok') {
   el.textContent = msg;
   el.className = `toast show ${type}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 5500);
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────────
+// ── Init ────────────────────────────────────────────────────────────────────
 
 refresh();
 setInterval(refresh, 30000);
