@@ -50,13 +50,14 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 
 .pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:10px;padding:2px 8px}
 .pill-running{background:#d1fae5;color:#065f46}
-.pill-provisioning,.pill-installing_plugin,.pill-starting_containers,.pill-restoring_snapshot,.pill-creating_user,.pill-waiting{background:#fef3c7;color:#92400e}
-.pill-stopping,.pill-stopped{background:#f1f5f9;color:#475569}
+.pill-provisioning,.pill-installing_plugin,.pill-starting_containers,.pill-restoring_snapshot,.pill-creating_user,.pill-waiting,.pill-starting_seed,.pill-running_upgrade,.pill-creating_snapshot,.pill-stopping{background:#fef3c7;color:#92400e}
+.pill-stopped{background:#f1f5f9;color:#475569}
 .pill-error{background:#fee2e2;color:#991b1b}
 .pill-started,.pill-confirmed{background:#ede9fe;color:#5b21b6}
 .pill-pending,.pill-expired{background:#f1f5f9;color:var(--muted)}
 .pill-default{background:#fef3c7;color:#92400e}
 .pill-version{background:#e0e7ff;color:#3730a3}
+.pill-done{background:#d1fae5;color:#065f46}
 
 .btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:var(--sans);padding:4px 10px;border-radius:5px;border:1px solid var(--rule);background:var(--white);color:var(--ink);cursor:pointer;transition:all .15s;white-space:nowrap;text-decoration:none}
 .btn:hover{background:#f3f4f6;border-color:#ccc}
@@ -65,6 +66,8 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .btn-danger:hover{background:#fee2e2}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.btn-warning{border-color:#fcd34d;color:#92400e;background:#fef3c7}
+.btn-warning:hover{background:#fde68a}
 .btn-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
@@ -76,6 +79,15 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .modal-close:hover{color:var(--ink)}
 .modal-body{flex:1;overflow:auto;padding:16px 20px}
 pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;color:#e2e8f0;background:#0f1117;border-radius:8px;padding:16px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.rebuild-status{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px 16px;background:#fafaf8;border:1px solid var(--rule);border-radius:8px;font-size:13px}
+.rebuild-status .spinner-mini{width:14px;height:14px;border:2px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;flex-shrink:0}
+.rebuild-status.done .spinner-mini{display:none}
+.rebuild-status.error .spinner-mini{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rebuild-status .check-mini{display:none;width:14px;height:14px;border-radius:50%;background:var(--green);color:#fff;font-size:10px;align-items:center;justify-content:center;flex-shrink:0}
+.rebuild-status.done .check-mini{display:flex}
+.rebuild-status .err-mini{display:none;width:14px;height:14px;border-radius:50%;background:var(--red);color:#fff;font-size:10px;align-items:center;justify-content:center;flex-shrink:0}
+.rebuild-status.error .err-mini{display:flex}
 
 .extend-inline{display:flex;align-items:center;gap:6px}
 .extend-inline input{font-family:var(--sans);font-size:11px;width:56px;padding:3px 7px;border:1px solid var(--rule);border-radius:4px;color:var(--ink)}
@@ -93,7 +105,6 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
 .toast.ok{border-left:3px solid var(--green)}
 .toast.err{border-left:3px solid var(--red)}
 
-/* Snapshot-Manager-Spezifika (task43) */
 .snap-meta{display:flex;flex-direction:column;gap:2px}
 .snap-meta-label{font-size:13px;color:var(--ink);font-weight:500}
 .snap-meta-desc{font-size:11px;color:var(--muted);line-height:1.4}
@@ -123,7 +134,6 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
     <span class="auto-badge">AUTO 30s</span>
   </div>
 
-  <!-- Instances -->
   <div class="section">
     <div class="section-head">
       <span class="section-title">Instanzen</span>
@@ -132,25 +142,13 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
     <div class="card">
       <table id="instTable">
         <thead>
-          <tr>
-            <th>ID</th>
-            <th>Status</th>
-            <th>Plugin / Config</th>
-            <th>Gestartet</th>
-            <th>Letzte Aktivität</th>
-            <th>Verlängerung</th>
-            <th>URL</th>
-            <th>Aktionen</th>
-          </tr>
+          <tr><th>ID</th><th>Status</th><th>Plugin / Config</th><th>Gestartet</th><th>Letzte Aktivität</th><th>Verlängerung</th><th>URL</th><th>Aktionen</th></tr>
         </thead>
-        <tbody id="instBody">
-          <tr><td colspan="8" class="empty">Lade…</td></tr>
-        </tbody>
+        <tbody id="instBody"><tr><td colspan="8" class="empty">Lade…</td></tr></tbody>
       </table>
     </div>
   </div>
 
-  <!-- Tokens -->
   <div class="section">
     <div class="section-head">
       <span class="section-title">Demo-Anfragen (Tokens)</span>
@@ -159,25 +157,13 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
     <div class="card">
       <table id="tokTable">
         <thead>
-          <tr>
-            <th>Token</th>
-            <th>E-Mail</th>
-            <th>Name</th>
-            <th>Config</th>
-            <th>Token</th>
-            <th>Status</th>
-            <th>Angefragt</th>
-            <th>Instanz</th>
-          </tr>
+          <tr><th>Token</th><th>E-Mail</th><th>Name</th><th>Config</th><th>Token</th><th>Status</th><th>Angefragt</th><th>Instanz</th></tr>
         </thead>
-        <tbody id="tokBody">
-          <tr><td colspan="8" class="empty">Lade…</td></tr>
-        </tbody>
+        <tbody id="tokBody"><tr><td colspan="8" class="empty">Lade…</td></tr></tbody>
       </table>
     </div>
   </div>
 
-  <!-- Snapshots (task43, Stage 1A) -->
   <div class="section">
     <div class="section-head">
       <span class="section-title">Snapshots</span>
@@ -186,25 +172,14 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
     <div class="card">
       <table id="snapTable">
         <thead>
-          <tr>
-            <th>ID / Beschreibung</th>
-            <th>Moodle / PHP</th>
-            <th>Plugins</th>
-            <th>Größe</th>
-            <th>Erstellt</th>
-            <th>Verwendet von</th>
-            <th>Aktionen</th>
-          </tr>
+          <tr><th>ID / Beschreibung</th><th>Moodle / PHP</th><th>Plugins</th><th>Größe</th><th>Erstellt</th><th>Verwendet von</th><th>Aktionen</th></tr>
         </thead>
-        <tbody id="snapBody">
-          <tr><td colspan="7" class="empty">Lade…</td></tr>
-        </tbody>
+        <tbody id="snapBody"><tr><td colspan="7" class="empty">Lade…</td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 
-<!-- Log Modal -->
 <div class="modal-overlay" id="logModal" onclick="closeLog(event)">
   <div class="modal">
     <div class="modal-head">
@@ -217,13 +192,29 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
   </div>
 </div>
 
-<!-- Toast -->
+<!-- Rebuild Modal (task43 Stage 1B) -->
+<div class="modal-overlay" id="rebuildModal" onclick="closeRebuild(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="rebuildTitle">Snapshot wird neu gebaut…</span>
+      <button class="modal-close" onclick="closeRebuildDirect()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="rebuild-status" id="rebuildStatus">
+        <div class="spinner-mini"></div>
+        <div class="check-mini">✓</div>
+        <div class="err-mini">!</div>
+        <span id="rebuildPhase">Wird vorbereitet…</span>
+      </div>
+      <pre class="logs" id="rebuildLog">Warte auf Job-Start…</pre>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const API = window.location.origin;
-
-// ── Formatierungshelper ───────────────────────────────────────────────
 
 function relTime(iso) {
   if (!iso) return '—';
@@ -254,6 +245,11 @@ const PHASE_LABEL = {
   starting_containers:  'container start',
   restoring_snapshot:   'snapshot',
   creating_user:        'nutzer anlegen',
+  starting_seed:        'seed start',
+  running_upgrade:      'moodle upgrade',
+  creating_snapshot:    'snapshot create',
+  stopping:             'stoppen',
+  done:                 '✓ fertig',
 };
 
 function pill(status, isPhase = false) {
@@ -267,8 +263,6 @@ function pinIndicator(inst) {
   const reason = (inst.pinReason ?? 'pinned').replace(/"/g, '&quot;');
   return ` <span title="${reason}" style="font-size:11px" aria-label="Gepinnt: ${reason}">📌</span>`;
 }
-
-// ── Instanzen ───────────────────────────────────────────────────────────
 
 async function loadInstances() {
   const r = await fetch(`${API}/api/admin/instances`);
@@ -361,9 +355,12 @@ function closeLog(e) {
 function closeLogDirect() {
   document.getElementById('logModal').classList.remove('open');
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLogDirect(); });
-
-// ── Tokens ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeLogDirect();
+    closeRebuildDirect();
+  }
+});
 
 async function loadTokens() {
   const r = await fetch(`${API}/api/admin/tokens`);
@@ -397,8 +394,6 @@ function renderTokens(requests) {
   }).join('');
 }
 
-// ── Snapshots (task43, Stage 1A) ────────────────────────────────────────────
-
 async function loadSnapshots() {
   const r = await fetch(`${API}/api/admin/snapshots`);
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -409,15 +404,10 @@ function renderSnapshots(snapshots, configs) {
   document.getElementById('snapCount').textContent = snapshots.length;
   const tbody = document.getElementById('snapBody');
   if (!snapshots.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Keine Snapshots vorhanden. Erstelle Snapshots via MCP-Tool <code>snapshot_build</code> oder Stage 1B-Button (kommt bald).</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Keine Snapshots vorhanden. Erstelle Snapshots via MCP-Tool <code>snapshot_build</code>.</td></tr>';
     return;
   }
 
-  // Configs als Optionen für Set-Default-Dropdown vorbereiten.
-  // Wir zeigen nur Configs, deren Moodle-Version zum Snapshot passt (oder die
-  // schon den Snapshot nutzen). Versions-Mismatch ist die häufigste Ursache für
-  // "Error reading from database" — wir warnen aber blockieren nicht (Backend
-  // erlaubt es trotzdem mit Warning).
   function configOptions(snap) {
     return configs.map(c => {
       const matches = c.moodleVersion === snap.moodleVersion;
@@ -465,6 +455,7 @@ function renderSnapshots(snapshots, configs) {
           <div class="snap-default-row">
             <select id="setdef-${esc(s.id)}">${configOptions(s)}</select>
             <button class="btn btn-primary" onclick="setSnapshotDefault('${esc(s.id)}')">★ Set Default</button>
+            <button class="btn btn-warning" onclick="rebuildSnapshot('${esc(s.id)}')" title="Snapshot mit Moodle-Version der gewählten Config neu bauen">🔄 Rebuild</button>
           </div>
           <button class="btn btn-danger" onclick="deleteSnapshot('${esc(s.id)}')">🗑 Delete</button>
         </div>
@@ -491,7 +482,7 @@ async function setSnapshotDefault(snapshotId) {
     if (d.versionMismatch) {
       toast(
         `⚠️ Snapshot gesetzt, ABER: Snapshot ist Moodle ${d.versionMismatch.snapshotMoodle}, ` +
-        `Config nutzt ${d.versionMismatch.configMoodle}. Beim nächsten Demo-Start kann "Error reading from database" auftreten.`,
+        `Config nutzt ${d.versionMismatch.configMoodle}. Beim nächsten Demo-Start kann "Error reading from database" auftreten. Tipp: "🔄 Rebuild"-Button nutzen.`,
         'err'
       );
     } else {
@@ -512,8 +503,7 @@ async function deleteSnapshot(snapshotId) {
       const force = confirm(
         `⚠️ ${d.error}\n\n` +
         `Trotzdem löschen?\n\n` +
-        `Achtung: Demos für Config '${d.usedBy?.configId}' werden danach mit "Snapshot nicht gefunden" failen, ` +
-        `bis du eine andere snapshotId in configs.json setzt.`
+        `Achtung: Demos für Config '${d.usedBy?.configId}' werden danach mit "Snapshot nicht gefunden" failen.`
       );
       if (!force) return;
       r = await fetch(`${API}/api/admin/snapshots/${snapshotId}?force=1`, { method: 'DELETE' });
@@ -526,7 +516,110 @@ async function deleteSnapshot(snapshotId) {
   }
 }
 
-// ── Refresh ─────────────────────────────────────────────────────────────────
+// ── Rebuild (Stage 1B) ────────────────────────────────────────────────
+let rebuildPollHandle = null;
+
+async function rebuildSnapshot(snapshotId) {
+  const sel = document.getElementById('setdef-' + snapshotId);
+  const configId = sel?.value;
+  if (!configId) {
+    toast('Bitte erst eine Config aus dem Dropdown auswählen', 'err');
+    return;
+  }
+  const sopt = sel.options[sel.selectedIndex];
+  const configLabel = sopt?.textContent ?? configId;
+
+  if (!confirm(
+    `Snapshot "${snapshotId}" mit folgender Config neu bauen?\n\n` +
+    `Config: ${configLabel}\n\n` +
+    `Ablauf:\n` +
+    `1. Seed-Instanz mit der Moodle-Version der Config wird gestartet\n` +
+    `2. Alter Snapshot wird restauriert\n` +
+    `3. admin/cli/upgrade.php migriert die DB-Schema\n` +
+    `4. Neuer Snapshot wird gedumpt (überschreibt alten)\n` +
+    `5. Seed-Instanz wird gestoppt\n\n` +
+    `Das kann mehrere Minuten dauern. Lass das Modal offen.`
+  )) return;
+
+  try {
+    const r = await fetch(`${API}/api/admin/snapshots/rebuild`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ snapshotId, configId })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error ?? 'HTTP ' + r.status);
+
+    document.getElementById('rebuildTitle').textContent = `Rebuild — ${snapshotId}`;
+    document.getElementById('rebuildPhase').textContent = 'Job gestartet…';
+    document.getElementById('rebuildLog').textContent = '';
+    const statusEl = document.getElementById('rebuildStatus');
+    statusEl.classList.remove('done', 'error');
+    document.getElementById('rebuildModal').classList.add('open');
+
+    pollRebuildJob(d.jobId);
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function pollRebuildJob(jobId) {
+  if (rebuildPollHandle) { clearInterval(rebuildPollHandle); rebuildPollHandle = null; }
+
+  async function tick() {
+    try {
+      const r = await fetch(`${API}/api/admin/snapshots/jobs/${jobId}`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const job = await r.json();
+
+      const phaseLabel = PHASE_LABEL[job.status] ?? job.status;
+      document.getElementById('rebuildPhase').innerHTML =
+        `<strong>${esc(phaseLabel)}</strong>` +
+        (job.status === 'done' && job.newSnapshot
+          ? ` — Neue Größe: <span class="mono">${esc(formatBytes(job.newSnapshot.sizeBytes))}</span>`
+          : '') +
+        (job.status === 'error' ? ` — ${esc((job.error ?? '').slice(0, 200))}` : '');
+
+      document.getElementById('rebuildLog').textContent = (job.log ?? []).join('\n') || '(noch keine Log-Einträge)';
+
+      const statusEl = document.getElementById('rebuildStatus');
+      statusEl.classList.toggle('done', job.status === 'done');
+      statusEl.classList.toggle('error', job.status === 'error');
+
+      if (job.status === 'done' || job.status === 'error') {
+        clearInterval(rebuildPollHandle);
+        rebuildPollHandle = null;
+        if (job.status === 'done') {
+          toast(`✓ Rebuild ${jobId.slice(0,6)}… erfolgreich`, 'ok');
+        } else {
+          toast(`✗ Rebuild ${jobId.slice(0,6)}… fehlgeschlagen — siehe Log`, 'err');
+        }
+        await refresh();
+      }
+    } catch(e) {
+      console.error('pollRebuildJob:', e);
+    }
+  }
+
+  await tick();
+  rebuildPollHandle = setInterval(tick, 2000);
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  return (b/1024/1024).toFixed(1) + ' MB';
+}
+
+function closeRebuild(e) {
+  if (e.target === document.getElementById('rebuildModal')) closeRebuildDirect();
+}
+function closeRebuildDirect() {
+  document.getElementById('rebuildModal').classList.remove('open');
+  // Polling läuft im Hintergrund weiter — wird beim Job-Ende automatisch gestoppt.
+  // Falls der Admin das Modal schließt, will er den Job nicht abbrechen, nur
+  // nicht mehr aktiv zuschauen.
+}
 
 async function refresh() {
   try {
@@ -545,8 +638,6 @@ async function refresh() {
   }
 }
 
-// ── Toast ───────────────────────────────────────────────────────────────────
-
 let toastTimer;
 function toast(msg, type = 'ok') {
   const el = document.getElementById('toast');
@@ -555,8 +646,6 @@ function toast(msg, type = 'ok') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 5500);
 }
-
-// ── Init ────────────────────────────────────────────────────────────────────
 
 refresh();
 setInterval(refresh, 30000);

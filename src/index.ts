@@ -39,6 +39,7 @@ import * as tokens from "./services/tokens.js";
 import * as email from "./services/email.js";
 import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
+import * as snapshotRebuild from "./services/snapshot-rebuild.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
 import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
@@ -55,7 +56,6 @@ const server = new McpServer({
   version: "0.1.0",
 });
 
-// Register all tools
 registerInstanceStart(server);
 registerInstanceStop(server);
 registerInstanceStatus(server);
@@ -64,18 +64,12 @@ registerInstanceLogs(server);
 registerInstanceRunTests(server);
 registerInstanceExtend(server);
 registerInstanceTimeRemaining(server);
-
-// Snapshot tools
 registerSnapshotList(server);
 registerSnapshotCreate(server);
 registerSnapshotDelete(server);
 registerSnapshotBuild(server);
-
-// Config tools
 registerConfigList(server);
 registerConfigGet(server);
-
-// ── Transport selection ─────────────────────────────────────────────────
 
 const transport = process.env.TRANSPORT ?? "stdio";
 
@@ -183,8 +177,6 @@ async function runHTTP(): Promise<void> {
     res.json({ ok: true });
   });
 
-  // ── Demo-Anfrage-Flow ──────────────────────────────────────────
-
   app.post("/request-demo", demoLimiter, async (req, res) => {
     const { email: userEmail, name, configId } = req.body as {
       email?: string; name?: string; configId?: string;
@@ -283,7 +275,6 @@ async function runHTTP(): Promise<void> {
 
         const port = await allocatePort(PORT_START, PORT_END);
         const instanceDir = path.join(WORK_DIR, id);
-
         const apiToken = randomBytes(32).toString("hex");
 
         const instance: MoodleInstance = {
@@ -351,7 +342,6 @@ async function runHTTP(): Promise<void> {
     });
   });
 
-  // ── Live-Status der Demo-Provisionierung (feat09) ────────────────────────
   const demoStatusHandler: express.RequestHandler = async (req, res) => {
     const { token } = req.params;
     let request;
@@ -399,7 +389,6 @@ async function runHTTP(): Promise<void> {
   app.get("/api/demo-status/:token", demoStatusHandler);
   app.get("/demo-status/:token", demoStatusHandler);
 
-  // ── Extend-Code API (task26 / feat12) ─────────────────────────────────────
   const extendCodeHandler: express.RequestHandler = async (req, res) => {
     const { token, code } = (req.body ?? {}) as { token?: string; code?: string };
     if (!token || !code) {
@@ -469,7 +458,6 @@ async function runHTTP(): Promise<void> {
   app.post("/api/extend-code", extendCodeHandler);
   app.post("/extend-code", extendCodeHandler);
 
-  // ── Plugin detail API ──────────────────────────────────────────────────
   const pluginInfoHandler: express.RequestHandler = async (req, res) => {
     try {
       const configs = await loadConfigs().catch(() => []);
@@ -583,19 +571,11 @@ async function runHTTP(): Promise<void> {
     }
   });
 
-  // ── Admin Snapshot-Manager (task43, Stage 1A) ─────────────────────────────
-  // Liste, Löschen, Set-Default, Download von Snapshots im zentralen Admin.
-  // Stage 1B (Rebuild) und 1C (Edit-Live) folgen separat.
-  //
-  // Auth: Re-uses adminAuth (HTTP Basic Auth, gleiche Credentials wie
-  // für /admin). Snapshot-Files liegen in SNAPSHOT_DIR (default /opt/snapshots).
+  // ── Admin Snapshot-Manager (task43) ────────────────────────────────────────
 
   app.get("/admin/snapshots", adminAuth, async (_req, res) => {
     try {
       const snapshots = await snapshotSvc.listSnapshots();
-      // Configs incl. invisible — wir brauchen die volle Liste, damit
-      // "Set as Default" auch für versteckte Configs funktioniert. loadConfigs()
-      // filtert visible:false raus.
       const configs = await loadConfigs().catch(() => []);
       const enriched = snapshots.map(s => ({
         ...s,
@@ -604,7 +584,6 @@ async function runHTTP(): Promise<void> {
           .filter(c => c.snapshotId === s.id)
           .map(c => ({ id: c.id, name: c.name })),
       }));
-      // Configs minimal exportieren für das Set-Default-Dropdown im Frontend.
       const configsLite = configs.map(c => ({
         id: c.id,
         name: c.name,
@@ -636,9 +615,6 @@ async function runHTTP(): Promise<void> {
       const meta = await snapshotSvc.getSnapshot(id);
       if (!meta) { res.status(404).json({ error: "Snapshot nicht gefunden" }); return; }
 
-      // Default-Schutz: Wenn ein Config diesen Snapshot als snapshotId nutzt,
-      // verweigern — außer ?force=1. Verhindert versehentliches Löschen, das
-      // alle Demos kaputt macht.
       const configs = await loadConfigs().catch(() => []);
       const inUse = configs.find(c => c.snapshotId === id);
       if (inUse && !force) {
@@ -665,9 +641,6 @@ async function runHTTP(): Promise<void> {
       const meta = await snapshotSvc.getSnapshot(id);
       if (!meta) { res.status(404).json({ error: "Snapshot nicht gefunden" }); return; }
 
-      // Warnung bei Versions-Mismatch — verhindert das nicht, aber loggt.
-      // Z.B. Snapshot auf Moodle 5.0, Config auf 5.1 → Demo wird beim ersten
-      // Request den Upgrade-Pfad triggern und ggf. crashen.
       const cfg = (await loadConfigs().catch(() => []))
         .find(c => c.id === configId);
       if (cfg && cfg.moodleVersion !== meta.moodleVersion) {
@@ -691,6 +664,38 @@ async function runHTTP(): Promise<void> {
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
+  });
+
+  // ── Snapshot-Rebuild (task43 Stage 1B) ────────────────────────────────
+
+  // POST /admin/snapshots/rebuild  Body: { snapshotId, configId }  → 202 { jobId }
+  app.post("/admin/snapshots/rebuild", adminAuth, async (req, res) => {
+    const { snapshotId, configId } = (req.body ?? {}) as { snapshotId?: string; configId?: string };
+    if (!snapshotId || !configId) {
+      res.status(400).json({ error: "snapshotId und configId erforderlich" });
+      return;
+    }
+    try {
+      const job = await snapshotRebuild.startRebuild(snapshotId, configId);
+      res.status(202).json({
+        jobId: job.jobId,
+        statusUrl: `/admin/snapshots/jobs/${job.jobId}`,
+        message: `Rebuild gestartet für ${snapshotId} via Config ${configId}`,
+      });
+    } catch (e) {
+      res.status(404).json({ error: String(e) });
+    }
+  });
+
+  app.get("/admin/snapshots/jobs/:jobId", adminAuth, (req, res) => {
+    const job = snapshotRebuild.getRebuildJob(req.params.jobId);
+    if (!job) { res.status(404).json({ error: "Job nicht gefunden (oder Server neu gestartet)" }); return; }
+    res.json(job);
+  });
+
+  app.get("/admin/snapshots/jobs", adminAuth, (_req, res) => {
+    const jobs = snapshotRebuild.listRebuildJobs(20);
+    res.json({ count: jobs.length, jobs });
   });
 
   app.get("/plugin/:id", (_req, res) => {
@@ -1045,7 +1050,6 @@ function buildLoadingPage(firstName: string, pluginName: string, token: string):
 </html>`;
 }
 
-// ── Start ────────────────────────────────────────────────────────────────
 if (transport === "http") {
   cleanupOrphans()
     .catch((e) => {
