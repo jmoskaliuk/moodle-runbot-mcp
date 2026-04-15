@@ -1,403 +1,327 @@
-# eLeDia Moodle Onlineshop — Konzept v0.3
+# eLeDia Moodle Onlineshop — Konzept v0.4
 
-**Status:** Draft v0.3, 2026-04-15 — AGB/AVV-Signing + Mini-Kunden-Dashboard zurück im MVP
+**Status:** Draft v0.4, 2026-04-15 — **Vollautomatischer Flow, Admin raus aus der Loop**
 **Autor:** Johannes (Vision) + Claude (Ausarbeitung)
 **Basis:** `moodle-runbot-mcp` (Demo-Plattform)
 
-**Änderungen seit v0.2:**
-- AGB/AVV-Signing-Flow: jetzt im MVP (Sektion 0.1 + neue Sektion 6a)
-- Mini-Kunden-Dashboard: jetzt im MVP (Sektion 0.2 + neue Sektion 6b)
-- MVP-Aufwand: 3–4 Wochen → **4–5 Wochen**
+**Änderungen seit v0.3:**
+- Alle 8 Fragen beantwortet (Sektion 0.3)
+- Vollautomatischer Flow statt Admin-Approval (Sektion 0.4)
+- Subdomain-Verfügbarkeitscheck (Sektion 6c)
+- Odoo als Bestandsplattform dokumentiert
 
 ---
 
-## 0. MVP-Scope v0.3 (gültiger Scope — überschreibt v0.1)
+## 0. MVP-Scope v0.4 (gültiger Scope)
 
-Runbot im MVP:
+### 0.1 Was Runbot im MVP macht
 1. **Order-Frontend** — Paket-Auswahl + Formular
-2. **AGB/AVV-Signing** — digitales Click-Agreement mit PDF-Generierung + Audit-Log
-3. **Provisioning-Trigger** — nach Bestätigung Moodle-Instanz hochfahren
-4. **Mini-Kunden-Dashboard** — Instanz-Status-Anzeige via Magic-Link-Login
+2. **Double-Opt-In** — Verify-Mail, dann Bestell-Review-Seite
+3. **AGB/AVV-Signing** — PDF-Generation + Click-Agreement + Audit-Log
+4. **Automatisches Provisioning** — nach Bestätigung direkt Container hochfahren
+5. **Odoo-Notification** — E-Mail an `bestellung@eledia.de` mit Bestell-Details für Rechnungserstellung
+6. **Welcome-Mail** — URL + Admin-Login + Password-Reset-Link + Next-Steps
+7. **Mini-Kunden-Dashboard** — Magic-Link-Login, Instanz-Status-Anzeige
 
-**Weiterhin NICHT im MVP** (läuft extern):
-- ❌ Zahlungsabwicklung (Stripe/PayPal)
-- ❌ Rechnungs-Generierung + Versand
-- ❌ Support-Tickets + SLA
-- ❌ Renewal/Cancellation-Workflows
-- ❌ Backup-Management-UI für Kunde
+### 0.2 Was NICHT im MVP ist (läuft in Odoo / extern)
+- ❌ Rechnungs-Generierung + Versand (odoo)
+- ❌ Zahlungsabwicklung (odoo)
+- ❌ CRM + Kundenstammdaten (odoo)
+- ❌ Support-Tickets (odoo oder separat)
+- ❌ Renewal/Cancellation (odoo-Workflows)
 - ❌ Plugin-Updates im Kundendashboard
+- ❌ Backup-Management-UI für Kunde
 
-### 0.1 Warum AGB/AVV zurück im MVP
+### 0.3 Johannes-Antworten auf Sektion 8 (2026-04-15)
 
-**Rechtliche Pflicht:** DSGVO Art. 28 schreibt einen schriftlichen (Text-Form reicht nach Art. 28 (9) DSGVO) Auftragsverarbeitungsvertrag vor, **bevor** die Verarbeitung beginnt. Da Runbot die Moodle-Instanz provisioniert und betreibt und auf dem Hosting dann personenbezogene Daten (Kursteilnehmer) verarbeitet werden, ist der AVV zwingend.
+| # | Frage | Antwort |
+|---|---|---|
+| 1 | Bestandsplattform | **odoo** |
+| 2 | Bestellübergabe | **E-Mail zum Start, Webhook an odoo in Phase 2** |
+| 3 | Zahlungsdauer | **Nicht relevant** — Instanz geht vor Zahlung live |
+| 4 | Subdomain | **Wunscheingabe** mit Verfügbarkeits-Check |
+| 5 | Welcome-Mail-Empfänger | **Person, die Formular ausfüllt** |
+| 6 | AGB/AVV | **Pflicht-Download + Klick**, Ablauf siehe 0.4 |
+| 7 | Spam-Filter | **Double-Opt-In** via Verify-Mail reicht als Schutz |
+| 8 | Wann "live"? | **Direkt nach Bestätigung + Provisioning** — kein Warten auf Zahlung |
 
-**Varianten-Vergleich:**
+### 0.4 Neuer vollautomatischer Customer-Flow
 
-| Option | Beschreibung | Legal-Stärke | MVP-tauglich |
-|---|---|---|---|
-| A | Checkbox "AGB akzeptiert" mit PDF-Link | für AGB ok, für AVV schwach | nur teilweise |
-| **B** | Kunde tippt Firma/Name/Funktion → Server generiert personalisiertes PDF → Click-Agreement + Audit-Log | reicht für AVV (Text-Form) | ✅ **empfohlen** |
-| C | Qualifizierte elektronische Signatur (DocuSign/Skribble) | maximal | overkill, ~100€/Mt |
-| D | Papier/Fax-Versand + Rückgabe | solide, altmodisch | Friction zu hoch |
+**Key-Insight:** Die Instanz wird VOR Zahlung bereitgestellt. Odoo übernimmt nachgelagert die Rechnungsstellung. Damit entfällt der Admin-Approval-Schritt — alles vollautomatisch.
 
-**Wichtig:** Die Text-Form nach §126b BGB + Art. 28 (9) DSGVO reicht aus — es **muss keine handschriftliche Unterschrift** sein, solange erkennbar ist, wer (Firma + Name) unterzeichnet hat und der Text unveränderbar dokumentiert ist. Das PDF mit Namen + Zeitstempel + IP + Hash reicht.
+```
+1. Kunde füllt Shop-Formular aus
+      ↓
+2. Verify-Mail geht an Kunden-E-Mail (Double-Opt-In, Spam-Schutz)
+      ↓
+3. Kunde klickt Link → Order-Review-Seite (keine Instanz läuft noch)
+      - Zeigt: Paket, Subdomain, Rechnungsdaten
+      - AGB-PDF-Download-Button (Pflicht vor Bestätigung)
+      - AVV-PDF-Download-Button (Pflicht vor Bestätigung)
+      - Checkbox: "Ich habe AGB + AVV gelesen und akzeptiert"
+      - "Bestellung bestätigen + Instanz starten"-Button (erst enabled
+         wenn beide PDFs runtergeladen + Checkbox gesetzt)
+      ↓
+4. Bestätigung → SOFORT:
+      a) Order-Status = CONFIRMED
+      b) Auto-Provisioning startet (Docker-Container)
+      c) Odoo-Notify-Mail an bestellung@eledia.de mit allen Bestelldaten
+      ↓
+5. Kunde sieht Loading-Page (analog Demo-Loading, mit echter Progress)
+      ↓
+6. Nach Provisioning-Ende → Welcome-Mail:
+      - Moodle-URL
+      - Admin-Login (generiertes starkes Passwort)
+      - "Passwort ändern"-Link (direkt zu Moodle /login/change_password.php)
+      - Magic-Link zum Kunden-Dashboard
+      - Next-Steps-Guide (PDF-Anhang)
+      ↓
+7. Odoo-Mitarbeiter erstellt Rechnung, sendet sie über odoo raus
+      ↓
+8. Kunde zahlt über odoo-Prozess (nicht in Runbot sichtbar)
+```
 
-### 0.2 Warum Mini-Kunden-Dashboard zurück im MVP
+**Wichtig:** Kein Admin-Klick in Runbot nötig. Admin-Dashboard-Bestellungen-Tab bleibt als **Monitoring + Override** für Edge-Cases (Provisioning fehlgeschlagen, manuelles Eingreifen nötig), nicht als regulärer Workflow-Schritt.
 
-**Scope auf Transparenz reduziert:**
-- ✅ Liste der eigenen Instanzen (meist nur 1)
-- ✅ Status (running / down / maintenance)
-- ✅ URL, Created-At, Paket-Name
-- ✅ Download-Link für signierten AVV (wieder ausdrucken falls verloren)
-- ❌ Stopp/Restart/Upgrade-Buttons (läuft über Bestands-Support)
-- ❌ User-Management (macht Kunde in seiner Moodle-Instanz selbst)
-- ❌ Rechnungen/Verträge (läuft über Bestandsplattform)
+### 0.5 Lifecycle-State-Machine v0.4
 
-**Begründung:** Minimum an Self-Service, maximale Reduktion von "ist mein System noch da?"-Support-Anfragen. Weder Billing- noch Feature-Verwaltung duplizieren.
+```
+DRAFT ──Formular-Submit──► PENDING_VERIFICATION
+                                    │ (Verify-Mail verschickt)
+                                    │
+                                    │ Klick auf Verify-Link (7d gültig)
+                                    ↓
+                             ORDER_REVIEW
+                                    │ (Kunde sieht Review-Seite)
+                                    │
+                                    │ AGB+AVV download + confirm click
+                                    ↓
+                             CONFIRMED
+                                    │ (Auto-Provisioning startet,
+                                    │  Odoo-Notify-Mail raus)
+                                    ↓
+                             PROVISIONING
+                                    │ (Docker läuft hoch, 3–5 min)
+                                    ↓
+                             LIVE  ◄──── (Welcome-Mail raus)
+                              │
+                              │ (manueller Admin-Stop bei Kündigung,
+                              │  kein Auto-Renew, kein Auto-Cancel)
+                              ↓
+                          TERMINATED
+```
+
+**Fehlerzustände:**
+- `VERIFY_EXPIRED` — Nutzer hat Verify-Link 7 Tage nicht geklickt → Order gelöscht
+- `PROVISION_FAILED` — Docker-Fehler → Admin-Nachricht, manuelles Retry im Admin-Dashboard
+- `REJECTED` — Admin hat Bestellung abgelehnt (Spam-Verdacht, Konflikt)
 
 ---
 
-## 1. Vision
+## 1. Vision (unverändert)
 
-Aus der Runbot-Demo-Plattform wird ein Self-Service Moodle-Shop mit MVP-Scope: Order-Annahme + Agreement-Signing + Provisioning + Transparenz-Dashboard. Billing, Rechnungen, Support laufen über die bestehende eLeDia-Plattform.
+Self-Service Moodle-Shop: Kunde durchläuft autonom Paket-Auswahl bis fertige Instanz. Rechnung läuft separat über odoo.
 
-## 2. Zwei Kauf-Pfade
+## 2. Pakete (MVP-Start)
 
-### 2a. Paket (MVP-Start)
+| Paket | Inhalt | User-Limit |
+|---|---|---|
+| **LMS Starter** | Vanilla Moodle 5.1 | 50 |
+| **Schulungs-LMS** | Moodle + LeitnerFlow + exam2pdf | 200 |
+| **Prüfungs-Suite** | Moodle + exam2pdf + SafeExamBrowser | 500 |
 
-| Paket | Zielgruppe | Inhalt | User-Limit |
-|---|---|---|---|
-| **LMS Starter** | Vereine, Projektgruppen | Vanilla Moodle 5.1 | 50 |
-| **Schulungs-LMS** | Weiterbildner | Moodle + LeitnerFlow + exam2pdf | 200 |
-| **Prüfungs-Suite** | Zertifizierer | Moodle + exam2pdf + SafeExamBrowser | 500 |
+Baukasten kommt in Phase 2.
 
-### 2b. Baukasten — Phase 2+
+## 6a. AGB/AVV-Flow — aktualisiert für v0.4
 
-Freie Plugin-Kombination. Im MVP weggelassen.
+**Flow gemäß Johannes-Idee (Frage 6):**
 
-## 3. Customer Journey (MVP v0.3)
+1. Kunde füllt Shop-Formular aus (Firma, Name, Funktion, E-Mail, Paket, Subdomain-Wunsch)
+2. **Verify-Mail** geht raus (einmaliger Token, 7d gültig)
+3. Kunde klickt Verify-Link → **Order-Review-Seite** (`/order/review/:token`)
+4. Review-Seite zeigt:
+   - **Bestell-Zusammenfassung**: Paket, Subdomain, Rechnungsadresse
+   - **AGB-PDF-Download-Button**: "AGB als PDF herunterladen (Pflicht)"
+   - **AVV-PDF-Download-Button**: "AVV als PDF herunterladen (Pflicht)" — PDF ist personalisiert mit Firma/Name/Funktion aus dem Formular
+   - **Checkbox**: "Ich habe die AGB und den AVV heruntergeladen, gelesen und akzeptiere sie."
+   - **Confirm-Button**: "Bestellung bestätigen + Instanz starten" — erst enabled wenn beide PDFs mindestens 1× geladen wurden UND Checkbox gesetzt ist
+5. Klick auf Confirm → Backend:
+   - Audit-Log-Eintrag mit Order-ID, PDF-SHAs, Timestamp, IP
+   - State: `ORDER_REVIEW` → `CONFIRMED`
+   - Auto-Provisioning wird gestartet
+   - Odoo-Notify-Mail geht raus
 
-### Schritt 1 — Paket wählen
-- `shop.eledia.ai` → Paket-Übersicht → Auswahl
+**Technische Änderungen gegenüber v0.3:**
+- PDF-Downloads werden server-seitig getrackt (Backend-Zähler pro Order-ID)
+- Confirm-Button-Freischaltung per Frontend-JS, aber Backend verifiziert
+- **Neue Endpoints:**
+  - `GET /order/review/:token` → Review-HTML
+  - `GET /api/order/:token/agb.pdf` → AGB-Download + Download-Counter
+  - `GET /api/order/:token/avv.pdf` → personalisierter AVV-Download + Counter
+  - `POST /api/order/:token/confirm` → Final-Confirm, triggert Provisioning
 
-### Schritt 2 — Formular ausfüllen
-- **Rechnungsanschrift:** Firma, Adresse, USt-ID (für externe Rechnung)
-- **AVV-Daten:** Firma, Vor/Nachname, Funktion, E-Mail des Unterzeichnenden
-- **Technisch:** gewünschte Subdomain, Kontakt-E-Mail
-- Submit → AVV/AGB-Review-Schritt
+**Legal-Note:** Die Text-Form nach §126b BGB + Art. 28 (9) DSGVO ist gewahrt — das personalisierte AVV-PDF + der dokumentierte Confirm-Click + Audit-Log reichen für B2B-SaaS.
 
-### Schritt 3 — AGB + AVV signieren (NEU im v0.3)
-- Server generiert personalisiertes AVV-PDF mit eingesetzten Daten
-- Kunde sieht PDF im Browser + Download-Button + AGB-Link
-- Checkbox "Ich, [Name], bestätige als [Funktion] der [Firma], den AVV und die AGB gelesen und akzeptiert zu haben."
-- "Bestellung absenden" → Backend speichert Order + AVV-PDF + Audit-Log
-- Bestätigungs-E-Mail an Kontakt mit PDF-Anhang
+## 6b. Mini-Kunden-Dashboard — unverändert aus v0.3
 
-### Schritt 4 — Extern (eLeDia)
-- Admin sieht Bestellung im Dashboard, erstellt Rechnung über Bestandsplattform
-- Kunde zahlt über Bestandsprozess
-- Admin klickt in Runbot-Admin "✅ Provisionieren"
+Magic-Link-Login, Liste Instanzen mit Status + URL, AVV-Download, Support-Kontakt. Keine Steuerung.
 
-### Schritt 5 — Provisioning
-- Docker-Container wird hochgefahren (3–5 Min frisch, oder Paket-Snapshot)
-- Welcome-Mail an Kunde mit URL + Admin-Login + **Magic-Link** zum Kunden-Dashboard
+## 6c. Subdomain-Verfügbarkeitscheck (NEU in v0.4)
 
-### Schritt 6 — Betrieb
-- Kunde nutzt Moodle
-- Im Kunden-Dashboard sieht er: Status, URL, AVV-Download
-- Support/Rechnung/Renewal über Bestandsplattform
+**Warum:** Wenn Kunde einen Wunsch-Namen eingibt, muss Runbot prüfen:
+- Bereits vergeben? (andere Instance hat denselben Subdomain)
+- Reserviert? (Blacklist für `admin`, `api`, `www`, `mail`, `demo`, `shop`, `eledia`, ...)
+- Syntaktisch gültig? (`^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$` — DNS-Labels)
 
----
+**Frontend-UX:**
+- Formular-Feld "Subdomain" mit Live-Check beim Tippen (`/api/subdomain/check?s=xyz`)
+- Grün: "✓ `meine-firma.eledia.ai` ist verfügbar"
+- Rot: "✗ bereits vergeben / reserviert / ungültig"
+- Vorschlag bei Konflikt: `meine-firma-2`, `meine-firma-lms`
 
-## 6a. AGB/AVV-Signing-Flow (NEU)
-
-### UX-Flow
-
-```
-Formular ausgefüllt ──► Review-Seite ──► AVV gesigned ──► Bestätigungsmail
-                           │                     │
-                           │                     └─ Order in "ORDER_SIGNED" Status
-                           │
-                           └─ AVV-PDF serverseitig generiert
-                              AGB-Version aus Repo eingefroren
-```
-
-### Technische Komponenten
-
-**1. Templates im Repo:**
-```
-templates/
-├── agb-v1.md              # AGB-Text, Markdown, von Anwalt geliefert
-├── avv-template-v1.md     # AVV mit {{firma}}, {{name}}, {{funktion}}, {{datum}}, {{paket}} Platzhaltern
-└── agreement-styles.css   # Corporate-Styling für PDF-Rendering
-```
-
-**2. PDF-Generierung:**
-- **Option A:** `pandoc` via child_process + LaTeX (kostenlos, im Docker-Image installierbar, hohe Qualität)
-- **Option B:** Node-Library `puppeteer` — HTML-zu-PDF (größerer Footprint, aber flexibler)
-- **Option C:** Externer Service (z.B. ConvertAPI, DocRaptor ~0,01€/PDF)
-
-**Empfehlung MVP:** Option A (pandoc) — in moodle-docker bereits verfügbar, zuverlässig, schön.
-
-**3. Neuer Service `src/services/agreements.ts`:**
+**Backend-Endpoint:**
 ```typescript
-interface SignedAgreement {
-  orderId:      string;
-  type:         "agb" | "avv";
-  templateVersion: string;   // "v1" — aus Repo eingefroren
-  signedBy: {
-    firma:    string;
-    name:     string;
-    funktion: string;
-    email:    string;
-  };
-  signedAt:     string;       // ISO
-  ipAddress:    string;       // von req.ip
-  userAgent:    string;
-  pdfPath:      string;       // /opt/runbot/agreements/<orderId>/avv-signed.pdf
-  pdfSha256:    string;       // Hash zur Integritätsprüfung
-}
-
-export async function generateAvvPdf(order: Order): Promise<string>;
-export async function recordAgreement(agreement: SignedAgreement): Promise<void>;
-export async function listAgreementsForOrder(orderId: string): Promise<SignedAgreement[]>;
-export async function getAgreementPdf(orderId: string, type: "agb" | "avv"): Promise<Buffer>;
+GET /api/subdomain/check?s=<wunsch>
+→ { available: true, suggestions?: string[] }
 ```
 
-**4. Persistenz:**
-- Metadaten: `/opt/runbot/agreements/index.json` (append-only)
-- PDFs: `/opt/runbot/agreements/<orderId>/{agb,avv}-signed.pdf`
-- Backup: tägliches Sync in Object-Storage (Phase 2)
+Prüft gegen:
+- Bestehende Instanzen in Registry (alle `instance.id` aus `registry.ts`)
+- Blacklist-Array (hardcoded)
+- DNS-Label-Regex
 
-**5. Audit-Log:**
-Jedes Signing wird zusätzlich in `logs/agreements-audit.log` geschrieben (append-only, nie überschreiben):
-```
-2026-04-20T10:23:45Z order=ord-abc123 type=avv version=v1 signer="Max Mustermann (CTO, ACME GmbH)" ip=203.0.113.42 sha256=4a7b...
-```
-
-### AVV-Template-Aufbau (Platzhalter-Liste)
-
-```markdown
-# Auftragsverarbeitungsvertrag
-
-zwischen
-**{{firma}}**
-vertreten durch {{name}}, {{funktion}}
-— nachfolgend "Verantwortlicher" —
-
-und
-**eLeDia GmbH**, [Adresse einfügen]
-vertreten durch [Geschäftsführer-Name]
-— nachfolgend "Auftragsverarbeiter" —
-
-## 1. Gegenstand der Verarbeitung
-Der Auftragsverarbeiter stellt dem Verantwortlichen eine Moodle-Instanz
-im Rahmen des Pakets **{{paket}}** zur Verfügung. ...
-
-## 2. Art und Zweck
-...
-
-## 3. Kategorien betroffener Personen
-Lernende, Lehrende, Administratoren in der Moodle-Instanz des Verantwortlichen.
-
-## 4. Technische und organisatorische Maßnahmen (TOM)
-Anlage 1.
-
-## 5. Unterauftragsverarbeiter
-Anlage 2 — z.B. Hetzner Online GmbH (Hosting DE).
-
-...
-
-**Datum der Annahme:** {{datum}}
-**Digitale Annahme durch:** {{name}}, {{funktion}}, {{email}}
-**Annahme-IP:** {{ip}}
-**Template-Version:** {{version}}
-**SHA256 dieses Dokuments:** {{sha}}
-```
-
-### Rechtlicher Disclaimer
-
-**Wichtig:** Ich kann das technische Gerüst bauen — **die Texte (AGB, AVV, TOM, Unterauftragsverarbeiter-Liste) müssen von einem IT-Fachanwalt erstellt oder geprüft werden.** eLeDia hat vermutlich schon welche für Bestands-Hosting — die sollten als Basis dienen.
-
-Die Template-Platzhalter (`{{firma}}`, `{{name}}` etc.) gebe ich vor — Johannes + Anwalt füllen mit echten Texten.
-
-### MVP-Aufwand AGB/AVV
-
-- Service + Endpoints: ~3–4 Tage
-- PDF-Rendering: 1–2 Tage (pandoc-Setup, Styling)
-- Frontend-Review-Seite: 1–2 Tage
-- **Gesamt:** ~1 Woche + unabhängig dazu Anwaltskosten + Text-Erstellung
+**Race-Condition:** Beim finalen Order-Submit wird nochmal geprüft (zwei Leute können gleichzeitig denselben Namen wählen). Wenn kollidiert: Fehler + Vorschläge.
 
 ---
 
-## 6b. Mini-Kunden-Dashboard (NEU)
+## 7. Odoo-Integration
 
-### UX-Flow
+### 7.1 MVP: E-Mail-basiert
+
+Nach `CONFIRMED`-State triggert Runbot eine E-Mail an `bestellung@eledia.de`:
 
 ```
-Kunde bekommt E-Mail mit Magic-Link
-    │
-    ▼
-Klick → GET /kunde/:magic-token (30 Tage gültig)
-    │
-    ▼
-Dashboard zeigt:
-    - Meine Instanz(en) mit Status
-    - Moodle-URL
-    - Created-At, Letzter-Backup-At
-    - Download-Link AGB + AVV
-    - Support-Kontakt (E-Mail + Tel)
-    - Bei Fragen → weiterleitung an eLeDia-Support
+Betreff: Neue Runbot-Bestellung: ACME GmbH — Schulungs-LMS
+
+Neue Shop-Bestellung ist eingegangen und wird aktuell provisioniert.
+
+Rechnungsdaten:
+  Firma:     ACME GmbH
+  Anschrift: Musterstraße 1, 12345 Musterstadt
+  USt-ID:    DE123456789
+  Kontakt:   Max Mustermann <max@acme.de>
+
+Bestellung:
+  Paket:     Schulungs-LMS
+  Subdomain: acme-schulung.eledia.ai
+  User-Limit: 200
+  Order-ID:  ord-abc123
+
+AVV:
+  Personalisiert + gesigned am 2026-04-20 10:23 UTC
+  PDF: https://demo.eledia.ai/api/admin/orders/ord-abc123/avv.pdf
+
+Aktion erforderlich:
+  Rechnung in Odoo erstellen, Kunde kontaktieren, Zahlungseingang überwachen.
+  Instanz läuft bereits — bei Stornierung "Bestellung ablehnen" im Runbot-Admin.
 ```
 
-### Technik
+eLeDia-Mitarbeiter legt in odoo manuell einen Auftrag an, erstellt Rechnung, versendet sie.
 
-**1. Magic-Link statt Passwort-DB:**
-- Keine Registrierung, keine Passwörter
-- Link ist token-basiert (64 Zeichen random, 30d gültig)
-- Bei Click wird Session-Cookie gesetzt (1h), danach erneuter Link aus Profil
-- Wiederholungen: "Neuen Link anfordern" → an Rechnungsmail senden
+### 7.2 Phase 2: Webhook an Odoo
 
-**2. Neuer Service `src/services/customers.ts`:**
-```typescript
-interface Customer {
-  id:          string;        // gleiche wie Order.customerId
-  email:       string;        // Login-Identifikator
-  firma:       string;
-  name:        string;
-  magicTokens: MagicToken[];  // [{token, expiresAt, usedAt?}]
-  orderIds:    string[];      // alle Orders dieses Kunden
-}
+Später: Direkte Odoo-API-Integration via `xmlrpc` oder `jsonrpc`:
 
-export async function createMagicLink(email: string): Promise<string>;
-export async function validateMagicToken(token: string): Promise<Customer | null>;
-export async function getCustomerInstances(customerId: string): Promise<InstanceInfo[]>;
-```
+- Erstelle Partner (`res.partner`) wenn noch nicht existent
+- Erstelle Sales Order (`sale.order`) mit Produkten = Paket
+- Bestätige Order → Rechnung automatisch via odoo-Workflow
+- Verknüpfe `odoo_order_id` zurück zu Runbot-Order
 
-**3. Neue Frontend-Seite `webui/customer.html` (~300 Zeilen):**
-- Styling analog zu admin.html (konsistent)
-- Header: Name + Firma + Logout
-- Sektion "Meine Instanzen" — Tabelle mit:
-  - Paket-Name + Icon
-  - Status-Pill (running/starting/down)
-  - URL mit "Öffnen"-Button
-  - Created-At + Laufzeit
-  - Actions: "AVV herunterladen", "Support kontaktieren"
-- Keine Stoppen/Upgraden/User-Mgmt-Buttons — das läuft über eLeDia-Support
-- Footer: "Bei Fragen: support@eledia.de • Tel +49..."
-
-**4. Neue Endpoints:**
-- `POST /api/customer/magic-link` — body: `{email}` → erzeugt Token, sendet Mail
-- `GET /kunde/:token` — validiert, setzt Cookie, serviert customer.html
-- `GET /api/customer/me` — aktuelle Customer-Daten + Instanzen (Cookie-Auth)
-- `GET /api/customer/agreements/:orderId/:type` — AVV/AGB-PDF-Download
-
-**5. Sicherheit:**
-- Tokens sind HMAC-signiert (kein Server-State in URL)
-- Rate-Limit auf Magic-Link-Anfrage (max. 3 pro Stunde pro E-Mail)
-- Cookie: `HttpOnly`, `Secure`, `SameSite=Lax`, Expires nach 1h
-- Kein CSRF-relevanter Action möglich (nur Reads)
-
-### MVP-Aufwand Kunden-Dashboard
-
-- Service + Endpoints: ~2–3 Tage
-- Frontend: ~2–3 Tage
-- Magic-Link-Mail-Template: 0,5 Tage
-- **Gesamt:** ~1 Woche
+Erfordert: odoo-Credentials, API-Zugang. Nicht MVP-kritisch.
 
 ---
 
-## 7. Angepasste MVP-Roadmap v0.3
+## 8. MVP-Roadmap v0.4
 
-### Phase 0 — Vorbereitung (diese Woche, kein Code)
-- [ ] Johannes beantwortet 8 offene Fragen aus v0.2 Sektion 8
-- [ ] Fachanwalt liefert AGB + AVV-Text (eLeDia hat vermutlich schon)
-- [ ] Corporate-Styling für PDFs (Logo, Farben)
-- [ ] 1–2 Paket-Snapshots bauen (z.B. via Admin-UI Edit-Live)
+### Phase 0 — Vorbereitung (diese Woche)
+- [ ] AGB + AVV-Texte bei eLeDia sichten (bestehende Vorlagen?) und ggf. vom Anwalt prüfen lassen
+- [ ] 1–2 Paket-Snapshots bauen via Admin-UI Edit-Live
+- [ ] odoo-Workflow klären: Wer bekommt `bestellung@eledia.de`-Mails? Wie wird zurückgemeldet?
 
-### Phase 1 — Implementation (4–5 Wochen statt 3–4)
+### Phase 1 — MVP Implementation (4–5 Wochen)
 
-**Woche 1:** Order-Backend
-- `orders.ts` + Endpoints
-- 2 Mail-Templates
-- Admin-Dashboard-Erweiterung (Bestellungen-Tab)
+**Woche 1: Order-Backend + Lifecycle**
+- `orders.ts` mit State-Machine DRAFT → PENDING_VERIFICATION → ORDER_REVIEW → CONFIRMED → PROVISIONING → LIVE
+- Verify-Mail + Verify-Link-Handler
+- Odoo-Notify-Mail-Template
+- Admin-Dashboard-Tab "Bestellungen" (Monitoring-View, keine regulären Aktionen)
 
-**Woche 2:** AGB/AVV-System
-- `agreements.ts` + PDF-Generator via pandoc
-- Template-Rendering mit Platzhaltern
-- Audit-Log
-- Frontend-Review-Seite
+**Woche 2: AGB/AVV-System**
+- `agreements.ts` + pandoc-basierter PDF-Generator
+- AVV-Template mit Platzhaltern, AGB-Template
+- Download-Counter + Audit-Log
+- Confirm-Gate (Button erst enabled wenn Downloads getrackt)
 
-**Woche 3:** Shop-Frontend
-- `shop.html` + Builder-JS
-- Integration mit AVV-Review-Step
-- Bestätigungs-Mail mit AVV-Anhang
+**Woche 3: Shop-Frontend**
+- `shop.html` mit Paket-Übersicht + Formular
+- Subdomain-Live-Check
+- `order-review.html` (Zusammenfassung + AGB/AVV-Downloads + Confirm)
+- Styling (Corporate Design eLeDia)
 
-**Woche 4:** Kunden-Dashboard
-- `customers.ts` + Magic-Link
-- `customer.html`
-- Magic-Link-Mail-Template
+**Woche 4: Provisioning-Integration + Kunden-Dashboard**
+- `confirmOrder()` → Auto-Provisioning analog `/confirm/:token`, aber mit `pinned: true` + langem Lifetime
+- Welcome-Mail mit Magic-Link
+- `customers.ts` + Magic-Link-System
+- `customer.html` mit Instanz-Liste
 
-**Woche 5:** Integration + Polish
-- Provisioning-Trigger integriert mit bestehender Runbot-Infra
-- Welcome-Mail erweitert (Magic-Link + Admin-Login)
-- Ende-zu-Ende-Test mit Pilot-Bestellung
-- Landing-Page-Text + Launch-Prep
+**Woche 5: Polish + Launch**
+- End-to-End-Test mit 1–2 Pilot-Bestellungen
+- Landing-Page-Text + SEO
+- Odoo-Workflow-Anbindung dokumentieren
+- Go-Live mit 1–2 Paketen
 
----
-
-## 8. Offene Fragen (v0.3 aktualisiert)
-
-### Aus v0.2 (noch offen)
-1. **Bestandsplattform-Identifizierung:** Welche Plattform macht die Rechnung? (Integration Detail)
-2. **Bestellübergabe:** E-Mail oder Webhook? (Empfehlung: E-Mail MVP)
-3. **Subdomain:** Auto aus Firma oder Wunsch-Eingabe? (Empfehlung: Wunsch mit Check)
-4. **Welcher Kontakt bekommt Welcome-Mail?** (Empfehlung: technischer Kontakt = Formular-E-Mail)
-5. **Spam-Filter:** Automatisch oder manuell? (Empfehlung: manuell im MVP)
-
-### Neu in v0.3
-6. **AGB/AVV-Texte:** Hat eLeDia schon welche im Bestand? Kann ich die Templates im Repo anlegen, Johannes füllt Inhalt?
-7. **TOM-Anlage (Technische & Organisatorische Maßnahmen):** Nötig für AVV — gibt es schon eine TOM-Dokumentation bei eLeDia?
-8. **Unterauftragsverarbeiter:** Wer ist in der Liste außer Hetzner? (Brevo für E-Mail? GitHub als Code-Host?)
-9. **PDF-Rendering:** pandoc (MVP-empfohlen) oder Puppeteer? (Puppeteer ist flexibler, aber braucht Chrome im Container)
-10. **Magic-Link-TTL:** 30 Tage praktikabel oder zu lang? (Security vs. Convenience)
-11. **Kunden-Dashboard bei falschem Login:** "E-Mail nicht gefunden" zeigen oder immer "Link gesendet" (Security through obscurity)?
+### Phase 2 — Nach Launch (ab ~4 Wochen nach Go-Live)
+- Odoo-API-Webhook statt E-Mail
+- Baukasten-Option im Shop
+- Weitere Pakete
+- Kunden-Dashboard-Erweiterungen (Backup-Stand anzeigen)
 
 ---
 
-## 9. Zusammenfassung der Architektur v0.3
+## 9. Offene Fragen v0.4 (verbleibend)
 
-**Drei Komponenten:**
-
-```
-┌────────────────────────────┐    ┌────────────────────────┐    ┌──────────────────────────┐
-│ RUNBOT (erweitert)         │    │ eLeDia-Bestand (extern)│    │ Kunde                    │
-│                            │    │                        │    │                          │
-│ • Shop-Frontend            │───►│ • Rechnung             │◄──►│ • Zahlung                │
-│ • AVV-Signing + PDF-Gen    │    │ • Zahlungsabwicklung   │    │ • Moodle-Nutzung         │
-│ • Order-Management         │    │ • Support-Tickets      │    │ • Mini-Dashboard (Read)  │
-│ • Provisioning (Docker)    │    │ • Vertragsverwaltung   │    │ • Support über Bestand   │
-│ • Mini-Kunden-Dashboard    │    │ • Renewals             │    │                          │
-│                            │    │                        │    │                          │
-└────────────────────────────┘    └────────────────────────┘    └──────────────────────────┘
-```
-
-**Runbot neu (auf Basis bestehender Infra):**
-- ~150 Zeilen `orders.ts`
-- ~200 Zeilen `agreements.ts` + Templates + PDF-Gen
-- ~150 Zeilen `customers.ts` + Magic-Link
-- ~400 Zeilen `shop.html` + Review-Seite
-- ~300 Zeilen `customer.html`
-- ~200 Zeilen Admin-Erweiterung für Bestellungen-Tab
-- 4–5 neue Mail-Templates
-- **Gesamt:** ~1500 Zeilen neuer Code, 4–5 Wochen Implementation
-
-**Keine** Billing-Logic, keine Stripe-Integration, keine Renewal-Engine, keine Ticket-System-Integration — das alles bleibt bei der Bestandsplattform.
+1. **AGB/AVV-Texte**: Hat eLeDia schon welche? Wer im Team hat die Hand drauf? → Johannes klären
+2. **TOM-Anlage für AVV**: Bestehend oder müssen wir erstellen?
+3. **Unterauftragsverarbeiter-Liste** (Hetzner, Brevo, etc.): Gibt's eine Sammlung?
+4. **Corporate Design für PDFs**: Logo-SVG + Farben + Fonts — bei eLeDia verfügbar?
+5. **odoo-Zugang**: Wer im Team pflegt die Mails an `bestellung@eledia.de`? Wie ist die Reaktionszeit?
+6. **Provisioning-Fehler**: Was passiert bei `PROVISION_FAILED`? Admin kriegt Mail, Kunde kriegt Mail mit "kommen Sie bitte auf uns zu" oder retry-Link?
+7. **Passwort-Policy für Admin-Login**: Zufallsgeneriertes starkes Passwort reicht? Oder direkter Magic-Link ohne Passwort?
+8. **Rechtssicherheit PDFs**: Sollen die PDFs zusätzlich in S3/Object-Storage gebackupt werden (10+ Jahre)?
 
 ---
 
-**Wichtig:** Die AGB/AVV-Texte müssen vom Fachanwalt kommen. Ich bereite das technische Gerüst vor, aber ohne juristisch sauberen Input wird die Plattform nicht launch-fähig.
+## 10. Zusammenfassung v0.4
+
+**Das eleganteste am neuen Flow:** Kein Admin-Bottleneck. Alles passiert vollautomatisch zwischen Kundenaktionen.
+
+**Admin-Dashboard-Bestellungen-Tab wird zum Beobachtungsposten:**
+- Zeigt alle Orders mit State + History
+- Manual-Override bei Fehlern (retry Provisioning, Order ablehnen, Welcome-Mail erneut senden)
+- Kein regelmäßiger Click-Workflow mehr
+
+**Technische Neu-Komponenten:**
+- `orders.ts` — ~200 Zeilen mit State-Machine
+- `agreements.ts` — ~200 Zeilen mit PDF-Gen
+- `customers.ts` — ~100 Zeilen mit Magic-Link
+- `shop.html` + `order-review.html` + `customer.html` — ~1000 Zeilen Frontend
+- Admin-Erweiterung — ~200 Zeilen
+- Subdomain-Check-Endpoint — ~30 Zeilen
+- 5 neue Mail-Templates
+- **Gesamt:** ~2000 Zeilen neuer Code, 4–5 Wochen
+
+**Hauptrisiko:** AGB/AVV-Texte-Verfügbarkeit — wenn eLeDia keine parat hat und der Anwalt 4 Wochen braucht, verzögert das den Launch.
 
 ---
 
-*Phase-2+-Themen (Stripe-Integration, Renewal-Engine, Custom-Domains, Whitelabel, volle Support-SLA) sind in v0.1 dieses Dokuments dokumentiert und werden relevant, wenn sich die Trennung Runbot ↔ Bestandsplattform als zu aufwändig erweist.*
+*Phase-2+-Themen (Stripe-Integration wenn sich Trennung nicht bewährt, Webhook-Integration mit odoo, Baukasten, Custom-Domains, Whitelabel) sind in v0.1 dieses Dokuments dokumentiert.*
