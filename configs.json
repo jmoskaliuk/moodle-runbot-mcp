@@ -16,7 +16,7 @@
     ],
     "db": "pgsql",
     "phpVersion": "8.2",
-    "moodleVersion": "5.1",
+    "moodleVersion": "5.0",
     "plugin": {
       "srcPath": "/opt/plugins/mod_eledialeitnerflow",
       "type": "mod",
@@ -43,7 +43,7 @@
     ],
     "db": "pgsql",
     "phpVersion": "8.3",
-    "moodleVersion": "5.1",
+    "moodleVersion": "5.0",
     "plugin": {
       "srcPath": "/opt/plugins/local_eledia_exam2pdf",
       "type": "local",
