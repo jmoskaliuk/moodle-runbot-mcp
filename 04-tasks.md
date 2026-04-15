@@ -10,11 +10,7 @@ Enthält: neue Beobachtungen, Tasks, Klärungsbedarf, aktive Arbeit, Verifikatio
 ## ✍️ Quick-Capture für Johannes
 
 Neue Bugs und Feature-Ideen einfach unten in die passende Sektion kopieren.
-Du musst nicht perfekt schreiben — halbfertig ist besser als nichts. Claude
-liest diese Sektionen beim nächsten Task automatisch und formuliert bei
-Bedarf aus, fragt nach, oder erstellt daraus ausgearbeitete Task-Einträge.
-
-**Bug-Template (unter `## 🐞 Bugs` einfügen):**
+Format siehe Templates unten.
 
 ```markdown
 ### bugXX <kurzer Titel>
@@ -25,26 +21,17 @@ Repro: <was hast du gemacht, was ist passiert, was hättest du erwartet>
 Workaround: <falls du einen hast, sonst leer>
 ```
 
-**Feature-Template (unter `## 💡 Ideen` einfügen oder direkt nach `01-features.md` → `featXX`):**
-
 ```markdown
 ### ideaXX <kurzer Titel>
 Datum: 2026-04-10
-Wunsch: <ein Satz — was soll das Produkt tun>
-Warum: <kurz — welches Problem löst es>
+Wunsch: <ein Satz>
+Warum: <welches Problem löst es>
 Offen: <was ist dir noch unklar>
 ```
-
-Für größere Features lieber direkt in `01-features.md` als `featXX`-Block
-(dort steht ein analoges Template oben).
 
 ---
 
 ## 🐞 Bugs
-
-*(Neue Bug-Beobachtungen hier reinkippen — Claude sortiert und priorisiert
-im nächsten Task. Format siehe Quick-Capture oben. Gefixte Bugs wandern in
-`05-quality.md` zur dauerhaften Archivierung.)*
 
 Aktuell keine offenen Bugs.
 
@@ -52,34 +39,13 @@ Aktuell keine offenen Bugs.
 
 ## 💡 Ideen
 
-*(Halbgare Feature-Gedanken hier. Sobald konkret genug, wandern sie in
-`01-features.md` als `featXX`-Block.)*
-
 ### idea: nginx-Config sauber aufräumen
 
 Der nginx vor dem Node-Backend proxyt `/api/*` mit trailing-slash
 (`proxy_pass http://127.0.0.1:3000/;`) und strippt dadurch den
-`/api/`-Präfix vor dem Forward an Express. Das ist der Grund für die
-Alias-Routen in `src/index.ts` (`/demo-status/:token` neben
-`/api/demo-status/:token`, `/plugininfo/:id` neben `/api/plugininfo/:id`,
-historisch auch `/configs` neben `/api/configs`). Wir haben uns bereits
-zweimal daran geschnitten:
-
-- Plugin-Detail-Seite: Bis 2026-04-09 wurde `loadPluginData()` still
-  mit einer HTML-Antwort statt JSON gefüttert, weil `/api/plugin/:id`
-  nach dem Strip als `/plugin/:id` den HTML-Handler getroffen hat.
-- Warteseite: Bis 2026-04-09 zeigte sie "Ihre Demo-Anfrage ist
-  abgelaufen", weil `/api/demo-status/:token` nach dem Strip auf
-  eine nicht existierende Route lief (3× 404 → Error-State).
-
-Beides wurde mit Aliasen entschärft (commit `bd878b9`), aber die
-eigentliche Ursache sitzt in `/etc/nginx/sites-enabled/runbot.conf`.
-Cleanup-Vorschlag: `proxy_pass http://127.0.0.1:3000;` (ohne
-trailing slash) → nginx reicht den vollständigen Pfad durch, Aliase
-entfallen. Muss ein Wartungsfenster sein, damit wir die Config mit
-`nginx -t` validieren und notfalls auf den Backup zurückfallen können
-(`/tmp/runbot-last-failed-nginx.conf`). Low-risk, aber aktuell nicht
-pressing — die Aliase funktionieren.
+`/api/`-Präfix. Das ist der Grund für die Alias-Routen in `src/index.ts`.
+Cleanup-Vorschlag: `proxy_pass http://127.0.0.1:3000;` (ohne trailing slash).
+Muss ein Wartungsfenster sein. Low-risk, aber aktuell nicht pressing.
 
 ---
 
@@ -87,13 +53,11 @@ pressing — die Aliase funktionieren.
 
 *(Neue Ideen, Beobachtungen, ungefilterte Einträge hier)*
 
-Aktuell nichts Neues seit dem 2026-04-10-Cleanup.
+Aktuell nichts Neues.
 
 ---
 
 ## ❓ Clarification Needed
-
-*(Offene Fragen an Johannes)*
 
 Aktuell keine offenen Fragen.
 
@@ -104,134 +68,61 @@ Aktuell keine offenen Fragen.
 ### task37c `local_runbotadmin` Stage 3 — Upload, Plugin-Management, Metadata
 Status: open
 Feature: feat05, in-Moodle-Admin
-Voraussetzung: task37b done (Stage 2 fertig)
+Voraussetzung: task37b done
 
-Fortsetzung der in-Moodle-Admin-GUI. Stage 1 (task37) lieferte Create +
-List; Stage 2 (task37b) lieferte Download, Delete, Set-Default. Stage 3
-ergänzt die noch fehlenden Workflows, damit der externe curl-Workflow
-(`project_runbot_snapshots.md`) endgültig abgelöst werden kann.
-
-**Scope**
-
-1. **Snapshot-Upload** vom Admin-Laptop direkt ins `SNAPSHOT_DIR`
-   - Neuer Endpoint `POST /api/internal/snapshot/upload` mit `multipart/form-data`
-   - Server-seitige Validierung: Size-Limit (z.B. 500 MB), `.sql.gz`-MIME-Prüfung,
-     Path-Containment-Check beim Zielpfad, Plugin-Scope-Check gegen rufende Instanz
-   - Atomic-Write via `tmp-file + rename`
-   - Moodle-UI: Drag-and-Drop-Feld im Snapshots-Tab + Metadata-Eingabe (Label, Description, Plugins)
-2. **Plugin-Management-Tab**
-   - Install/Update eines Plugins aus GitHub direkt in die laufende Instanz
-   - Nutzt `src/services/github.ts` für Release-Lookup
-   - Runbot-Backend ruft `docker.installPlugin()` + `purge_caches.php`
-3. **Metadata-Tab**
-   - Bearbeitung von Label, Description, Plugins-Liste eines bestehenden Snapshots
-   - Neuer Endpoint `POST /api/internal/snapshot/update-metadata`
-4. **Rate-Limiting + Audit-Logging**
-   - Simple per-Instance-Rate-Limit (z.B. 10 Actions / Minute) gegen Missbrauch
-   - Audit-Log nach `logs/runbot-admin-audit.log` mit Timestamp, Instance-ID, Action, Actor
-5. **Infrastruktur**
-   - Einheitlicher CSRF-Token-Check (bisher: Moodle-`sesskey`, reicht für Stage 2 — Stage 3 braucht evtl. mehr bei Upload)
-   - Error-Handling-Overhaul: konsistente deutsche Fehlermeldungen im Plugin-UI
-
-**Aufwand:** ~10–12 h (Upload 4 h, Plugin-Mgmt 3 h, Metadata 1 h, Rate-Limit + Audit 2 h, Infra 2 h)
-
-**Priorität:** mittel — aktuell ist der Stage-2-Funktionsumfang ausreichend
-für den täglichen Workflow, Stage 3 ist eine Komfort- und
-Robustheits-Ergänzung.
+Erweitert die **in-Moodle**-Admin-GUI (nicht zentral, läuft in jeder Demo).
+Die zentrale Admin-UI hat seit task43 einen vollständigen Snapshot-Manager —
+task37c bleibt nur noch für Zusatz-Features (Plugin-Install in laufender
+Instanz, Audit-Logging). Mittlere Priorität, ~10–12 h.
 
 ---
 
 ### task39 exam2pdf Demo-Bereitschaft: Plugin-Clone + Snapshot auf VPS
-Status: open
+Status: open → ersetzbar durch task43
 Feature: feat04
-Voraussetzung: task38 done (Config aktiviert)
 
-Die Demo-Karte für `local_eledia_exam2pdf` ist seit Commit `32339ad`
-(2026-04-12) in `configs.json` aktiviert (`visible: true`). Damit die Demo
-tatsächlich startbar ist, müssen auf dem VPS noch zwei Schritte erfolgen:
-
-**1. Plugin-Repo klonen**
-```bash
-ssh root@178.104.171.153
-git clone https://github.com/jmoskaliuk/local_eledia_exam2pdf.git /opt/plugins/local_eledia_exam2pdf
-```
-
-**2. Snapshot `exam2pdf-v1` erstellen**
-- Seed-Instanz starten (analog task19-Runbook für leitnerflow):
-  ```bash
-  curl -sX POST http://localhost:3000/mcp/call \
-    -H "Authorization: Bearer $MCP_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{"name":"instance_start","arguments":{"configId":"exam2pdf","owner":"seed@eledia.ai"}}' | jq .
-  ```
-- Im Browser auf der Seed-Instanz Demo-Daten anlegen:
-  - Quiz mit 5–10 Beispielfragen (Mix aus MC, Wahr/Falsch, Freitext)
-  - Als Student ein Quiz bestehen → PDF wird automatisch erzeugt
-  - Plugin-Settings konfigurieren (Ausgabemodus, optionale Felder)
-- Snapshot erstellen:
-  ```bash
-  INSTANCE_ID="..."  # aus Schritt 1
-  curl -sX POST http://localhost:3000/mcp/call \
-    -H "Authorization: Bearer $MCP_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{\"name\":\"snapshot_create\",\"arguments\":{\"instanceId\":\"$INSTANCE_ID\",\"snapshotId\":\"exam2pdf-v1\",\"description\":\"exam2pdf Demo mit Beispiel-Quiz und PDF-Zertifikat\"}}" | jq .
-  ```
-- Seed-Instanz stoppen
-- E2E-Test: Über https://demo.eledia.ai eine exam2pdf-Demo anfordern, prüfen ob Quiz + PDF-Download funktioniert
-
-**Aufwand:** ~1–2 h (inkl. Demo-Daten-Erstellung)
+Seit task43 (Plugin-Wizard in Admin-UI) kann das manuell geklont werden
+über https://demo.eledia.ai/api/admin → "+ Plugin hinzufügen". Bleibt
+als Task dokumentiert für den historischen Kontext; das konkrete
+`git clone` kann aber wegfallen.
 
 ---
 
 ### task40 Kategorie-Filter "Prüfungen" im Demo-Portal
 Status: open
 Feature: feat04
-Voraussetzung: task38 done
 
-Die exam2pdf-Karte hat die Kategorie `pruefungen` / "Prüfungen & Compliance".
-Im Portal-Frontend existieren aktuell nur Filter für: Alle, Lernen, Verwaltung,
-Reporting. Der Filter "Prüfungen" fehlt — die Karte wird zwar bei "Alle"
-angezeigt, ist aber nicht einzeln filterbar.
-
-**Fix:**
-1. In `demo-portal.html` → `<div id="catFilters">` einen neuen Button ergänzen:
-   ```html
-   <button class="fbtn" onclick="filter('pruefungen',this)" data-i18n="filter_exam">Prüfungen</button>
-   ```
-2. i18n-Strings ergänzen:
-   - DE: `filter_exam: 'Prüfungen'`
-   - EN: `filter_exam: 'Exams'`
-3. FALLBACK_CONFIGS um exam2pdf-Eintrag ergänzen (analog LeitnerFlow)
-
-**Aufwand:** ~15 min
+In `demo-portal.html` `catFilters` den Button `pruefungen` ergänzen +
+i18n-Strings `filter_exam`. Aufwand: ~15 min.
 
 ---
 
 ### task42 Bestehende Snapshots auf Moodle 5.1 neu bauen
-Status: open
-Feature: feat05
-Voraussetzung: task41 deployed
+Status: open → deutlich vereinfacht durch task43b
+Feature: feat05, feat14
 
-task41 hat Moodle von 5.0 auf 5.1 angehoben. Die existierenden Snapshots
-(`leitnerflow-v1`, ggf. `exam2pdf-v1`) wurden aber gegen Moodle 5.0
-erzeugt. Beim Restore in eine 5.1-Instanz triggert Moodle automatisch
-den Upgrade-Pfad — das dauert mehrere Minuten und ist bei Demo-Cold-Starts
-unbrauchbar.
+Seit Stage 1B (Rebuild-Button, commit `d9c193f`) ist das ein einziger
+Klick im Admin:
+1. https://demo.eledia.ai/api/admin → Sektion "Snapshots"
+2. Bei `leitnerflow-v1` im Dropdown "LeitnerFlow" wählen
+3. 🔄 Rebuild klicken → ~5–10 min Live-Fortschritt im Modal
+4. Fertig — Snapshot ist auf Moodle 5.1 migriert
+5. Dann `configs.json` `moodleVersion` zurück auf 5.1 setzen (per
+   "★ Set Default" im UI, oder manuell)
 
-**Fix:** Seed-Instanzen mit Moodle 5.1 neu bauen, fresh Snapshot erstellen,
-alte Snapshots als `.v0`-Backup archivieren und `configs.json` → `snapshotId`
-auf die neuen Files zeigen lassen.
+---
 
-**Runbook analog task19 (leitnerflow) und task39 (exam2pdf).**
+### task45 Automatischer Plugin-Clone im Wizard
+Status: done (task43 Stage 1D)
+Feature: feat14
 
-**Aufwand:** ~30–60 min pro Snapshot (Seed-Daten existieren bereits, nur neu
-provisionieren + Snapshot ziehen).
+task43 Stage 1D implementiert das — der Plugin-Wizard klont das Plugin
+automatisch und parst `version.php`. Manueller `git clone` auf dem VPS
+entfällt.
 
 ---
 
 ## 🔄 Active
-
-*(Tasks die gerade aktiv bearbeitet werden)*
 
 Aktuell nichts aktiv.
 
@@ -241,104 +132,103 @@ Aktuell nichts aktiv.
 
 ### task37b Stage 2 — live-verify auf VPS
 Status: open (pending manual verification)
+Deployed: `b4cb814` (2026-04-10)
 
-Deployed via commit `b4cb814` (2026-04-10). Im Browser prüfen:
-
-1. Admin-Dashboard → Snapshots-Tab zeigt Tabelle mit Snapshot-Zeilen
-2. Neue Zeilen haben `[Download]`, `[Set Default]`, `[Delete]`-Buttons
-3. Aktueller Default hat ★-Badge, keine Delete-/Set-Default-Buttons
-4. Download-Button lädt `.sql.gz`-File direkt (kein HTML-Chrome drumherum)
-5. Set-Default auf anderen Snapshot ändert `configs.json` atomar, Badge wandert
-6. Delete auf Nicht-Default löscht File + Metadata; Bestätigungs-Dialog erscheint
-7. Delete auf aktuellen Default → 409 mit freundlicher Fehlermeldung
+Im Moodle-Admin prüfen: Admin-Dashboard → Snapshots-Tab zeigt Tabelle mit
+Create/Download/Delete/Set-Default-Buttons. Default-Schutz beim Löschen.
 
 ### task38 exam2pdf-Karte — verify auf Portal
 Status: open (pending deploy + verify)
+Deployed: `32339ad` (2026-04-12), Rollback auf 5.0: `ae0ca2f` (2026-04-15)
 
-Deployed via commit `32339ad` (2026-04-12). Prüfen:
+### task41 Moodle 5.0→5.1 + Debug-Härtung — verify auf neuer Instanz
+Status: rolled back (leitnerflow/exam2pdf wieder auf 5.0)
+Deployed: `ba3cd01` (2026-04-14) → Hotfix-Rollback `ae0ca2f` (2026-04-15)
 
-1. https://demo.eledia.ai → exam2pdf-Karte sichtbar mit 📄-Icon und Beschreibung
-2. Kategorie "Prüfungen & Compliance" wird korrekt angezeigt
-3. "Demo starten" → E-Mail-Modal öffnet sich (Demo wird erst nach task39 tatsächlich starten können)
+Grund für Rollback: Existierender leitnerflow-v1-Snapshot war auf Moodle 5.0
+gebaut, Moodle 5.1-Code triggerte beim Restore den Upgrade-Pfad, der mit
+"Error reading from database" scheiterte. **Task42 via Stage 1B-Rebuild
+erledigt das jetzt in ~10 Min**, danach kann moodleVersion wieder auf 5.1.
 
-### task41 Moodle 5.1 + Debug-Härtung — verify auf neuer Instanz
+Debug-Overrides (7 `$CFG`-Felder) bleiben in docker.ts aktiv, auch unter 5.0.
+
+### task43 Snapshot-Manager + Plugin-Wizard — verify auf https://demo.eledia.ai/api/admin
 Status: open (pending deploy + verify)
+Deployed: `007c2f8` (1A), `d9c193f` (1B), `2a67780` (1C), `50fc143`+`2d0fbd5` (1D)
 
-Deployed via commit `ba3cd01` (2026-04-14). Prüfen:
+**Stage 1A — List/Download/Delete/Set-Default:**
+1. /admin → Sektion "Snapshots" mit Tabelle (id, label, Moodle/PHP/DB-Pills,
+   Plugins, Größe, erstellt, verwendet-von)
+2. "⬇ Download" streamt `.sql.gz`
+3. "★ Set Default" schreibt `snapshotId` in configs.json atomar
+4. "🗑 Delete" zeigt Default-Schutz-Dialog (409) wenn Snapshot in Use
+5. Versions-Mismatch-Warnung beim Set-Default
 
-1. Neue Demo anfordern (leitnerflow oder exam2pdf) → wenn der leitnerflow-v1-Snapshot aktiv ist, läuft Moodle automatisch den 5.0→5.1 Upgrade-Pfad beim ersten Request. Das ist langsam, aber einmalig. Für saubere Cold-Starts muss task42 (Snapshot-Neubau) erfolgen.
-2. In der laufenden Instanz: Admin → Site administration → Notifications → Version sollte `5.1.x+ (Build: 202604xx)` anzeigen
-3. Admin → Site administration → Development → Debugging:
-   - "Debug messages" sollte auf **NONE** stehen und mit Lock-Symbol als "Forced in config.php" markiert sein
-   - "Display debug messages" deaktiviert + forced
-   - "Performance info" deaktiviert + forced
-4. Seitenende: keine Performance-/SQL-Debug-Zeile mehr sichtbar
-5. config.php im Container: `grep -E "debug|perfdebug" /var/www/html/config.php` zeigt 7 Override-Zeilen
+**Stage 1B — Rebuild-Button:**
+1. Dropdown wählen, 🔄 Rebuild klicken
+2. Modal zeigt Phase-Pill + Live-Log (provisioning → installing_plugin →
+   starting_containers → restoring_snapshot → **running_upgrade** →
+   creating_snapshot → stopping → ✓ done)
+3. Seed-Instanz ist pinned, Cleanup-Scheduler ignoriert sie
+4. Fehler-Cleanup: Best-effort stop + dir cleanup auch bei Exception
+
+**Stage 1C — Edit-Live:**
+1. ✏️ Edit Live öffnet Modal, startet Seed-Instanz
+2. Bei State `ready`: Zeile zeigt Banner mit ↗ Demo öffnen + 💾 Save + ✗ Discard
+3. Admin editiert manuell in Moodle-Browser
+4. 💾 Save → createSnapshot (überschreibt), Instanz stoppt
+5. ✗ Discard → Instanz stoppt ohne Speichern
+6. Server-Restart-Recovery: Edit-Sessions aus `pinReason: "edit:..."` rekonstruiert
+
+**Stage 1D — Plugin-Wizard:**
+1. Oben rechts "+ Plugin hinzufügen"-Button
+2. Git-URL eingeben → 🔍 Analysieren → Backend klont + parst version.php
+3. Detected-Box zeigt component, type, shortname, release, maturity, path
+4. Metadata-Form vorbelegt (id, name, moodleVersion, category nach type)
+5. Submit → POST /admin/configs → Kachel erscheint im Portal
 
 ### Weitere offene Verify-Items
-
-- [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash (muss manuell durch Cert-Rename simuliert werden)
+- [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash
 
 ---
 
 ## ✅ Done
 
-*Abgeschlossene Tasks, eine Zeile pro Task. Für Volltext-Details siehe
-`05-quality.md` (Bugs) oder den jeweiligen Commit.*
+*Abgeschlossene Tasks, eine Zeile pro Task.*
 
 **Infrastructure & Core (task01–task13)**
-- task01 config.php-Patch: `removePortBlock()` mit Brace-Counter statt Regex (obsoleted durch task15's `patchConfigForProduction()`)
-- task02 nginx HTTPS konfigurieren → **reopened als task14** (Fix war nie im Code angekommen)
-- task03 feat04 dokumentieren — `DemoConfig`-Struktur + `configs.json`
-- task04 feat05 Snapshot-System dokumentieren — `.sql.gz` + `.json`, pgsql/mariadb/mysql
-- task05 feat06 Cleanup-Scheduler dokumentieren — 60 min max, 15 min Inaktivität, 60 s Polling
-- task06 feat07 Demo-Nutzerverwaltung dokumentieren — teilweise obsoleted durch feat10
-- task07 `sendErrorEmail()` bei fehlgeschlagenem Demo-Start — non-fatal catch
-- task08 Demo-Portal Frontend — `demo-portal.html`, `plugin-detail.html`, relative API-URLs
-- task09 E2E-Test Demo-Flow — 2026-04-09 komplett auf VPS durchgespielt, commit `30157f8`
-- task10 `instance.url` auf HTTPS (partial, vollständig in task16)
-- task11 `configs.json` Pflichtfelder — `db`, `features[]` ergänzt
-- task12 `setup.sh` Placeholder-URLs auf `jmoskaliuk/moodle-runbot-mcp` + `demo.eledia.ai`
-- task13 GitHub Actions CI/CD — `.github/workflows/deploy.yml`, Push auf main → SSH deploy
+- task01–task13 (siehe git log)
 
 **Code-Review-Bundle 2026-04-09 (task14–task20)**
-- task14 nginx HTTPS + Wildcard-Cert — `listen 443 ssl`, `SSL_CERT_DIR`, commit `770dd46` (bundled mit task15)
-- task15 `patchConfigForProduction()` — `$CFG->wwwroot`, `$CFG->sslproxy`, `tool_replace_allowdb` (commit `770dd46`, bug06+bug14-fix)
-- task16 `tools/instances.ts → instanceUrl()` auf `https://` (bug09-fix)
-- task17 `plugin-detail.html` — MCP-Direktstart raus, Token-Flow rein (commit `4aa961d`, bug07+bug08+bug12+bug18-fix, Variante B)
-- task18 `demo-portal.html` — `statPlugins`-ID + `close()`→`closeModal()` (bug10+bug11-fix)
-- task19 Snapshot `leitnerflow-v1.sql.gz` auf VPS — Cold-Start von ~3 min auf ~5 s reduziert, commit `4c29d5e`
-- task20 `cleanupOrphans()` — Startup-Cleanup für verwaiste Container/Dirs/Configs (bug17-fix)
+- task14–task20 (siehe git log)
 
-**UX-Feature-Backlog 2026-04-09 (task21–task28, task30)**
-- task21 Portal UI-Polish — Logo, Navigation, Sprachtoggle
-- task22 Warteseite Live-Status-Polling — `/api/demo-status/:token`, Credentials-Box, Demo-Öffnen-Button (feat09)
-- task23 Plugin-Icon aus GitHub — `resolvePluginIconUrl()` in `github.ts`, Plugin-Detailseite (feat13, commit `ee798b0`)
-- task24 Multi-User-Demo-Szenarien — admin/teacher/student im Snapshot, `multiUser`-Flag (feat10, commit `795b819`)
-- task25 Admin-Dashboard — `webui/admin.html`, Basic Auth, Instanzen + Tokens (feat11, commit `997c608`)
-- task26 Extend-Codes — `POST /api/extend-code`, `EXTEND_CODES` Env, 1-Tag-TTL (feat12)
-- task27 Details-Link im Demo-Portal — Link zur Plugin-Detail-Seite (commit `0ac642a`)
-- task28 Ready-Page + E-Mail UX-Feinschliff — pro-Account-Kopier-Buttons, Spacing (commit `a3eff28`)
-- task30 Snapshot-Building-Instanzen schützen — `pinned: true`-Flag, `snapshot_build` One-Shot-Tool (commit `1f98bb4`)
+**UX-Feature-Backlog 2026-04-09 (task21–task30)**
+- task21–task30 (siehe git log)
 
 **Lifecycle + Branding-Bundle 2026-04-10 (task29, task31–task36)**
-- task29 Token-Status nach Instanz-Stop auf EXPIRED — `tokens.markExpired()`, Cleanup-Scheduler-Integration (commit `b4cb814`)
-- task31 "Demo starten"-Button neben E-Mail-Eingabe — prominenter CTA (commit `94177d3`)
-- task32 E-Mail-Layout: Logo + Website-Schrift — `emailTemplates.ts` Refactor, Brevo-SMTP (commit `b4cb814`)
-- task33 Moodle-Site-Name auf "Demo | <Plugin-Titel>" — `docker.ts` Site-Name-Patch (commit `b4cb814`)
-- task34 "Demos aktiv"-Zähler: Fake-Range 3–17 — `statActive` im Portal (commit `94177d3`)
-- task35 Plugin-Icon aus GitHub im Portal-Grid — `configsHandler` enrichment via `resolvePluginIconUrl()` (commit `b4cb814`)
-- task36 Moodle-Debug-Anzeige deaktivieren nach Instance-Start — `$CFG->debug = 0` (commit `795b819`)
+- task29, task31–task36 (siehe git log)
 
 **In-Moodle Admin Plugin (task37, task37b)**
-- task37 `local_runbotadmin` MVP — Stage 1: Create + List (commit `5a634cd`)
-- task37b `local_runbotadmin` Stage 2 — Download, Delete, Set-Default, atomic `updateConfig()`, binary-streaming (commit `b4cb814`)
+- task37 `local_runbotadmin` Stage 1 — Create + List (commit `5a634cd`)
+- task37b `local_runbotadmin` Stage 2 — Download, Delete, Set-Default, atomic updateConfig() (commit `b4cb814`)
 
 **Plugin-Demos (task38)**
-- task38 exam2pdf Demo-Karte aktivieren — `configs.json` updated: `visible: true`, Kategorie "Prüfungen & Compliance", Metadaten aktualisiert (commit `32339ad`, 2026-04-12)
+- task38 exam2pdf Demo-Karte aktivieren — `configs.json` visible:true (commit `32339ad`)
 
 **Moodle-Version + Debug-Härtung (task41, 2026-04-14)**
-- task41 Moodle 5.0 → 5.1 upgrade + Debug-Settings härten — `MOODLE_BRANCH_MAP["5.1"]` auf `MOODLE_501_STABLE` (war fälschlich `main`), `configs.json` `moodleVersion` 5.0→5.1 für beide Demos, `patchConfigForProduction()` um 5 zusätzliche `$CFG`-Overrides ergänzt (`debugsmtp`, `debugpageinfo`, `debugvalidators`, `debugstringids`, `perfdebug`). Erzwingt DEBUG_NONE auch bei restaurierten Snapshots mit alten DB-Werten. Commit `ba3cd01`.
+- task41 Moodle 5.0→5.1 upgrade + Debug-Settings härten — 7 `$CFG`-Overrides (`ba3cd01`); Hotfix-Rollback `ae0ca2f` wegen Snapshot-Inkompatibilität — Moodle-Code bleibt 5.1-fähig, nur configs.json wieder 5.0 bis task42-Rebuild erfolgt.
+
+**Snapshot-Manager + Plugin-Wizard (task43, 2026-04-15) — feat14**
+
+- task43a Snapshot-Manager Stage 1A — List/Download/Delete/Set-Default. Endpoints `GET /admin/snapshots`, `GET /admin/snapshots/:id/download`, `DELETE /admin/snapshots/:id` mit Default-Schutz, `POST /admin/snapshots/:id/set-default` mit Versions-Mismatch-Warnung. Frontend: Snapshot-Tabelle mit Dropdown + Actions (commit `007c2f8`).
+- task43b Snapshot-Manager Stage 1B — Rebuild-Button mit Async-Job-Tracking. Neuer Service `snapshot-rebuild.ts` (später zu `snapshot-admin.ts` mergen), neue Funktion `docker.runUpgrade()` (`admin/cli/upgrade.php --non-interactive --allow-unstable`). Endpoints `POST /admin/snapshots/rebuild`, `GET /admin/snapshots/jobs/:jobId`. Modal mit Phase-Pill + Live-Log, Polling alle 2s (commit `d9c193f`).
+- task43c Snapshot-Manager Stage 1C — Edit-Live-Flow. Service `snapshot-admin.ts` mit EditSession-Map, Shared-Helper `provisionSeedReady()`. Endpoints `POST /admin/snapshots/:id/edit`, `POST /admin/snapshots/:id/save`, `POST /admin/snapshots/:id/discard`. Recovery via `recoverEditSessionsFromRegistry()` beim Server-Start (sucht pinned Instances mit `pinReason:"edit:..."`). Frontend: Edit-Session-Banner pro Snapshot-Zeile wenn aktiv (commit `2a67780`).
+- task43d Plugin-Wizard Stage 1D — GUI für "neues Plugin → neue Demo-Kachel". Neuer Service `plugin-install.ts` mit `clonePluginFromGithub()` (parst version.php via Regex), `createConfig()` (atomar append). Endpoints `POST /admin/plugins/install`, `POST /admin/configs`, `GET /admin/configs`, `DELETE /admin/configs/:id`. Frontend: "+ Plugin hinzufügen"-Button in Refresh-Bar öffnet zweistufiges Wizard-Modal mit Auto-Detect + Metadata-Form (commits `50fc143` + `2d0fbd5`).
+
+**Plugin-Demos + Vanilla-Varianten (2026-04-15)**
+- vanilla-4.5, vanilla-5.1, vanilla-dev als Demo-Karten (commit `143c052`)
+- vanilla-5.1-mariadb als Demo-Karte — MariaDB 10.6 statt PostgreSQL für Kunden-Demos (commit `50fc143`)
+- Spinning Wheel (mod_spinningwheel v1.1.0, andreajuettner/moodle-mod_spinningwheel) als Demo-Karte (commit `cdbf2d2`)
 
 ---
 
@@ -346,5 +236,5 @@ Deployed via commit `ba3cd01` (2026-04-14). Prüfen:
 
 - Neue Einträge zuerst unter "New" → dann zu Task konvertieren
 - Tasks klein halten, klar formuliert
-- Abgeschlossene Tasks als One-Liner in "Done" archivieren — Volltext-Details gehören in `05-quality.md` (Bugs) oder in die Commit-Message
+- Abgeschlossene Tasks als One-Liner in "Done" archivieren — Volltext-Details in Commit-Message
 - Fixed Bugs wandern aus "🐞 Bugs" komplett nach `05-quality.md`
