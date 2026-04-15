@@ -1,372 +1,316 @@
-# eLeDia Moodle Onlineshop — Konzept v0.1
+# eLeDia Moodle Onlineshop — Konzept v0.2
 
-**Status:** Draft, 2026-04-15
+**Status:** Draft v0.2, 2026-04-15 — **MVP-Scope drastisch geschrumpft**
 **Autor:** Johannes (Vision) + Claude (Ausarbeitung)
 **Basis:** `moodle-runbot-mcp` (Demo-Plattform)
-**Ziel dieses Dokuments:** Strategische Klärung, bevor irgendein Code geschrieben wird.
 
 ---
 
-## 1. Vision
+## 0. MVP-Scope v0.2 (NEU — überschreibt Sektion 6–9 für MVP)
 
-Aus der Runbot-Demo-Plattform wird ein **Self-Service Moodle-Shop**:
-Interessent durchläuft autonom den Prozess vom Plugin-Vergleich bis zur
-fertig gehosteten, abrechnungsfähigen Moodle-Instanz. Kein manueller
-Eingriff durch eLeDia-Mitarbeiter im Normalfall.
+**Entscheidung Johannes 2026-04-15:** Runbot übernimmt im MVP **nur**:
+1. **Order-Frontend** — Kunde wählt Paket oder Baukasten, füllt Formular aus
+2. **Provisioning-Trigger** — nach Bestätigung wird die Moodle-Instanz hochgefahren
 
-### Scope-Abgrenzung (wichtig!)
+**Explizit NICHT im MVP (läuft extern, vermutlich bestehende eLeDia-Plattform):**
+- ❌ Zahlungsabwicklung (Stripe/PayPal/Rechnung)
+- ❌ Rechnungs-Generierung + Versand
+- ❌ AGB/AVV-PDFs + Signing-Flow
+- ❌ Support-Tickets + SLA-Verträge
+- ❌ Kunden-Dashboard mit Vertragsverwaltung
+- ❌ Renewal/Cancellation-Workflows
+- ❌ Backup-Management-UI für Kunde
 
-**Runbot heute:** ephemere 60-Min-Demo, kein Geld, keine Daten-Retention, kein SLA.
-**Shop morgen:** dauerhaft betriebene Moodle-Instanz, Rechnungsstellung, Datenschutz, Support-Verpflichtungen.
+### Drei-Komponenten-Architektur (MVP)
 
-Das ist ein *Sprung in eine andere Liga*. Der bestehende Code ist die Basis für Provisioning, aber ein Shop braucht zusätzlich:
-- Persistente Kunden-Datenbank (Tenants, Rechnungen, Verträge)
-- Zahlungs-Integration (Stripe/Mollie)
-- Backup + Monitoring + Updates
-- AGB, Datenschutzerklärung, AVV, Impressum — juristisch geprüft
-- Support-Workflow (Tickets, SLA, Eskalation)
+```
+┌─────────────────────┐      ┌──────────────────────┐      ┌─────────────────────┐
+│ Runbot (shop-UI)    │      │ eLeDia-Bestandsplatt-│      │ Runbot (Provisioner)│
+│                     │      │ form (extern)        │      │                     │
+│ - Paket/Baukasten   │─────►│ - Rechnung           │─────►│ - Docker-Container  │
+│ - Bestell-Formular  │      │ - Zahlung            │      │ - Moodle install    │
+│ - Bestätigungsmail  │      │ - AGB-Dialog         │      │ - Subdomain + nginx │
+│                     │      │ - Kunden-CRM         │      │ - "Welcome"-Mail    │
+│                     │◄─────│ - Support-Tickets    │      │                     │
+└─────────────────────┘      └──────────────────────┘      └─────────────────────┘
+     POST /api/order                                           Admin triggert
+     → Bestellung                                              oder Webhook
+                                                               von Bestandsplattform
+```
+
+### Schnittstellen zwischen Runbot und Bestandsplattform
+
+**Runbot → Bestandsplattform (Bestellübergabe):**
+- **Option A (einfach):** E-Mail an `bestellung@eledia.de` mit strukturierten Feldern (Paket-ID, Kunde, Subdomain-Wunsch). Bestandsplattform verarbeitet manuell.
+- **Option B (automatisiert):** Webhook an Bestandsplattform, die übernimmt CRM-Anlage + Zahlung.
+
+**Bestandsplattform → Runbot (Provisioning-Trigger):**
+- **Option A (manuell):** Admin-Mitarbeiter klickt im `/admin`-Dashboard auf "Bestellung provisionieren" (nach Zahlungseingang). Neuer Button + neue "Bestellungen"-Sektion im Admin.
+- **Option B (Webhook):** Bestandsplattform ruft `POST /api/provisioning/trigger` mit Order-ID auf, Runbot startet den Container.
+
+**Empfehlung für MVP:** Option A überall. Manuelle Eingriffe erlaubt, Komplexität minimal. Automatisierung kommt in Phase 2.
+
+### MVP-Aufwand revidiert
+
+| Komponente | Alte Schätzung (v0.1) | Neue Schätzung (v0.2) |
+|---|---|---|
+| Shop-Frontend (Paket-Auswahl, Formular) | 2–3 Wochen | 1 Woche |
+| Billing-Integration | 3–4 Wochen | **entfällt** |
+| Tenant-Registry (persistent) | 2 Wochen | 3 Tage (simpler, weil CRM extern) |
+| Kunden-Dashboard | 2–3 Wochen | **entfällt im MVP** |
+| Admin-Erweiterung (Bestellungen) | 1 Woche | 1 Woche |
+| Provisioning-Scheduler | 2 Wochen | 2 Tage (startContainers läuft eh schon) |
+| Legal + AGB + AVV | 4–8 Wochen | **entfällt** (läuft über Bestand) |
+| **Gesamt MVP** | **3–4 Monate** | **3–4 Wochen** 🎯 |
+
+### MVP-Featureliste (konkret)
+
+1. **Shop-Frontend** (`webui/shop.html`) — neue Route, separat von `/demo-portal`
+   - Paket-Übersicht (lädt aus `configs.json` mit `shop.available: true`)
+   - "Jetzt bestellen"-CTA → Formular
+   - Formular: Firma, Name, E-Mail, Subdomain-Wunsch, gewünschtes Paket, optionaler Kommentar
+   - Submit → `POST /api/order` → Bestätigungsmail
+
+2. **Order-Backend** (`src/services/orders.ts` — neuer, schlanker Service)
+   - `createOrder(data)` → persistent in `orders.json` (SQLite wäre overkill für MVP)
+   - `listOrders()`, `getOrder(id)`, `markProvisioned(id)`
+   - Kein Webhook-Empfang im MVP — nur manueller Admin-Trigger
+
+3. **Admin-Dashboard-Erweiterung** — neuer Tab "📦 Bestellungen"
+   - Tabelle: Eingang / Firma / Kontakt / Paket / Subdomain / Status
+   - Aktionen pro Bestellung:
+     - **✅ Provisionieren** — triggert Docker-Provisionierung analog `/confirm/:token`, aber mit langer Laufzeit (Pinned)
+     - **📧 Mail erneut senden** — Bestätigungs- oder Willkommensmail
+     - **🗑 Ablehnen** — markiert als abgelehnt, Kunde bekommt Absage-Mail
+
+4. **Long-Lived Instances** — kleine Erweiterung der bestehenden Instance-Registry
+   - Neues Feld `orderType: "demo" | "shop"`
+   - Shop-Instanzen bekommen `pinned: true` + `pinReason: "shop-order:<orderId>"`
+   - Cleanup-Scheduler ignoriert sie komplett (funktioniert schon so via pin)
+   - Kein auto-Stop, kein `maxAge`
+
+5. **Mail-Templates** — 2 neue Vorlagen (analog bestehende Demo-Mails)
+   - "Bestellung eingegangen" (nach Formular-Submit)
+   - "Ihre Instanz ist bereit" (nach Admin-Trigger + Install-Ende, mit Login-Daten)
+
+6. **MINIMAL Kundensicht** — kein Dashboard, aber:
+   - Die "Instanz ist bereit"-Mail enthält die Moodle-URL, Admin-Login + Passwort-Reset-Link
+   - Ab dann kommuniziert der Kunde nur noch mit dem Bestand-Support
+   - Runbot ist für den Kunden nach dem Go-Live unsichtbar
+
+### Was bleibt offen (auch im reduzierten MVP)
+
+1. **Subdomain-Strategie:** Automatisch aus Firma ableiten (`acme-gmbh.eledia.ai`) oder Kunde wählt im Formular? Kollisionen?
+2. **Admin-Passwort für Kunde:** Zufallsgeneriert + Passwort-Reset-Zwang? (Empfehlung: ja, via `admin/cli/reset_password.php` + Link in Welcome-Mail)
+3. **Custom-Domain:** Im MVP eher nicht — Kunde bekommt `firma.eledia.ai`. Custom-Domain = Phase 2.
+4. **Abgelehnte Bestellungen:** Auto-Spam-Filter? Manuelle Prüfung? (MVP: manuell via Admin-UI)
+
+---
+
+## 1. Vision (unverändert)
+
+Aus der Runbot-Demo-Plattform wird ein **Self-Service Moodle-Shop** —
+mit dem MVP-Scope: nur Order-Annahme + Provisioning.
 
 ## 2. Zwei Kauf-Pfade
 
-### 2a. Paket (Option 1) — empfohlen für den MVP
+### 2a. Paket (Option 1) — MVP-Start
 
-Kuratierte Bundles mit abgestimmtem Plugin-Set für konkrete Use-Cases.
-
-Vorschlag für initiale Pakete (Arbeitshypothese):
+Kuratierte Bundles. Arbeitshypothese:
 
 | Paket | Zielgruppe | Inhalt | User-Limit |
 |---|---|---|---|
-| **LMS Starter** | Kleine Vereine, Projektgruppen | Vanilla Moodle 5.1 | 50 |
-| **Schulungs-LMS** | Weiterbildungsanbieter | Moodle + LeitnerFlow + exam2pdf | 200 |
-| **Prüfungs-Suite** | Zertifizierungsstellen | Moodle + exam2pdf + SafeExamBrowser-Integration | 500 |
-| **Forschungs-LMS** | Hochschulen, Labs | Moodle + SpinningWheel + GradingSnapshot | 100 |
-
-**Vorteil:** Entscheidungsleicht, klarer Preis, bekannter Support-Scope.
-**Nachteil:** Weniger Flexibilität; Kunden mit Spezialbedarf fallen raus.
+| **LMS Starter** | Vereine, Projektgruppen | Vanilla Moodle 5.1 | 50 |
+| **Schulungs-LMS** | Weiterbildner | Moodle + LeitnerFlow + exam2pdf | 200 |
+| **Prüfungs-Suite** | Zertifizierer | Moodle + exam2pdf + SafeExamBrowser | 500 |
 
 ### 2b. Baukasten (Option 2) — Phase 2+
 
-Freie Plugin-Kombination aus dem Shop-Katalog:
+Freie Plugin-Kombination. Im MVP verzichten — kommt, sobald Pakete laufen.
 
-- **Basis wählen:** Moodle-Version (5.1 / 5.0 / 4.5 LTS), DB-Engine (pgsql/mariadb)
-- **User-Limit:** 25 / 50 / 100 / 250 / 500 / unlimitiert (wirkt auf Preis)
-- **Plugins:** kategorisierte Checkboxliste (Lernen / Prüfung / Reporting / Verwaltung)
-- **Dependencies:** automatische Prüfung (z.B. exam2pdf braucht mod_quiz; availability_spinningwheel braucht mod_spinningwheel)
-- **Konflikte:** Warnung bei unverträglichen Kombinationen
-- **Live-Preis:** aktualisiert sich beim Zusammenstellen
+## 3. Customer Journey (MVP — vereinfacht)
 
-**Vorteil:** Flexibilität, Differentiator gegenüber Mitbewerbern.
-**Nachteil:** Support-Matrix explodiert (jede Plugin-Kombi ist eine eigene Wartungseinheit). QA-Aufwand.
+### Schritt 1 — Paket wählen
+- shop.eledia.ai (oder `demo.eledia.ai/shop`)
+- Paket anklicken
 
-### Empfehlung
+### Schritt 2 — Formular ausfüllen
+- Firma, Name, Anschrift (für Rechnung, die extern gemacht wird)
+- Kontakt-E-Mail
+- Subdomain-Wunsch (z.B. `meine-firma`)
+- AGB-Link (zur Einsicht; formeller Vertragsabschluss läuft extern)
+- Submit
 
-**Hybrid:** Starte mit 2–3 Paketen (Option A). Baukasten als Phase-2-Feature, sobald Betriebs-Prozesse für Pakete stabil laufen.
+### Schritt 3 — Bestätigung
+- Bestätigungs-E-Mail: "Ihre Bestellung wurde empfangen. Sie erhalten eine Rechnung von eLeDia. Nach Zahlungseingang wird Ihre Instanz bereitgestellt."
+- Bestellung landet im Admin-Dashboard als "eingegangen"
 
-## 3. Customer Journey (Happy Path)
+### Schritt 4 — Extern (bei eLeDia)
+- eLeDia-Mitarbeiter sieht Bestellung, erstellt Rechnung über Bestandsplattform
+- Kunde bezahlt
+- eLeDia-Mitarbeiter öffnet Runbot-Admin, klickt "✅ Provisionieren"
 
-### Schritt 1 — Entdecken
-- Einstieg auf `shop.eledia.ai` (Separate Subdomain) oder integriert in `demo.eledia.ai`
-- Header: "Jetzt kaufen" neben existierendem "Demo starten"
-- Auswahl Paket oder Baukasten
+### Schritt 5 — Provisioning
+- Runbot startet Docker-Container (kann 3–5 Min dauern, weil frische Installation)
+- Bei Fertig: automatische "Willkommen"-Mail an Kunde mit URL + Admin-Login
 
-### Schritt 2 — Konfigurieren
-- **Paket:** kurze Bestätigungsseite mit Feature-Liste, User-Limit, Preis
-- **Baukasten:** interaktiver Builder mit Live-Preisanzeige, Dependency-Check
+### Schritt 6 — Betrieb
+- Kunde nutzt Moodle
+- Support/Rechnung/Renewal alles über Bestands-Kanäle
+- Runbot administriert nur die technische Instanz
 
-### Schritt 3 — Vorher testen (optional)
-- "Paket vorher testen" → startet eine 60-Min-Demo (bestehender Runbot-Flow, `snapshotId` = Paket-Snapshot)
-- Nach dem Test: "Jetzt kaufen"-CTA im Demo-Portal
+## 4. Paket-Katalog — Struktur
 
-### Schritt 4 — Bestellen
-- Formular:
-  - Name, Firma, Adresse (Rechnungsanschrift)
-  - USt-ID (Pflicht für B2B-EU, optional sonst)
-  - Kontakt-Mail (Tenant-Admin)
-  - Gewünschte Subdomain (`kundenname.eledia.ai`) oder Custom-Domain-Option
-  - Ziel-Datenresidenz (DE / EU)
-- Zahlungsmethode:
-  - Kreditkarte (Stripe)
-  - SEPA-Lastschrift (Stripe)
-  - PayPal
-  - Rechnung + Überweisung (B2B, manuell)
-- **Pflicht-Checkboxen:** AGB, Datenschutz, AVV (Link zur PDF)
-
-### Schritt 5 — Double-Opt-In + Zahlung
-- Bestätigungs-E-Mail an Kontakt-Adresse mit:
-  - AGB/AVV im PDF-Anhang
-  - Widerrufsbelehrung (B2C)
-  - Link "Bestellung bestätigen + bezahlen"
-- Klick auf Link → Stripe-Checkout
-- Nach Zahlungseingang → Install-Start
-
-### Schritt 6 — Install + Onboarding
-- Progress-Page mit Live-Status (analog Runbot Loading-Page, aber ausführlicher)
-  - Container bereitstellen
-  - Moodle installieren
-  - Plugins installieren
-  - Initial-Daten laden (Demo-Kurse je nach Paket)
-  - DNS-Eintrag + Zertifikat
-  - Admin-Account erstellen
-- Bei Fertig: "Willkommen"-E-Mail mit:
-  - Admin-Login + Temp-Passwort (Passwort-Reset-Zwang beim ersten Login)
-  - Link zum Kunden-Dashboard
-  - Erste-Schritte-Guide (PDF)
-  - Booking-Link für optionales Onboarding-Call
-
-### Schritt 7 — Betrieb
-- Kunden-Dashboard unter `kunde.shop.eledia.ai` (oder `/meine-demo` im Shop):
-  - Übersicht: Vertragslaufzeit, User-Count vs. Limit, Backup-Stand, Uptime
-  - Plugin-Upgrades (mit Changelog-Anzeige)
-  - User-Limit ändern (Upsell-Pfad)
-  - Rechnung einsehen + downloaden
-  - Ticket eröffnen
-  - Daten-Export anfordern (GDPR Art. 20)
-
-### Schritt 8 — Verlängern / Kündigen
-- **Autorenewal:** 30 Tage vor Ablauf Reminder-Mail mit Opt-Out-Link
-- **Kündigung:** über Dashboard → Bestätigungsmail → nach Frist (Standard: zum Laufzeitende)
-- **Grace-Period:** 60 Tage nach Kündigung read-only-Zugang für Daten-Export
-- **Nach Grace:** Daten gelöscht, nur Rechnungen + Audit-Log bleiben (§ 147 AO — 10 Jahre)
-
-## 4. Paket-Katalog & Plugin-Marketplace
-
-### Datenstruktur: Erweiterung `configs.json`
+Erweiterung `configs.json`:
 
 ```json
 {
   "type": "package",
   "id": "schulungs-lms",
   "name": "Schulungs-LMS",
-  "description": "Perfekt für Weiterbildner: Moodle + LeitnerFlow + Quiz-Zertifikate",
+  "description": "Moodle + LeitnerFlow + Quiz-Zertifikate",
   "includedPlugins": ["leitnerflow", "exam2pdf"],
   "userLimit": 200,
   "moodleVersion": "5.1",
-  "db": "pgsql",
-  "phpVersion": "8.3",
+  "snapshotId": "schulungs-lms-v1",
   "shop": {
-    "priceMonthlyCents": 9900,
-    "priceYearlyCents": 99000,
-    "yearlyDiscountPct": 17,
-    "trialDays": 14,
     "available": true,
-    "sortOrder": 20
-  },
-  "snapshotId": "schulungs-lms-v1"
-}
-```
-
-### Plugin-Einträge (Erweiterung):
-
-```json
-{
-  "id": "leitnerflow",
-  "shop": {
-    "addonPriceMonthlyCents": 900,
-    "dependencies": [],
-    "conflictsWith": [],
-    "available": true
+    "sortOrder": 20,
+    "priceInfoUrl": "https://eledia.de/preise/schulungs-lms",
+    "trialSnapshotId": "schulungs-lms-trial-v1"
   }
 }
 ```
 
-### Plugin-Source-Wahrheit
-- **Kurierter Shop-Katalog:** nur geprüfte, von eLeDia supportete Plugins
-- Admin kann im Admin-Dashboard pro Config `shop.available: true` setzen (UI-Erweiterung des Plugin-Wizards)
-- Öffentlicher Shop zeigt nur `available: true` an — getrennt vom Demo-Portal-Filter
+**Preis explizit NICHT in configs.json** — die Bestandsplattform ist die Single Source of Truth für Preise. Runbot zeigt nur einen Link "Preis anfragen" / "Preise ansehen" (→ Bestandsplattform).
 
-## 5. Lifecycle — State Machine pro Tenant
+## 5. Lifecycle (MVP)
 
-```
-DRAFT ─ Mail bestätigt ──► TRIAL ─ 14d oder Paid ──► ACTIVE
-  │                          │                        │
-  │                          └─ unpaid ──► EXPIRED ◄──┘
-  │
-  └─ 7d abgelaufen ──► DISCARDED (Formular-Spam-Cleanup)
-
-ACTIVE ─ Renewal ──► ACTIVE (Loop)
-       ─ Kündigung ──► ACTIVE_CANCELLING ─ Laufzeit-Ende ──► GRACE (60d read-only)
-                                                               │
-                                                               └─► DELETED
-```
-
-### Unterschied zu Runbot-Demo
-
-| Aspekt | Runbot-Demo | Shop-Tenant |
-|---|---|---|
-| Lifetime | 60 Min | 12+ Monate |
-| Cleanup | Auto bei Inaktivität | Nur bei Kündigung |
-| Isolation | Dedicated Container | Dedicated Container + eigene DB + eigene Subdomain + eigenes moodledata-Volume |
-| Backups | Keine | Tägliches Snapshot, 30d Retention |
-| Updates | Nie | Sicherheits-Patches automatisch binnen 72h, Feature-Updates quartalsweise |
-| Monitoring | Pro Instanz Basic | Prometheus + Alerting, Statuspage |
-| Support | Kein SLA | 48h Response (Standard), 4h (Premium) |
-
-## 6. Technische Architektur
-
-### Wiederverwendung aus Runbot
-- ✅ Docker-Provisionierung (`docker.ts`) — funktioniert 1:1 für Shop-Tenants, nur längere Lifetime
-- ✅ Snapshot-System als Basis für Paket-Templates (`snapshot.ts`)
-- ✅ nginx-Subdomain-Registrierung (`nginx.ts`)
-- ✅ Plugin-Wizard als Admin-Backend für Katalog-Pflege
-- ✅ Edit-Live-Flow für Paket-Snapshot-Erstellung
-
-### Neu zu bauen
-- **Shop-Frontend** (`webui/shop.html` + Builder-JS)
-- **Billing-Service** (`src/services/billing.ts` — Stripe-Integration, Webhooks, Invoice-Generation)
-- **Tenant-Registry** (`src/services/tenants.ts` — persistente SQLite-Datenbank, später PostgreSQL)
-- **Recurring-Scheduler** (Renewal-Reminder, Backup-Trigger, Monitoring-Checks, Cleanup-Grace)
-- **Kunden-Dashboard** (`webui/customer.html` — Login, User-Mgmt, Rechnungen, Tickets)
-- **Admin-CRM-View** (Erweiterung Admin-Dashboard um Tenants-Tab)
-
-### Infrastruktur-Upgrade nötig?
-
-**Aktueller Stand:** Ein Hetzner-VPS (178.104.171.153) reicht für Demo-Instanzen.
-
-**Für Shop:** Je Tenant permanent Compute + Storage + Backup. Rechnung: 20 Tenants × 2GB RAM × 5GB Disk = 40GB RAM, 100GB Disk. Platzt der aktuelle VPS (vermutlich 32GB RAM) sehr schnell.
-
-**Empfehlung:**
-- **Demo-Server bleibt separat** (status quo, unverändert)
-- **Production-Cluster** neu: Hetzner Cloud mit Load-Balancer + 2 App-Nodes + Managed PostgreSQL + Object Storage (S3-kompatibel) für Backups
-- **Kosten:** geschätzt 150–300€/Monat an Infra-Kosten für die ersten 20–50 Tenants
-
-Das muss in die Pricing-Kalkulation mit rein.
-
-## 7. Bezahlung & Recht
-
-### Zahlungsintegration
-
-**Empfehlung:** **Stripe** als primärer Prozessor.
-- Kreditkarte + SEPA Direct Debit + Apple Pay / Google Pay
-- Stripe Invoicing für Rechnungen + Dunning
-- Webhooks für Zahlungs-Events
-- Deutsche Dokumentation, SCA-konform, EU-Hosting via Stripe Ireland
-
-**Sekundär:** PayPal (in DE erwartet, höhere Gebühren ~2,5%)
-
-**B2B-Klassiker:** Manuelle Rechnung + Überweisung (SEPA-Vorabprüfung). Kann über Stripe Invoicing automatisiert werden.
-
-### Steuerrecht (DE/EU)
-
-- **B2B EU mit USt-ID:** Reverse-Charge (0% USt beim Verkäufer)
-- **B2C EU:** OSS (One-Stop-Shop) — USt-Land nach Kundenwohnsitz
-- **B2C DE:** 19% USt
-- **Außerhalb EU:** nach Land, oft 0% mit Nachweis
-
-### Rechtliche Pflichten (DE)
-
-Alle **vor Vertragsabschluss** einsehbar und akzeptiert:
-- Impressum (§ 5 TMG)
-- Datenschutzerklärung (Art. 13 DSGVO)
-- AGB
-- Widerrufsbelehrung (B2C; bei Dienstleistungen kann Widerruf nach Inbetriebnahme ausgeschlossen werden, wenn Kunde explizit zustimmt)
-- Auftragsverarbeitungsvertrag (AVV) nach Art. 28 DSGVO
-
-**Kritisch:** Das muss ein Fachanwalt für IT-Recht prüfen und AGB-Vorlagen liefern. eLeDia hat vermutlich schon welche für Bestandskunden — die sollten die Basis sein.
-
-## 8. Support & Betrieb
-
-### Support-Tiers (Vorschlag)
-
-| Tier | Enthalten | Preis | Response-Time |
-|---|---|---|---|
-| Community | Online-Doku, FAQ, Community-Forum | inkludiert | — |
-| Standard | Ticket-Support Business Hours | +19€/Monat | 48h |
-| Premium | Ticket 4h, Telefon, Onboarding-Call | +99€/Monat | 4h |
-
-### Betriebsthemen
-- **Backup:** Täglich 2 Uhr UTC, 30d Retention, Restore über Dashboard
-- **Monitoring:** Uptime-Checks (Statuspage.io), Perf-Alerts (P95 > 500ms → auto-Ticket)
-- **Updates:** Moodle-Security-Patches binnen 72h, Feature-Updates quartalsweise mit Maintenance-Window-Ankündigung
-- **Plugin-Updates:** Minor automatisch, Major durch Kunde angefordert (Changelog-Anzeige im Dashboard)
-
-## 9. Pricing-Modelle — 3 Optionen zur Diskussion
-
-### Option A: Flat Monthly pro Paket (einfachstes Modell)
+**Einfachster Lifecycle ohne State-Machine-Schwerarbeit:**
 
 ```
-LMS Starter       49€/Monat      50 User, Vanilla
-Schulungs-LMS     99€/Monat     200 User
-Prüfungs-Suite   149€/Monat    500 User
-Enterprise      Anfrage
+ORDER_RECEIVED → ORDER_CONFIRMED → (manuell bei eLeDia) → PROVISIONING → RUNNING
+                                                                           │
+                                                                           └─► (manuell) TERMINATED
 ```
 
-### Option B: Basis + Add-ons (granularer)
+- **ORDER_RECEIVED:** Formular abgeschickt, Bestätigungs-Mail raus
+- **ORDER_CONFIRMED:** Admin hat im Dashboard "Provisionieren" geklickt
+- **PROVISIONING:** Docker läuft hoch
+- **RUNNING:** Pinned-Instanz, kein Auto-Cleanup
+- **TERMINATED:** Admin hat manuell gestoppt (nach Kündigung, die extern läuft)
 
-```
-Moodle-Basis:            29€/Monat (50 User)
-+ User-Upgrade:          +0,30€/User/Monat (ab 51)
-+ Plugin LeitnerFlow:    +9€/Monat
-+ Plugin exam2pdf:      +15€/Monat
-+ Backup-Retention 90d:  +5€/Monat
-+ Premium-Support:      +49€/Monat
-```
+Keine GRACE-Period, keine Auto-Renewal, keine Auto-Cancellation — alles extern gesteuert, Runbot macht nur was der Admin im Dashboard klickt.
 
-### Option C: Hybrid (empfohlen)
+## 6. Technische Architektur (MVP)
 
-Pakete als "empfohlene Konfigurationen" mit festem Preis (Option A).
-Baukasten für alle, die was Custom wollen (Option B-Style).
-Die meisten Kunden nehmen ein Paket — der Baukasten wirkt als Differentiator im Wettbewerb.
+### Wiederverwendung aus Runbot — praktisch 100%
+- `docker.ts provisionInstance + startContainers + installPlugin` → funktioniert 1:1
+- `snapshot.ts restoreSnapshot` → funktioniert 1:1 (Paket-Snapshots wie Demo-Snapshots)
+- `nginx.ts registerInstance` → funktioniert 1:1
+- `registry.ts` → Instance gets `pinned: true` → Cleanup-Scheduler lässt sie in Ruhe
 
-## 10. Offene Fragen (an Johannes)
+### Neu zu bauen (MVP, minimal)
+1. `src/services/orders.ts` — ~150 Zeilen, JSON-Persistenz via tmp+rename
+2. `src/index.ts` — 4 neue Admin-Endpoints (list/get/trigger-provisioning/reject) + POST /api/order
+3. `webui/shop.html` — neue Shop-Landing + Formular (~400 Zeilen)
+4. `webui/admin.html` — neuer "Bestellungen"-Tab (~200 Zeilen Erweiterung)
+5. `emailTemplates.ts` — 2 neue Mail-Templates
 
-1. **Zielgruppe:** Bestandskunden-Self-Service, Neuakquise, oder beides?
-2. **Verhältnis zum klassischen eLeDia-Hosting:** Konkurrenz, Ergänzung, Ersatz?
-3. **Start-Paket-Set:** Mit wie vielen Paketen startest du? (Empfehlung: 2–3)
-4. **Trial-Dauer:** 14 Tage? 7? 30?
-5. **Laufzeit/Kündigungsfrist:** monatlich / quartalsweise / jährlich? (Empfehlung: jährlich mit 20% Rabatt, monatlich als Option)
-6. **Subdomain:** `kunde.eledia.ai` automatisch oder Custom-Domain von Anfang an?
-7. **Datenresidenz:** Hetzner DE reicht, oder brauchen manche Kunden ISO-27001-zertifizierte RZ?
-8. **Zahlungsarten:** Reicht Stripe, oder muss klassische Rechnung + Überweisung (ohne SEPA-Lastschrift) unterstützt werden?
-9. **Upgrade-Pfad:** Kann ein Kunde mid-term sein Paket wechseln? Wie preislich?
-10. **Whitelabel:** Soll der Shop auch für Reseller funktionieren (zukünftig)?
+**Kein Database-Umbau, kein Stripe-SDK, kein PDF-Generator.**
 
-## 11. Phased Roadmap
+### Infrastruktur-Erweiterung nötig?
 
-### Phase 0 — Vorbereitung (parallel, kein Code)
-- [x] Runbot läuft und ist stabil (aktueller Stand)
-- [ ] AGB/Datenschutz/AVV mit Fachanwalt klären → **Johannes offline**
-- [ ] Hosting-Angebot-Vergleich: Welche Plugins werden in eLeDia-Bestand am häufigsten gebucht? Welche Preise üblich?
-- [ ] Steuerberatung: OSS-Meldung, Rechnungs-Anforderungen
-- [ ] Hetzner Cloud-Angebot einholen (Budget für Production-Cluster)
+**Für MVP:** Nein. Der aktuelle Hetzner-VPS reicht für die ersten paar Shop-Instanzen, solange die Demos + Shop-Tenants zusammen unter ~20 Container bleiben.
 
-### Phase 1 — MVP (4–6 Wochen)
-**Ziel:** Ein Paket ("LMS Starter") kaufbar, Proof-of-Concept Online
-- Nur Flat-Pricing, nur Stripe Checkout, nur jährliche Zahlung
-- Manueller Provisioning-Trigger durch Admin (Runbot-Infra wiederverwendet)
-- Kunden-Dashboard: nur Login + "Meine Instanz"-Übersicht
-- Rechnung automatisch via Stripe Invoicing
-- Email-Flows (Double-Opt-In, Willkommen, Rechnung)
-
-### Phase 2 — Katalog + Automatisierung (4–6 Wochen)
-- 3–4 Pakete + Baukasten-Option
-- Automatisches Provisioning nach Zahlungseingang
-- Kunden-Dashboard: User-Mgmt, Rechnungen einsehen
-- Tenants-Tab im Admin-Dashboard
-
-### Phase 3 — Lifecycle & Support (4–6 Wochen)
-- Renewals, Cancellation, Grace-Period, Daten-Export
-- Ticket-Integration (E-Mail → Helpdesk, z.B. HelpScout)
-- Backup/Restore-Funktion im Dashboard
-
-### Phase 4 — Skalierung (Open End)
-- Whitelabel für Reseller
-- Custom-Domains mit Let's Encrypt-Automation
-- Multi-Region-Hosting
-
-### Aufwandsschätzung
-- **Technik MVP→Launch:** ~3–4 Monate Vollzeit für einen Developer
-- **Legal + Business:** zusätzlich ~4–8 Wochen, parallel
-- **Go-Live realistisch:** Q3/Q4 2026
-
-## 12. Empfohlene nächste Schritte
-
-1. **Konzept-Review:** Johannes liest dieses Dokument, beantwortet die 10 Fragen in Sektion 10.
-2. **Marktvalidierung:** 5–10 Gespräche mit potenziellen Käufern (eLeDia-Leads aus den letzten 6 Monaten). Frage: "Würdest du so ein Paket selfservice kaufen? Was ist dir wichtig?"
-3. **Legal-Kickoff:** Fachanwalt-Termin zu AGB/AVV/Widerrufsbelehrung.
-4. **Steuer-Check:** Steuerberater-Termin zu OSS, Rechnung, USt-Behandlung.
-5. **Pricing-Kalkulation:** Infra-Kosten (Hetzner Cloud) + Support-Kosten + Margin → konkrete Preise.
-6. **Dann erst:** Technische Architektur-Sessions, konkreter Implementierungsplan.
+**Ab ~20 Tenants dauerhaft:** Dann dedizierter Production-VPS + Backups. Ist aber eine zukünftige Entscheidung, kein MVP-Blocker.
 
 ---
 
-**Wichtig:** Kein Code wird geschrieben, bevor die Fragen in Sektion 10 beantwortet und die Schritte 1–5 in Sektion 12 erledigt sind. Sonst bauen wir in die falsche Richtung und müssen rückspulen.
+## 7. Phase 2+ — Das volle Bild (dokumentiert aus v0.1)
+
+*Die folgenden Sektionen bleiben als Referenz für die langfristige Entwicklung. Sie gelten NICHT für den MVP — der läuft über die externe Plattform.*
+
+### Phase 2 — Automatisierung
+- Webhook-Integration Bestandsplattform → Runbot (kein manueller Admin-Klick mehr)
+- Kunden-Dashboard bei Runbot (nur technische Sicht: "Meine Instanz läuft", "Backup-Stand", keine Vertragsdaten)
+- Automatisches Backup-Management
+
+### Phase 3 — Integration
+- Ticket-System-Anbindung (wenn Support bei Runbot selbst läuft)
+- Plugin-Auto-Updates
+- Monitoring-Dashboards
+
+### Phase 4 — Skalierung
+- Multi-Tenant-Architektur auf separaten Production-VPS
+- Whitelabel für Reseller
+- Custom-Domains mit Let's Encrypt
+
+### Billing/Legal/SLA-Themen (aus v0.1 — für später)
+
+Wenn Runbot irgendwann selbst die Abrechnung übernehmen soll, stehen in v0.1 dieses Dokuments alle Details zu:
+- Stripe/PayPal-Integration
+- VAT-OSS (EU-weit)
+- AGB/Datenschutz/AVV
+- Support-SLA-Tiers
+- Pricing-Modelle (Flat vs. Basis+Addon vs. Hybrid)
+
+Diese Themen sind NICHT Scope des MVP und werden erst relevant, wenn sich rausstellt, dass die Trennung Runbot ↔ Bestandsplattform nicht mehr trägt.
+
+---
+
+## 8. Offene Fragen (MVP-fokussiert)
+
+1. **Welche Bestandsplattform macht die Rechnung + Zahlung?** (Shopify? Internes System? Manuell?)
+2. **Wie soll die Bestellübergabe laufen — E-Mail oder Webhook?** (Empfehlung: E-Mail für MVP)
+3. **Wie lang dauert der Zahlungsprozess typisch?** (Bestimmt, wie viel Warteinfo der Kunde nach Formular braucht)
+4. **Subdomain: automatisch oder Wunsch-Eingabe?** (Empfehlung: Wunsch mit Verfügbarkeits-Check)
+5. **Wer bekommt die Welcome-Mail — der technische Admin-Kontakt, der Rechnungskontakt, beide?**
+6. **AGB-Link im Shop — zur Info oder muss er geklickt werden?** (Formeller Vertrag läuft extern, Runbot-Formular ist keine Bestellung i.S.d. BGB)
+7. **Abgelehnte/verdächtige Bestellungen — automatischer Spam-Filter oder nur manuell?**
+8. **Ab wann ist eine Shop-Instanz "live" und Rechnung läuft?** (Mit Provisioning-Start? Mit E-Mail an Kunden?)
+
+## 9. Roadmap v0.2
+
+### Phase 0 — Vorbereitung (diese Woche)
+- [ ] Johannes beantwortet Sektion 8
+- [ ] Entscheidung Bestandsplattform-Integration (E-Mail vs. Webhook)
+- [ ] 1–2 Paket-Definitionen inkl. Snapshot (z.B. "LMS Starter" + "Schulungs-LMS")
+
+### Phase 1 — MVP Implementation (3–4 Wochen)
+
+**Woche 1:** Backend
+- `orders.ts` Service
+- `POST /api/order` Endpoint
+- Admin-Endpoints für Order-Management
+- 2 neue Mail-Templates
+
+**Woche 2:** Frontend
+- `shop.html` mit Paket-Übersicht + Formular
+- Admin-Dashboard-Erweiterung (Bestellungen-Tab)
+
+**Woche 3:** Provisioning-Integration
+- `markProvisioned` triggert gleiche Flow wie `/confirm/:token`, aber mit `pinned: true`
+- Welcome-Mail nach Install-Ende
+- Ende-zu-Ende-Test
+
+**Woche 4:** Polish + Launch
+- Landing-Page-Text
+- SEO-Grundlagen (Paket-Seiten mit meta-description)
+- Eine Pilot-Bestellung durchspielen
+- Go-Live mit 1–2 Paketen
+
+### Phase 2 — Nach Launch
+- Sobald MVP funktioniert und erste Bestellungen durch sind: Webhook-Integration, Baukasten-Option, mehr Pakete.
+
+---
+
+## 10. Empfohlene nächste Schritte
+
+1. **Diese Woche:** Johannes beantwortet Sektion 8 (die 8 MVP-Fragen)
+2. **Diese Woche:** Entscheidung: Welche Pakete starten? Welche Snapshots müssen für die Pakete gebaut werden?
+3. **Nächste Woche:** Technische Sessions konkret pro Woche der Phase 1
+
+---
+
+**Kern des v0.2-Shifts:** Der MVP ist ein 3–4-Wochen-Projekt statt 3–4 Monate, weil wir die Schwierigkeiten (Billing, Recht, SLA, Dashboard) an die bestehende eLeDia-Plattform delegieren. Runbot wird ein Provisioning-Werkzeug mit Shop-Frontend — nicht ein vollwertiges SaaS-Business.
