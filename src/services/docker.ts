@@ -15,11 +15,6 @@ const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_CACHE_DIR = process.env.MOODLE_CACHE_DIR ?? "/opt/moodle-cache";
 const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
 
-// ── Branch name → Moodle git branch ─────────────────────────────
-// "dev" → main (aktueller Entwicklungsstand aus https://github.com/moodle/moodle).
-// Download-URLs auf moodle.org beziehen sich auf die gleichen Branches:
-// https://download.moodle.org/releases/development/ → main
-
 const MOODLE_BRANCH_MAP: Record<MoodleVersion, string> = {
   "4.3": "MOODLE_403_STABLE",
   "4.4": "MOODLE_404_STABLE",
@@ -28,8 +23,6 @@ const MOODLE_BRANCH_MAP: Record<MoodleVersion, string> = {
   "5.1": "MOODLE_501_STABLE",
   "dev": "main",
 };
-
-// ── Helpers ────────────────────────────────────────────────────
 
 async function run(cmd: string, cwd?: string): Promise<{ stdout: string; stderr: string }> {
   try {
@@ -65,8 +58,6 @@ function envString(env: Record<string, string>): string {
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
 }
-
-// ── Core operations ─────────────────────────────────────────────────
 
 export async function provisionInstance(instance: MoodleInstance): Promise<void> {
   const instanceDir = path.join(WORK_DIR, instance.id);
@@ -113,7 +104,7 @@ export async function provisionInstance(instance: MoodleInstance): Promise<void>
   } catch (e) {
     console.error(
       `[docker] WARN task37: local_runbotadmin source not found at ${runbotAdminSrc} — skipping. ` +
-      `In-Moodle admin GUI will not be available for this instance. (${String(e).slice(0, 120)})`
+      `(${String(e).slice(0, 120)})`
     );
   }
 }
@@ -132,7 +123,6 @@ async function patchConfigForProduction(
 
   const overrideBlock = `
 // ── eLeDia Runbot overrides ───────────────────────────────
-// Auto-generiert von src/services/docker.ts — nicht manuell bearbeiten.
 $CFG->wwwroot  = '${wwwroot}';
 $CFG->sslproxy = true;
 $CFG->tool_replace_allowdb = true;
@@ -200,11 +190,15 @@ export async function startContainers(
   if (snapshotFile) {
     console.error(`[docker] Snapshot-Modus: ${snapshotFile}`);
   } else {
-    console.error(`[docker] Running install_database.php…`);
+    // hotfix 2026-04-15: Bei Moodle "dev" (main-Branch) verlangt
+    // install_database.php das --allow-unstable Flag, sonst bricht es
+    // mit "This version of Moodle is not yet stable" ab.
+    const unstableFlag = instance.moodleVersion === "dev" ? " --allow-unstable" : "";
+    console.error(`[docker] Running install_database.php…${unstableFlag ? " (with --allow-unstable)" : ""}`);
     try {
       const { stdout, stderr } = await execAsync(
         `${env} ${compose} exec -T webserver php admin/cli/install_database.php ` +
-        `--agree-license --fullname="eLeDia Demo ${instance.id}" ` +
+        `--agree-license${unstableFlag} --fullname="eLeDia Demo ${instance.id}" ` +
         `--shortname="${instance.id}" --adminpass="demo1234" --adminemail="admin@eledia.de"`,
         { cwd: instance.moodleDockerDir, maxBuffer: 10 * 1024 * 1024 }
       );
@@ -233,18 +227,23 @@ async function waitForDatabase(instance: MoodleInstance, timeoutSecs: number): P
   await new Promise<void>(r => setTimeout(r, 8000));
 
   const isPostgres = instance.db === "pgsql";
+  // hotfix 2026-04-15: MariaDB/MySQL ping braucht root-Credentials in
+  // moodle-docker's Setup (Default-Root-PW = "root"). Ohne das kommt
+  // "Access denied for user 'root'@'localhost'" und der 120s-Timeout
+  // greift → Provisionierung bricht ab. Konsistent mit setSiteName(),
+  // das dieselben Credentials nutzt.
   const healthCmd = isPostgres
     ? `${env} ${compose} exec -T db pg_isready -U moodle`
-    : `${env} ${compose} exec -T db mysqladmin ping -h localhost --silent`;
+    : `${env} ${compose} exec -T db mysqladmin -u root -proot ping --silent`;
 
-  console.error(`[docker] Waiting for database (max ${timeoutSecs}s)…`);
+  console.error(`[docker] Waiting for database (max ${timeoutSecs}s, ${instance.db})…`);
 
   while (Date.now() < deadline) {
     try {
       const { stdout, stderr } = await execAsync(healthCmd, {
         cwd: instance.moodleDockerDir, maxBuffer: 512 * 1024
       });
-      console.error(`[docker] Database ready — ${stdout.trim() || stderr.trim()}`);
+      console.error(`[docker] Database ready — ${stdout.trim() || stderr.trim() || "OK"}`);
       await new Promise<void>(r => setTimeout(r, 2000));
       return;
     } catch (e) {
@@ -253,21 +252,9 @@ async function waitForDatabase(instance: MoodleInstance, timeoutSecs: number): P
       await new Promise<void>(r => setTimeout(r, 5000));
     }
   }
-  throw new Error(`[docker] Database not ready after ${timeoutSecs}s`);
+  throw new Error(`[docker] Database not ready after ${timeoutSecs}s (${instance.db})`);
 }
 
-/**
- * task43: Run admin/cli/upgrade.php --non-interactive --allow-unstable in the
- * webserver container. Used by the snapshot rebuild flow to bring an old
- * snapshot's DB schema up to the current Moodle code version before re-dumping.
- *
- * --allow-unstable lets us cross major version boundaries (e.g. 5.0 → 5.1).
- * --non-interactive skips all confirmation prompts. Returns the combined
- * stdout/stderr for diagnostics.
- *
- * Throws on non-zero exit code (Moodle returns >0 when upgrade fails).
- * The caller is expected to log/surface the error to the admin UI.
- */
 export async function runUpgrade(instance: MoodleInstance): Promise<string> {
   const env = envString(composeEnv(instance));
   const compose = path.join(instance.moodleDockerDir, "bin", "moodle-docker-compose");
@@ -406,8 +393,6 @@ export async function runBehat(
     exitCode: stdout.includes("failed") ? 1 : 0,
   };
 }
-
-// ── Utilities ──────────────────────────────────────────────────────
 
 async function exists(p: string): Promise<boolean> {
   try {
