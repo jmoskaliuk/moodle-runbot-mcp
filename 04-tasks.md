@@ -15,7 +15,7 @@ Format siehe Templates unten.
 ```markdown
 ### bugXX <kurzer Titel>
 Status: open
-Entdeckt: 2026-04-10
+Entdeckt: 2026-04-16
 Betroffen: <Datei/Feature/URL falls bekannt>
 Repro: <was hast du gemacht, was ist passiert, was hättest du erwartet>
 Workaround: <falls du einen hast, sonst leer>
@@ -23,7 +23,7 @@ Workaround: <falls du einen hast, sonst leer>
 
 ```markdown
 ### ideaXX <kurzer Titel>
-Datum: 2026-04-10
+Datum: 2026-04-16
 Wunsch: <ein Satz>
 Warum: <welches Problem löst es>
 Offen: <was ist dir noch unklar>
@@ -53,13 +53,21 @@ Muss ein Wartungsfenster sein. Low-risk, aber aktuell nicht pressing.
 
 *(Neue Ideen, Beobachtungen, ungefilterte Einträge hier)*
 
-Aktuell nichts Neues.
+Aktuell nichts Neues seit dem 2026-04-16 Onlineshop-Konzept-Abschluss.
 
 ---
 
 ## ❓ Clarification Needed
 
-Aktuell keine offenen Fragen.
+*(Offene Fragen an Johannes — derzeit Shop-Content)*
+
+- **AGB-Text:** Johannes sagte "AGB nicht kompliziert". Task offen: Johannes
+  liefert finalen Text, wird in `templates/agb-v1.md` eingesetzt.
+- **AVV-Text:** Bestehende AVV-Vorlage (laut Johannes vorhanden). Task offen:
+  Text in `templates/avv-template-v1.md` übertragen, inkl. TOM-Anhang und
+  Unterauftragsverarbeiter-Liste.
+- **Styleguide für PDF:** Johannes sagte existiert. Muss an die pandoc-Pipeline
+  in Woche 2 angedockt werden.
 
 ---
 
@@ -122,9 +130,89 @@ entfällt.
 
 ---
 
+### task46 Onlineshop Woche 1b — Order-Endpoints + Mail-Templates
+Status: open (in progress)
+Feature: feat15 (Onlineshop, siehe `konzept-onlineshop.md` v0.6)
+Voraussetzung: `orders.ts`-Service in place (commit `be97b3a`), Konzept v0.6 bestätigt (`793020e`)
+
+**Scope Woche 1b:**
+
+1. Express-Routen für die State-Transitions:
+   - `POST /api/shop/order` — Create Draft (Formular-Submit)
+   - `GET /api/shop/verify/:token` — Double-Opt-In-Landingpage
+   - `POST /api/shop/confirm/:token` — AGB/AVV akzeptiert, löst Provisioning
+   - `GET /api/shop/order/:token` — Status-Polling für Kunde
+2. Mail-Templates in `src/emailTemplates.ts` erweitern:
+   - `mailVerifyOrder(token)` — "Bitte E-Mail bestätigen"
+   - `mailOrderReview(token, agbUrl, avvUrl)` — "AGB + AVV + Review-Link"
+   - `mailOrderConfirmed(instanceUrl, credentials)` — "Demo ist live"
+   - `mailAdminAlertNewOrder(order)` — Alert an post@moskaliuk.com
+3. Integration mit `orders.ts` State-Machine (DRAFT → PENDING_VERIFICATION
+   → ORDER_REVIEW → CONFIRMED → PROVISIONING → LIVE)
+4. Auto-Provisioning-Trigger: Bei CONFIRMED → `POST /confirm/:token`-Äquivalent
+   ausführen, Instance provisionieren, Credentials generieren (Random PW)
+
+**Aufwand:** ~8–10 h
+
+---
+
+### task47 Onlineshop Woche 2 — PDF-Generator via pandoc
+Status: open
+Feature: feat15
+
+AGB- und AVV-Template (`templates/agb-v1.md`, `templates/avv-template-v1.md`)
+werden mit Platzhaltern (`{{firma}}`, `{{name}}`, …) via Hash-Map populiert
+und per `pandoc` in PDF gerendert. Pro Order eine AGB-PDF + eine AVV-PDF,
+signiert mit Hash + Timestamp, in `/opt/runbot/contracts/<orderId>/`
+abgelegt. Download-Link geht per Mail an Kunden.
+
+**Scope:**
+- Service `src/services/contract-pdf.ts` mit `renderAgbPdf(order)` / `renderAvvPdf(order)`
+- pandoc + LaTeX auf VPS installieren (`apt install pandoc texlive-xetex`)
+- Branding aus `src/brand.ts` in PDF-Template übernehmen (Logo, Farben, Schrift)
+
+**Aufwand:** ~6–8 h (inkl. pandoc-Setup + Styling-Iteration)
+
+---
+
+### task48 Onlineshop Woche 3 — Shop-Frontend
+Status: open
+Feature: feat15
+
+Neue HTML-Seiten in `webui/`:
+- `shop.html` — öffentliches Bestellformular (Firma, Name, Funktion,
+  Wunsch-Subdomain, Wunsch-Paket)
+- `order-review.html` — Magic-Link-Landingpage mit AGB-/AVV-PDF-Download,
+  Zustimmungs-Checkbox, "Jetzt bestätigen"-Button
+- `shop-confirmed.html` — Post-Confirm Success-Page mit Hinweis
+  "Ihre Demo wird bereitgestellt, Sie erhalten in Kürze eine Mail"
+
+**Aufwand:** ~6 h
+
+---
+
+### task49 Onlineshop Woche 4 — Customer-Dashboard + Internal-Dashboard-Erweiterung
+Status: open
+Feature: feat15
+
+**Customer-Dashboard** (`webui/customer.html`):
+- Magic-Link unter `/kunde/:token` (Token aus `orders.ts → issueCustomerMagicToken`)
+- Zeigt eigene Demo-Instanzen (URL, Status, Ablaufdatum, Paket)
+- Button "Demo verlängern" (ruft Extend-Code-Flow)
+- AGB/AVV-PDFs zum Download
+
+**Internal-Dashboard-Erweiterung** (`webui/admin.html`):
+- Neue Sektion "Bestellungen" — Tabelle aller `orders.json`-Einträge
+- Filter nach State (ORDER_REVIEW, LIVE, TERMINATED)
+- Action-Buttons: "Manuell bestätigen" (für Sonderfälle), "Stornieren"
+
+**Aufwand:** ~8 h
+
+---
+
 ## 🔄 Active
 
-Aktuell nichts aktiv.
+Aktuell nichts aktiv — nächster Schritt ist task46 (Woche 1b).
 
 ---
 
@@ -187,6 +275,33 @@ Deployed: `007c2f8` (1A), `d9c193f` (1B), `2a67780` (1C), `50fc143`+`2d0fbd5` (1
 4. Metadata-Form vorbelegt (id, name, moodleVersion, category nach type)
 5. Submit → POST /admin/configs → Kachel erscheint im Portal
 
+### task44 Auto-Clone-Fallback — verify bei nächster neuer Plugin-Demo
+Status: open (pending deploy + verify)
+Deployed: `103c47b` (2026-04-15)
+
+Problem vor dem Fix: `configs.json`-Einträge mit `plugin.srcPath` konnten
+am Demo-Portal vorbeischleichen, ohne dass das Plugin-Repo auf dem VPS
+existiert. Folge: `cp -r /opt/plugins/… /tmp/…` scheiterte mit "cannot stat",
+Demo blieb hängen. Fix: `ensurePluginSrcPath()` klont das Plugin bei
+Bedarf automatisch aus `configs.json.githubRepo` vor `installPlugin()`.
+
+**Verify:**
+1. `/opt/plugins/moodle-mod_spinningwheel` löschen (`rm -rf`)
+2. https://demo.eledia.ai → Spinning-Wheel-Karte → "Demo starten"
+3. Logs zeigen `[plugin] cloning…` vor Start
+4. Demo startet erfolgreich
+5. `/opt/plugins/moodle-mod_spinningwheel` ist wieder da
+
+### task50 Admin-UI — Pin/Unpin + maxAgeMinutes-Display — verify
+Status: open (pending deploy + verify)
+Deployed: `ef6e9a7` + `95e1eb1` (2026-04-16)
+
+1. Admin-Dashboard → "Laufende Instanzen"-Tabelle
+2. Spalte "Verlängerung" zeigt maxAgeMinutes + remaining time (MM:SS)
+3. Jede Zeile hat "📌 Pin" / "📌 Unpin"-Button (je nach State)
+4. Pin setzt `pinReason: "admin"` → Instanz wird vom Cleanup-Scheduler ignoriert
+5. Unpin räumt die Pin-Flag wieder ab
+
 ### Weitere offene Verify-Items
 - [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash
 
@@ -221,7 +336,7 @@ Deployed: `007c2f8` (1A), `d9c193f` (1B), `2a67780` (1C), `50fc143`+`2d0fbd5` (1
 **Snapshot-Manager + Plugin-Wizard (task43, 2026-04-15) — feat14**
 
 - task43a Snapshot-Manager Stage 1A — List/Download/Delete/Set-Default. Endpoints `GET /admin/snapshots`, `GET /admin/snapshots/:id/download`, `DELETE /admin/snapshots/:id` mit Default-Schutz, `POST /admin/snapshots/:id/set-default` mit Versions-Mismatch-Warnung. Frontend: Snapshot-Tabelle mit Dropdown + Actions (commit `007c2f8`).
-- task43b Snapshot-Manager Stage 1B — Rebuild-Button mit Async-Job-Tracking. Neuer Service `snapshot-rebuild.ts` (später zu `snapshot-admin.ts` mergen), neue Funktion `docker.runUpgrade()` (`admin/cli/upgrade.php --non-interactive --allow-unstable`). Endpoints `POST /admin/snapshots/rebuild`, `GET /admin/snapshots/jobs/:jobId`. Modal mit Phase-Pill + Live-Log, Polling alle 2s (commit `d9c193f`).
+- task43b Snapshot-Manager Stage 1B — Rebuild-Button mit Async-Job-Tracking. Neuer Service `snapshot-rebuild.ts` (später zu `snapshot-admin.ts` gemerged), neue Funktion `docker.runUpgrade()` (`admin/cli/upgrade.php --non-interactive --allow-unstable`). Endpoints `POST /admin/snapshots/rebuild`, `GET /admin/snapshots/jobs/:jobId`. Modal mit Phase-Pill + Live-Log, Polling alle 2s (commit `d9c193f`).
 - task43c Snapshot-Manager Stage 1C — Edit-Live-Flow. Service `snapshot-admin.ts` mit EditSession-Map, Shared-Helper `provisionSeedReady()`. Endpoints `POST /admin/snapshots/:id/edit`, `POST /admin/snapshots/:id/save`, `POST /admin/snapshots/:id/discard`. Recovery via `recoverEditSessionsFromRegistry()` beim Server-Start (sucht pinned Instances mit `pinReason:"edit:..."`). Frontend: Edit-Session-Banner pro Snapshot-Zeile wenn aktiv (commit `2a67780`).
 - task43d Plugin-Wizard Stage 1D — GUI für "neues Plugin → neue Demo-Kachel". Neuer Service `plugin-install.ts` mit `clonePluginFromGithub()` (parst version.php via Regex), `createConfig()` (atomar append). Endpoints `POST /admin/plugins/install`, `POST /admin/configs`, `GET /admin/configs`, `DELETE /admin/configs/:id`. Frontend: "+ Plugin hinzufügen"-Button in Refresh-Bar öffnet zweistufiges Wizard-Modal mit Auto-Detect + Metadata-Form (commits `50fc143` + `2d0fbd5`).
 
@@ -229,6 +344,28 @@ Deployed: `007c2f8` (1A), `d9c193f` (1B), `2a67780` (1C), `50fc143`+`2d0fbd5` (1
 - vanilla-4.5, vanilla-5.1, vanilla-dev als Demo-Karten (commit `143c052`)
 - vanilla-5.1-mariadb als Demo-Karte — MariaDB 10.6 statt PostgreSQL für Kunden-Demos (commit `50fc143`)
 - Spinning Wheel (mod_spinningwheel v1.1.0, andreajuettner/moodle-mod_spinningwheel) als Demo-Karte (commit `cdbf2d2`)
+
+**Hotfixes 2026-04-15**
+- Hotfix vanilla-dev-Start: conditional `--allow-unstable` Flag für `install_database.php` (Dev-Branch ist "unstable") (commit `9eefe23`)
+- Hotfix vanilla-5.1-mariadb-Start: `mysqladmin -u root -proot ping` (statt ohne Credentials → "Access denied"/Timeout) (commit `9eefe23`)
+- Auto-Clone-Fallback in `/confirm/:token`: `ensurePluginSrcPath()` klont Plugin aus `configs.githubRepo` wenn `plugin.srcPath` fehlt (commit `103c47b`)
+
+**Onlineshop-Konzept (feat15, 2026-04-15 → 2026-04-16)**
+- Konzept v0.1 Draft — erster Wurf Moodle-Onlineshop als Erweiterung des Runbot (commit `311fa1b`)
+- v0.2 — MVP-Scope drastisch geschrumpft: kein Billing, kein Support-Ticket, nur Provisioning (commit `cd42ea2`)
+- v0.3 — AGB/AVV-Signing-Flow + Mini-Kunden-Dashboard zurück im MVP (commit `7b71c81`)
+- v0.4 — Johannes-Antworten auf Launch-Blocker, vollautomatischer Flow (Demo geht live bevor Rechnung rausgeht) (commit `5cea3fb`)
+- v0.5 — Internal-Dashboard klar vom Kunden-Dashboard getrennt, beide mit eigenen Use Cases (commit `5412dfa`)
+- v0.6 **final** — alle 8 Launch-Blocker beantwortet, MVP-Roadmap 4 Wochen festgezurrt, `src/brand.ts` mit eLeDia-CD-Konstanten aus PPTX extrahiert (commit `793020e`)
+
+**Onlineshop Woche 1 Scaffold (feat15, 2026-04-16)**
+- Order-Service (`src/services/orders.ts`) — State-Machine DRAFT → PENDING_VERIFICATION → ORDER_REVIEW → CONFIRMED → PROVISIONING → LIVE → TERMINATED, atomic JSON-Persistence in `/opt/runbot/orders.json`, Funktionen `createOrder`, `verifyOrder`, `markAgreementDownloaded`, `markAgreementSigned`, `transitionOrder`, `issueCustomerMagicToken` (commit `be97b3a`)
+- Template-Gerüste `templates/agb-v1.md` + `templates/avv-template-v1.md` + `templates/README.md` mit Platzhalter-Syntax (`{{firma}}`, `{{name}}`, `{{funktion}}`, `{{paket}}`, `{{datum}}`, …) für die pandoc-PDF-Pipeline (commit `be97b3a`)
+- Corporate-Design-Konstanten `src/brand.ts` — Kern + Akzent + Sekundärfarben, BRAND_FONTS, BRAND_ASSETS, BRAND_CONTACT aus PPTX extrahiert als Single Source of Truth (commit `793020e`)
+
+**Admin-UI-Polish (2026-04-16)**
+- maxAgeMinutes + Remaining-Time in "Verlängerung"-Spalte der Admin-Instanz-Tabelle (commit `ef6e9a7`)
+- Pin/Unpin-Button pro Instanz-Zeile — manueller Cleanup-Schutz ohne snapshot_build-Tool (commit `95e1eb1`)
 
 ---
 
