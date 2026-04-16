@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — eLeDia Runbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sans:'Inter',system-ui,sans-serif;
+  --serif:'Fraunces',Georgia,serif;
+  --ink:#353535;--muted:#6b6b6f;--rule:#e9e9e9;
+  --bg:#f3f5f8;--white:#fff;
+  --accent:#ab1d79;--accent2:#540e3b;
+  --accent-pale:#f5e4ef;
+  --green:#059669;--red:#b91c1c;--orange:#d97706;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent2)}
+
+/* Nav */
+.nav{background:#1a1a2e;padding:0 32px;display:flex;align-items:center;height:52px;gap:24px}
+.nav-brand{font-family:var(--serif);font-size:17px;font-weight:300;color:#fff;letter-spacing:-.3px}
+.nav-brand span{color:var(--accent)}
+.nav-badge{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:var(--accent);color:#fff;border-radius:4px;padding:2px 7px;margin-left:4px}
+.nav-link{font-size:13px;color:rgba(255,255,255,.55);text-decoration:none;transition:color .15s}
+.nav-link:hover{color:#fff}
+.nav-spacer{flex:1}
+
+/* Layout */
+.wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
+.page-title{font-family:var(--serif);font-size:26px;font-weight:300;color:var(--ink);margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:32px}
+
+/* Section headers */
+.section{margin-bottom:40px}
+.section-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.section-title{font-size:13px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.badge-count{background:var(--accent-pale);color:var(--accent);font-size:11px;font-weight:600;border-radius:10px;padding:1px 8px}
+
+/* Card/Table container */
+.card{background:var(--white);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:10px 14px;background:#fafaf8;border-bottom:1px solid var(--rule);text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--rule)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#fafaf8}
+td{padding:10px 14px;vertical-align:middle;font-size:13px}
+td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted)}
+
+/* Status pills */
+.pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:10px;padding:2px 8px}
+.pill-running{background:#d1fae5;color:#065f46}
+.pill-provisioning,.pill-installing_plugin,.pill-starting_containers,.pill-restoring_snapshot,.pill-creating_user,.pill-waiting{background:#fef3c7;color:#92400e}
+.pill-stopping,.pill-stopped{background:#f1f5f9;color:#475569}
+.pill-error{background:#fee2e2;color:#991b1b}
+.pill-started,.pill-confirmed{background:#ede9fe;color:#5b21b6}
+.pill-pending,.pill-expired{background:#f1f5f9;color:var(--muted)}
+
+/* Action buttons */
+.btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:var(--sans);padding:4px 10px;border-radius:5px;border:1px solid var(--rule);background:var(--white);color:var(--ink);cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{background:#f3f4f6;border-color:#ccc}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-danger{border-color:#fca5a5;color:var(--red)}
+.btn-danger:hover{background:#fee2e2}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-pin{border-color:#fcd34d;color:#92400e}
+.btn-pin:hover{background:#fef3c7}
+.btn-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Log modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:12px;width:min(800px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--rule);gap:12px}
+.modal-title{font-size:14px;font-weight:600;flex:1}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px}
+.modal-close:hover{color:var(--ink)}
+.modal-body{flex:1;overflow:auto;padding:16px 20px}
+pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;color:#e2e8f0;background:#0f1117;border-radius:8px;padding:16px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+
+/* Extend input */
+.extend-inline{display:flex;align-items:center;gap:6px}
+.extend-inline input{font-family:var(--sans);font-size:11px;width:56px;padding:3px 7px;border:1px solid var(--rule);border-radius:4px;color:var(--ink)}
+.extend-inline input:focus{outline:none;border-color:var(--accent)}
+
+/* Empty state */
+.empty{padding:40px;text-align:center;color:var(--muted);font-size:13px}
+
+/* Refresh bar */
+.refresh-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.refresh-btn{font-size:12px}
+.last-update{font-size:11px;color:var(--muted)}
+.auto-badge{font-size:10px;font-weight:600;color:var(--accent);background:var(--accent-pale);border-radius:8px;padding:1px 6px}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:#0f1117;color:#e2e8f0;font-size:12px;padding:10px 16px;border-radius:8px;z-index:200;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;max-width:320px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{border-left:3px solid var(--green)}
+.toast.err{border-left:3px solid var(--red)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand">eLeDia <span>Runbot</span> <span class="nav-badge">Admin</span></span>
+  <span class="nav-spacer"></span>
+  <a class="nav-link" href="/" target="_blank">→ Portal</a>
+</nav>
+
+<div class="wrap">
+  <div class="page-title">Admin-Dashboard</div>
+  <div class="page-sub">Laufende Instanzen &amp; Demo-Anfragen — Live-Refresh alle 30 Sekunden</div>
+
+  <div class="refresh-bar">
+    <button class="btn refresh-btn" onclick="refresh()">⟳ Aktualisieren</button>
+    <span class="last-update" id="lastUpdate">—</span>
+    <span class="auto-badge">AUTO 30s</span>
+  </div>
+
+  <!-- Instances -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-title">Instanzen</span>
+      <span class="badge-count" id="instCount">—</span>
+    </div>
+    <div class="card">
+      <table id="instTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Plugin / Config</th>
+            <th>Gestartet</th>
+            <th>Letzte Aktivität</th>
+            <th>Verlängerung</th>
+            <th>URL</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody id="instBody">
+          <tr><td colspan="8" class="empty">Lade…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tokens -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-title">Demo-Anfragen (Tokens)</span>
+      <span class="badge-count" id="tokCount">—</span>
+    </div>
+    <div class="card">
+      <table id="tokTable">
+        <thead>
+          <tr>
+            <th>Token</th>
+            <th>E-Mail</th>
+            <th>Name</th>
+            <th>Config</th>
+            <th>Token</th>
+            <th>Status</th>
+            <th>Angefragt</th>
+            <th>Instanz</th>
+          </tr>
+        </thead>
+        <tbody id="tokBody">
+          <tr><td colspan="8" class="empty">Lade…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Log Modal -->
+<div class="modal-overlay" id="logModal" onclick="closeLog(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="logTitle">Logs</span>
+      <button class="modal-close" onclick="closeLogDirect()">✕</button>
+    </div>
+    <div class="modal-body">
+      <pre class="logs" id="logContent">Lade…</pre>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = window.location.origin;
+
+// ── Formatierungshelper ────────────────────────────────────────────────────────
+
+function relTime(iso) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000)  return 'gerade eben';
+  if (diff < 3600000) return `vor ${Math.floor(diff/60000)} Min`;
+  if (diff < 86400000) return `vor ${Math.floor(diff/3600000)} Std`;
+  return new Date(iso).toLocaleDateString('de-DE', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+
+function absTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+const PHASE_LABEL = {
+  running:              'ok',
+  error:                'Fehler',
+  waiting:              'wartend',
+  provisioning:         'provisioning',
+  installing_plugin:    'plugin install',
+  starting_containers:  'container start',
+  restoring_snapshot:   'snapshot',
+  creating_user:        'nutzer anlegen',
+};
+
+function pill(status, isPhase = false) {
+  const cls = `pill pill-${(status||'').replace(/[^a-z_]/g,'')}`;
+  const label = isPhase ? (PHASE_LABEL[status] ?? status) : status;
+  return `<span class="${cls}">${label||'—'}</span>`;
+}
+
+function pinIndicator(inst) {
+  if (!inst.pinned) return '';
+  const reason = (inst.pinReason ?? 'pinned').replace(/"/g, '&quot;');
+  return ` <span title="${reason}" style="font-size:11px" aria-label="Gepinnt: ${reason}">📌</span>`;
+}
+
+// ── Instanzen ──────────────────────────────────────────────────────────────────
+
+async function loadInstances() {
+  const r = await fetch(`${API}/api/admin/instances`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function renderInstances(instances) {
+  document.getElementById('instCount').textContent = instances.length;
+  const tbody = document.getElementById('instBody');
+  if (!instances.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Keine laufenden Instanzen.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = instances.map(inst => {
+    let extended;
+    if (inst.pinned) {
+      extended = `<span title="${(inst.pinReason ?? 'gepinnt').replace(/"/g,'&quot;')}" style="font-size:11px">📌 unbegrenzt</span>`;
+    } else if (inst.maxAgeMinutes) {
+      const refTs  = inst.extendedBy?.at ? new Date(inst.extendedBy.at).getTime()
+                                         : new Date(inst.createdAt).getTime();
+      const expTs  = refTs + inst.maxAgeMinutes * 60000;
+      const minLeft = Math.max(0, Math.round((expTs - Date.now()) / 60000));
+      const expStr  = absTime(new Date(expTs).toISOString());
+      const codeStr = inst.extendedBy ? `✓ ${inst.extendedBy.code} · ` : '';
+      const color   = minLeft < 10 ? 'var(--red)' : (minLeft < 30 ? 'var(--orange)' : 'var(--green)');
+      extended = `<span style="color:${color};font-size:11px" title="Ablauf: ${expStr}">`
+               + `${codeStr}${inst.maxAgeMinutes} Min`
+               + ` <small style="color:var(--muted)">(noch ${minLeft} Min)</small></span>`;
+    } else if (inst.extendedBy) {
+      extended = `<span title="Code: ${inst.extendedBy.code}" style="color:var(--green);font-size:11px">✓ ${inst.extendedBy.code}</span>`;
+    } else {
+      extended = '—';
+    }
+    const urlLink = inst.url
+      ? `<a href="${inst.url}" target="_blank" style="font-size:11px;font-family:monospace">${inst.id}</a>`
+      : `<span class="mono">${inst.id}</span>`;
+    return `<tr>
+      <td class="mono">${inst.id}</td>
+      <td>${pill(inst.status, true)}${pinIndicator(inst)}</td>
+      <td>${inst.configId ?? inst.prId ?? '—'}</td>
+      <td title="${inst.createdAt}">${relTime(inst.createdAt)}</td>
+      <td title="${inst.lastActivity}">${relTime(inst.lastActivity)}</td>
+      <td>${extended}</td>
+      <td>${urlLink}</td>
+      <td>
+        <div class="btn-actions">
+          <button class="btn" onclick="showLogs('${inst.id}')">📋 Logs</button>
+          <div class="extend-inline">
+            <input type="number" id="ext-${inst.id}" value="60" min="1" max="1440" title="Minuten verlängern">
+            <button class="btn btn-primary" onclick="extendInst('${inst.id}')">+Zeit</button>
+          </div>
+          ${inst.pinned
+            ? `<button class="btn btn-pin" onclick="unpinInst('${inst.id}')" title="Pin aufheben — Cleanup-Scheduler greift wieder">📌 Unpin</button>`
+            : `<button class="btn" onclick="pinInst('${inst.id}')" title="Instanz pinnen — Cleanup-Scheduler ignoriert sie">📌 Pin</button>`
+          }
+          <button class="btn btn-danger" onclick="deleteInst('${inst.id}')">🗑 Stop</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function extendInst(id) {
+  const minEl = document.getElementById('ext-' + id);
+  const minutes = parseInt(minEl?.value ?? '60', 10) || 60;
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}/extend`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ minutes })
+    });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`✓ ${id} um ${minutes} Min verlängert`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function deleteInst(id) {
+  if (!confirm(`Instanz ${id} wirklich stoppen und löschen?`)) return;
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`✓ ${id} gestoppt`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function pinInst(id) {
+  const reason = prompt(`Grund für Pin (optional):`, 'manuell gepinnt (Admin)');
+  if (reason === null) return; // abgebrochen
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}/pin`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ reason: reason.trim() || 'manuell gepinnt (Admin)' })
+    });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`📌 ${id} gepinnt — Cleanup ignoriert diese Instanz`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function unpinInst(id) {
+  if (!confirm(`Pin von ${id} aufheben? Der Cleanup-Scheduler greift dann wieder.`)) return;
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}/unpin`, { method: 'POST' });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`✓ ${id} unpinned`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function showLogs(id) {
+  document.getElementById('logTitle').textContent = `Logs — ${id}`;
+  document.getElementById('logContent').textContent = 'Lade…';
+  document.getElementById('logModal').classList.add('open');
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}/logs`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    document.getElementById('logContent').textContent = d.logs || '(leer)';
+  } catch(e) {
+    document.getElementById('logContent').textContent = 'Fehler: ' + e.message;
+  }
+}
+
+function closeLog(e) {
+  if (e.target === document.getElementById('logModal')) closeLogDirect();
+}
+function closeLogDirect() {
+  document.getElementById('logModal').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLogDirect(); });
+
+// ── Tokens ─────────────────────────────────────────────────────────────────────
+
+async function loadTokens() {
+  const r = await fetch(`${API}/api/admin/tokens`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function renderTokens(requests) {
+  document.getElementById('tokCount').textContent = requests.length;
+  const tbody = document.getElementById('tokBody');
+  if (!requests.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Keine Anfragen gefunden.</td></tr>';
+    return;
+  }
+  const sorted = [...requests].sort((a,b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+  tbody.innerHTML = sorted.map(req => {
+    const tok = req.token.slice(0,8) + '…';
+    const inst = req.instanceId
+      ? `<span class="mono">${req.instanceId.slice(0,16)}</span>`
+      : '—';
+    return `<tr>
+      <td class="mono" title="${req.token}">${tok}</td>
+      <td>${req.email}</td>
+      <td>${req.name}</td>
+      <td>${req.configId}</td>
+      <td>${pill(req.status)}</td>
+      <td>${req.phase ? pill(req.phase, true) : '—'}</td>
+      <td title="${req.requestedAt}">${absTime(req.requestedAt)}</td>
+      <td>${inst}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Refresh ────────────────────────────────────────────────────────────────────
+
+async function refresh() {
+  try {
+    const [instData, tokData] = await Promise.all([loadInstances(), loadTokens()]);
+    renderInstances(instData.instances ?? []);
+    renderTokens(tokData.requests ?? []);
+    document.getElementById('lastUpdate').textContent =
+      'Zuletzt aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
+  } catch(e) {
+    toast('Fehler beim Laden: ' + e.message, 'err');
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+
+let toastTimer;
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
