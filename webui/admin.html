@@ -69,6 +69,8 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .btn-danger:hover{background:#fee2e2}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-pin{border-color:#fcd34d;color:#92400e}
+.btn-pin:hover{background:#fef3c7}
 .btn-actions{display:flex;gap:6px;flex-wrap:wrap}
 
 /* Log modal */
@@ -228,9 +230,6 @@ function pill(status, isPhase = false) {
   return `<span class="${cls}">${label||'—'}</span>`;
 }
 
-// task30: Pin-Indikator für Instanzen, die der Cleanup-Scheduler ignoriert.
-// Zeigt ein 📌-Icon mit Tooltip (pinReason), damit sofort klar ist, warum
-// die Instanz länger läuft als das übliche maxAge.
 function pinIndicator(inst) {
   if (!inst.pinned) return '';
   const reason = (inst.pinReason ?? 'pinned').replace(/"/g, '&quot;');
@@ -257,7 +256,6 @@ function renderInstances(instances) {
     if (inst.pinned) {
       extended = `<span title="${(inst.pinReason ?? 'gepinnt').replace(/"/g,'&quot;')}" style="font-size:11px">📌 unbegrenzt</span>`;
     } else if (inst.maxAgeMinutes) {
-      // Ablaufzeitpunkt: ab extendedBy.at (wenn gesetzt), sonst ab createdAt
       const refTs  = inst.extendedBy?.at ? new Date(inst.extendedBy.at).getTime()
                                          : new Date(inst.createdAt).getTime();
       const expTs  = refTs + inst.maxAgeMinutes * 60000;
@@ -291,6 +289,10 @@ function renderInstances(instances) {
             <input type="number" id="ext-${inst.id}" value="60" min="1" max="1440" title="Minuten verlängern">
             <button class="btn btn-primary" onclick="extendInst('${inst.id}')">+Zeit</button>
           </div>
+          ${inst.pinned
+            ? `<button class="btn btn-pin" onclick="unpinInst('${inst.id}')" title="Pin aufheben — Cleanup-Scheduler greift wieder">📌 Unpin</button>`
+            : `<button class="btn" onclick="pinInst('${inst.id}')" title="Instanz pinnen — Cleanup-Scheduler ignoriert sie">📌 Pin</button>`
+          }
           <button class="btn btn-danger" onclick="deleteInst('${inst.id}')">🗑 Stop</button>
         </div>
       </td>
@@ -321,6 +323,35 @@ async function deleteInst(id) {
     const r = await fetch(`${API}/api/admin/instances/${id}`, { method: 'DELETE' });
     if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
     toast(`✓ ${id} gestoppt`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function pinInst(id) {
+  const reason = prompt(`Grund für Pin (optional):`, 'manuell gepinnt (Admin)');
+  if (reason === null) return; // abgebrochen
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}/pin`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ reason: reason.trim() || 'manuell gepinnt (Admin)' })
+    });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`📌 ${id} gepinnt — Cleanup ignoriert diese Instanz`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function unpinInst(id) {
+  if (!confirm(`Pin von ${id} aufheben? Der Cleanup-Scheduler greift dann wieder.`)) return;
+  try {
+    const r = await fetch(`${API}/api/admin/instances/${id}/unpin`, { method: 'POST' });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`✓ ${id} unpinned`, 'ok');
     await refresh();
   } catch(e) {
     toast(`Fehler: ${e.message}`, 'err');
@@ -364,7 +395,6 @@ function renderTokens(requests) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty">Keine Anfragen gefunden.</td></tr>';
     return;
   }
-  // Neueste zuerst
   const sorted = [...requests].sort((a,b) => new Date(b.requestedAt) - new Date(a.requestedAt));
   tbody.innerHTML = sorted.map(req => {
     const tok = req.token.slice(0,8) + '…';
