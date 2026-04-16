@@ -16,7 +16,7 @@
     ],
     "db": "pgsql",
     "phpVersion": "8.2",
-    "moodleVersion": "5.0",
+    "moodleVersion": "5.1",
     "plugin": {
       "srcPath": "/opt/plugins/mod_eledialeitnerflow",
       "type": "mod",
