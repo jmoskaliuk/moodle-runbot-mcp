@@ -1,4 +1,4 @@
-export type MoodleVersion = "4.3" | "4.4" | "4.5" | "5.0" | "5.1";
+export type MoodleVersion = "4.3" | "4.4" | "4.5" | "5.0" | "5.1" | "dev";
 export type DbType = "pgsql" | "mariadb" | "mysql";
 export type PhpVersion = "8.1" | "8.2" | "8.3" | "8.4";
 export type InstanceStatus = "starting" | "running" | "stopping" | "stopped" | "error" | "testing";

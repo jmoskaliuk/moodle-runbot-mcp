@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eLeDia Moodle Shop — Bestellung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#353535;--muted:#6b6b6f;--rule:#e9e9e9;
+  --bg:#f3f5f8;--white:#fff;
+  --accent:#ab1d79;--accent2:#540e3b;--accent-pale:#f5e4ef;
+  --blue-dark:#194866;--blue-light:#65a1b3;
+  --orange:#f98012;--green:#3aadaa;--red:#b91c1c;
+  --sans:'Open Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;font-weight:300;-webkit-font-smoothing:antialiased;min-height:100vh}
+nav{background:#fff;border-bottom:1px solid var(--rule);padding:14px clamp(16px,6vw,80px);display:flex;align-items:center;gap:20px;height:68px;position:sticky;top:0;z-index:10}
+nav img{height:36px}
+nav .title{color:var(--muted);font-size:13px;margin-left:auto}
+.wrap{max-width:1040px;margin:0 auto;padding:clamp(28px,6vw,56px) clamp(16px,6vw,80px) 120px}
+.eyebrow{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:10px}
+h1{font-family:var(--sans);font-weight:300;font-size:clamp(28px,3vw,38px);line-height:1.2;color:var(--blue-dark);margin-bottom:12px;letter-spacing:-.3px}
+.lead{color:var(--muted);font-size:16px;line-height:1.7;max-width:620px;margin-bottom:36px}
+
+/* ── Step-Indicator ────────────────────────────────────────────────── */
+.steps{display:flex;gap:12px;align-items:center;margin-bottom:28px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.steps .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--rule);color:var(--muted);font-weight:500;font-size:12px;margin-right:6px}
+.steps .active{color:var(--ink);font-weight:500}
+.steps .active .n{background:var(--accent);color:#fff}
+.steps .sep{color:var(--rule)}
+
+/* ── Paket-Grid ──────────────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:36px}
+.pkg{background:#fff;border:2px solid var(--rule);border-radius:12px;padding:20px;cursor:pointer;transition:all .15s;position:relative;display:flex;flex-direction:column;gap:10px}
+.pkg:hover{border-color:var(--accent-pale);box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.pkg.selected{border-color:var(--accent);box-shadow:0 2px 16px rgba(171,29,121,.12)}
+.pkg .pkg-hdr{display:flex;align-items:center;gap:10px}
+.pkg .ico{width:36px;height:36px;border-radius:8px;background:var(--accent-pale);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.pkg h3{font-size:15px;font-weight:500;color:var(--ink);line-height:1.3}
+.pkg .cat{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--blue-light);font-weight:500}
+.pkg p{font-size:13px;color:var(--muted);line-height:1.55;min-height:40px}
+.pkg .radio{position:absolute;top:18px;right:18px;width:18px;height:18px;border:2px solid var(--rule);border-radius:50%;transition:all .15s}
+.pkg.selected .radio{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 3px #fff}
+
+/* ── Form ──────────────────────────────────────────────────────── */
+.section{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:clamp(22px,4vw,34px);margin-bottom:20px}
+.section h2{font-size:18px;font-weight:500;color:var(--blue-dark);margin-bottom:4px}
+.section .h-lead{font-size:13px;color:var(--muted);margin-bottom:22px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.row.three{grid-template-columns:1fr 1fr 1fr}
+.row.full{grid-template-columns:1fr}
+@media(max-width:620px){.row,.row.three{grid-template-columns:1fr}}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500;letter-spacing:.2px}
+.field input,.field textarea,.field select{width:100%;padding:11px 13px;border:1px solid var(--rule);border-radius:8px;font-family:inherit;font-size:14px;color:var(--ink);background:#fff;transition:border-color .15s}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--accent)}
+.field textarea{resize:vertical;min-height:80px;font-weight:300}
+.field .hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+.field.err input,.field.err select,.field.err textarea{border-color:var(--red)}
+.field.err .hint{color:var(--red)}
+.subdomain-wrap{display:flex;align-items:center;gap:0;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.subdomain-wrap:focus-within{border-color:var(--accent)}
+.subdomain-wrap input{border:none;border-radius:0;flex:1}
+.subdomain-wrap .suffix{padding:0 14px;color:var(--muted);background:var(--bg);border-left:1px solid var(--rule);font-size:13px;white-space:nowrap;height:44px;display:flex;align-items:center}
+
+/* ── Submit + Messages ──────────────────────────────────────── */
+.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:14px 28px;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
+.btn:hover{background:var(--accent2)}
+.btn:disabled{background:var(--blue-light);cursor:not-allowed}
+.price-note{color:var(--muted);font-size:13px}
+.msg{padding:14px 18px;border-radius:8px;font-size:14px;line-height:1.5;margin-top:16px;display:none}
+.msg.ok{display:block;background:#e3f2f1;color:var(--green-dark,#267372);border:1px solid var(--green)}
+.msg.err{display:block;background:#fdecea;color:var(--red);border:1px solid #fecaca}
+.consent{background:var(--accent-pale);border:1px solid var(--accent);border-radius:8px;padding:14px 18px;font-size:13px;line-height:1.6;color:var(--accent2);margin-top:4px}
+.consent a{color:var(--accent2);font-weight:500}
+.loading{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<nav>
+  <img src="/eledia_runbot.png" alt="eLeDia">
+  <span class="title">Moodle-Hosting Shop</span>
+</nav>
+<main class="wrap">
+  <div class="eyebrow">Bestellung</div>
+  <h1>Moodle-Instanz aus dem eLeDia-Shop bestellen</h1>
+  <p class="lead">
+    Wählen Sie ein Paket, hinterlegen Sie Ihre Rechnungs- und Signer-Daten,
+    bestätigen Sie AGB und Auftragsverarbeitungsvertrag — Ihre Instanz ist
+    nach etwa 5 Minuten einsatzbereit.
+  </p>
+
+  <div class="steps">
+    <span class="active"><span class="n">1</span>Paket wählen</span>
+    <span class="sep">→</span>
+    <span class="active"><span class="n">2</span>Daten</span>
+    <span class="sep">→</span>
+    <span><span class="n">3</span>Bestätigungsmail</span>
+    <span class="sep">→</span>
+    <span><span class="n">4</span>AGB &amp; AVV prüfen</span>
+    <span class="sep">→</span>
+    <span><span class="n">5</span>Moodle läuft</span>
+  </div>
+
+  <form id="order-form" autocomplete="on">
+    <div class="section">
+      <h2>1 Paket auswählen</h2>
+      <p class="h-lead">Alle Pakete beinhalten DSGVO-konformes Hosting in Deutschland (Hetzner Falkenstein), tägliche Backups und Moodle-Standard-Support.</p>
+      <div id="pkg-grid" class="grid">
+        <div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:40px 0">Pakete werden geladen…</div>
+      </div>
+      <input type="hidden" name="configId" id="configId" required>
+    </div>
+
+    <div class="section">
+      <h2>2 Kontakt &amp; Rechnungsadresse</h2>
+      <p class="h-lead">Alle Felder sind Pflicht. Rechnungsadresse = Firmenadresse der juristischen Person, die AGB/AVV akzeptiert.</p>
+      <div class="row">
+        <div class="field"><label>E-Mail für Bestätigung *</label>
+          <input type="email" name="contactEmail" required autocomplete="email">
+          <p class="hint">Verifikations- und Vertrags-Mails gehen hierhin.</p>
+        </div>
+        <div class="field"><label>Telefon (optional)</label>
+          <input type="tel" name="contactPhone" autocomplete="tel">
+        </div>
+      </div>
+      <div class="row full">
+        <div class="field"><label>Firma / Organisation *</label>
+          <input type="text" name="firma" required autocomplete="organization">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Straße &amp; Hausnummer *</label>
+          <input type="text" name="strasse" required autocomplete="street-address">
+        </div>
+        <div class="field"><label>USt-ID (nur B2B-EU)</label>
+          <input type="text" name="ustId" placeholder="DE123456789" autocomplete="off">
+        </div>
+      </div>
+      <div class="row three">
+        <div class="field"><label>PLZ *</label>
+          <input type="text" name="plz" required inputmode="numeric" autocomplete="postal-code">
+        </div>
+        <div class="field"><label>Ort *</label>
+          <input type="text" name="ort" required autocomplete="address-level2">
+        </div>
+        <div class="field"><label>Land *</label>
+          <select name="land" required>
+            <option value="DE">Deutschland</option>
+            <option value="AT">Österreich</option>
+            <option value="CH">Schweiz</option>
+            <option value="LU">Luxemburg</option>
+            <option value="NL">Niederlande</option>
+            <option value="BE">Belgien</option>
+            <option value="FR">Frankreich</option>
+            <option value="IT">Italien</option>
+            <option value="OTHER">Anderes Land</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>3 Unterzeichner</h2>
+      <p class="h-lead">Die Person, die AGB + AV-Vertrag für Ihre Organisation gegenzeichnet (Textform §126b BGB reicht — keine physische Unterschrift nötig).</p>
+      <div class="row">
+        <div class="field"><label>Vor- und Nachname *</label>
+          <input type="text" name="signerName" required autocomplete="name">
+        </div>
+        <div class="field"><label>Funktion *</label>
+          <input type="text" name="signerFunktion" required placeholder="z.B. Geschäftsführung, IT-Leitung">
+        </div>
+      </div>
+      <div class="row full">
+        <div class="field"><label>E-Mail des Unterzeichners *</label>
+          <input type="email" name="signerEmail" required>
+          <p class="hint">Oft identisch mit der Kontakt-E-Mail oben.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>4 Wunsch-Subdomain</h2>
+      <p class="h-lead">Unter dieser URL wird Ihre Moodle-Instanz erreichbar sein. Nur Kleinbuchstaben, Ziffern und Bindestriche (keine führenden/trailenden Dashes).</p>
+      <div class="field">
+        <label>Subdomain *</label>
+        <div class="subdomain-wrap">
+          <input type="text" name="subdomainWish" required pattern="[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?" placeholder="meine-firma" autocomplete="off">
+          <span class="suffix">.demo.eledia.ai</span>
+        </div>
+        <p class="hint">Falls bereits vergeben, schlagen wir im Bestätigungsschritt eine Alternative vor.</p>
+      </div>
+      <div class="row full" style="margin-top:16px">
+        <div class="field"><label>Anmerkungen (optional)</label>
+          <textarea name="notes" placeholder="Z.B. Wunschtermin für Go-Live, Sondersetup-Anforderungen…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="consent">
+      Mit Klick auf <strong>„Verifikationsmail anfordern"</strong> erhalten Sie eine E-Mail
+      mit einem Link zur Review-Seite. Dort sehen Sie AGB und AVV als personalisierte
+      PDFs und können die Bestellung verbindlich bestätigen. Bis dahin entstehen
+      <strong>keinerlei Kosten</strong>.
+    </div>
+
+    <div class="cta">
+      <div class="price-note">Preise &amp; Laufzeit richten sich nach der Paket-Auswahl. Rechnung nach Bereitstellung.</div>
+      <button type="submit" class="btn" id="submit-btn">Verifikationsmail anfordern →</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </form>
+</main>
+
+<script>
+const grid  = document.getElementById('pkg-grid');
+const hidden = document.getElementById('configId');
+const form = document.getElementById('order-form');
+const msg  = document.getElementById('msg');
+const btn  = document.getElementById('submit-btn');
+
+// Paket-Grid aus /api/configs laden (alle visible configs aus configs.json).
+async function loadPackages() {
+  try {
+    const r = await fetch('/api/configs', { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const list = (data.configs || []).filter(c => c.visible !== false);
+    if (list.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:40px 0">Derzeit keine Pakete verfügbar. Bitte wenden Sie sich an <a href="mailto:vertrieb@eledia.de">vertrieb@eledia.de</a>.</div>';
+      return;
+    }
+    grid.innerHTML = list.map(c => `
+      <label class="pkg" data-id="${esc(c.id)}">
+        <div class="radio"></div>
+        <div class="pkg-hdr">
+          <div class="ico" style="background:${esc(c.iconBg || '#f5e4ef')}">${esc(c.icon || '●')}</div>
+          <div>
+            <div class="cat">${esc(c.categoryLabel || c.category || '')}</div>
+            <h3>${esc(c.name)}</h3>
+          </div>
+        </div>
+        <p>${esc(c.description || '')}</p>
+      </label>`).join('');
+    grid.querySelectorAll('.pkg').forEach(el => {
+      el.addEventListener('click', () => selectPackage(el.dataset.id));
+    });
+  } catch (e) {
+    grid.innerHTML = '<div style="grid-column:1/-1;color:var(--red);text-align:center;padding:40px 0">Fehler beim Laden der Pakete. Bitte später erneut versuchen.</div>';
+  }
+}
+
+function selectPackage(id) {
+  hidden.value = id;
+  grid.querySelectorAll('.pkg').forEach(p => p.classList.toggle('selected', p.dataset.id === id));
+}
+
+// Prefill configId from ?pkg=... falls der Kunde aus dem Portal kommt.
+const params = new URLSearchParams(location.search);
+const wantedPkg = params.get('pkg');
+
+loadPackages().then(() => { if (wantedPkg) selectPackage(wantedPkg); });
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  msg.className = 'msg';
+  if (!hidden.value) {
+    msg.className = 'msg err'; msg.textContent = 'Bitte wählen Sie zuerst ein Paket aus.';
+    grid.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
+  }
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span>Sende Bestätigungsmail…';
+
+  const fd = new FormData(form);
+  const payload = {
+    configId:       fd.get('configId'),
+    contactEmail:   (fd.get('contactEmail')||'').trim(),
+    contactPhone:   (fd.get('contactPhone')||'').trim() || undefined,
+    billing: {
+      firma:   (fd.get('firma')||'').trim(),
+      strasse: (fd.get('strasse')||'').trim(),
+      plz:     (fd.get('plz')||'').trim(),
+      ort:     (fd.get('ort')||'').trim(),
+      land:    (fd.get('land')||'').trim(),
+      ustId:   (fd.get('ustId')||'').trim() || undefined,
+    },
+    signer: {
+      name:     (fd.get('signerName')||'').trim(),
+      funktion: (fd.get('signerFunktion')||'').trim(),
+      email:    (fd.get('signerEmail')||'').trim(),
+    },
+    subdomainWish: (fd.get('subdomainWish')||'').toLowerCase().trim(),
+    notes:         (fd.get('notes')||'').trim() || undefined,
+  };
+
+  try {
+    const r = await fetch('/api/shop/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      msg.className = 'msg err';
+      msg.textContent = d.error || ('Fehler: HTTP ' + r.status);
+      btn.disabled = false; btn.textContent = 'Erneut versuchen →';
+      return;
+    }
+    msg.className = 'msg ok';
+    msg.innerHTML = '✓ Verifikationsmail gesendet an <strong>' + esc(payload.contactEmail) +
+      '</strong>. Bitte klicken Sie auf den Link in der Mail, um die Bestellung fortzusetzen.';
+    btn.style.display = 'none';
+    form.querySelectorAll('input,select,textarea').forEach(el => el.disabled = true);
+    window.scrollTo({ top: msg.offsetTop - 80, behavior: 'smooth' });
+  } catch (err) {
+    msg.className = 'msg err'; msg.textContent = 'Netzwerkfehler. Bitte erneut versuchen.';
+    btn.disabled = false; btn.textContent = 'Erneut versuchen →';
+  }
+});
+</script>
+</body>
+</html>

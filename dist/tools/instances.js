@@ -65,7 +65,8 @@ Examples:
             openWorldHint: false,
         },
     }, async ({ prId, branch, pluginSrcPath, pluginType, pluginName, moodleVersion, phpVersion, db, snapshotId, pinned, pinReason }) => {
-        const id = `pr-${prId}-${shortId()}`;
+        const safePrId = prId.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-").toLowerCase();
+        const id = `pr-${safePrId}-${shortId()}`;
         const composeProject = `runbot-${id}`.replace(/[^a-z0-9-]/g, "-");
         const instanceDir = path.join(WORK_DIR, id);
         // Snapshot prüfen falls angegeben

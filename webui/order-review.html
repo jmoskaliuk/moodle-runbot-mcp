@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bestellung prüfen — eLeDia Moodle Shop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="/favicon.ico">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#353535;--muted:#6b6b6f;--rule:#e9e9e9;
+  --bg:#f3f5f8;--white:#fff;
+  --accent:#ab1d79;--accent2:#540e3b;--accent-pale:#f5e4ef;
+  --blue-dark:#194866;--blue-light:#65a1b3;--blue-pale:#a9cbd5;
+  --orange:#f98012;--orange-pale:#ffecdb;
+  --green:#3aadaa;--green-pale:#e3f2f1;
+  --red:#b91c1c;--red-pale:#fdecea;
+  --sans:'Open Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;font-weight:300;-webkit-font-smoothing:antialiased;min-height:100vh}
+nav{background:#fff;border-bottom:1px solid var(--rule);padding:14px clamp(16px,6vw,80px);display:flex;align-items:center;gap:20px;height:68px;position:sticky;top:0;z-index:10}
+nav img{height:36px}
+nav .title{color:var(--muted);font-size:13px;margin-left:auto}
+.wrap{max-width:780px;margin:0 auto;padding:clamp(28px,5vw,48px) clamp(16px,6vw,80px) 120px}
+.eyebrow{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:10px}
+h1{font-family:var(--sans);font-weight:300;font-size:clamp(26px,2.8vw,34px);line-height:1.22;color:var(--blue-dark);margin-bottom:10px;letter-spacing:-.3px}
+.lead{color:var(--muted);font-size:15px;line-height:1.7;max-width:620px;margin-bottom:28px}
+
+/* ── Step-Indicator (gleich wie shop.html, 4. Schritt aktiv) ─────── */
+.steps{display:flex;gap:12px;align-items:center;margin-bottom:28px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.steps .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--rule);color:var(--muted);font-weight:500;font-size:12px;margin-right:6px}
+.steps .done{color:var(--muted)}
+.steps .done .n{background:var(--green);color:#fff}
+.steps .active{color:var(--ink);font-weight:500}
+.steps .active .n{background:var(--accent);color:#fff}
+.steps .sep{color:var(--rule)}
+
+/* ── Pills ──────────────────────────────────────────────────────── */
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.pill{background:var(--accent-pale);color:var(--accent2);padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500}
+
+/* ── Card / Section ────────────────────────────────────────────── */
+.section{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:clamp(22px,4vw,30px);margin-bottom:16px}
+.section h2{font-size:16px;font-weight:500;color:var(--blue-dark);margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.section h2 .icon{width:26px;height:26px;border-radius:6px;background:var(--accent-pale);color:var(--accent2);display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:10px 16px;font-size:14px}
+@media(max-width:620px){.kv{grid-template-columns:1fr}.kv .k{margin-top:6px;font-size:12px}}
+.kv .k{color:var(--muted);font-weight:400}
+.kv .v{color:var(--ink);font-weight:400}
+.kv .v strong{font-weight:600}
+
+/* ── Docs ──────────────────────────────────────────────────────── */
+.docs{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.doc{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--rule);border-radius:8px;background:#fff;text-decoration:none;color:var(--ink);transition:border-color .15s,background .15s}
+.doc:hover{border-color:var(--accent);background:#fff}
+.doc .doc-ico{width:40px;height:40px;border-radius:8px;background:var(--accent-pale);color:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.doc .doc-body{flex:1;min-width:0}
+.doc .doc-title{font-size:14px;font-weight:500;color:var(--blue-dark);margin-bottom:2px}
+.doc .doc-sub{font-size:12px;color:var(--muted)}
+.doc .doc-action{color:var(--accent);font-size:13px;font-weight:500;white-space:nowrap}
+.doc.downloaded{border-color:var(--green);background:var(--green-pale)}
+.doc.downloaded .doc-ico{background:var(--green);color:#fff}
+.doc.downloaded .doc-sub{color:#267372}
+.docs-hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.55}
+
+/* ── Accept-Boxes ─────────────────────────────────────────────── */
+.accepts{margin-top:6px}
+.accept{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:var(--orange-pale);border:1px solid var(--orange);border-radius:8px;margin-bottom:10px;font-size:13.5px;line-height:1.55;cursor:pointer;transition:background .15s,border-color .15s}
+.accept:hover{background:#ffdfc2}
+.accept input{margin-top:3px;flex-shrink:0;accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+.accept input:disabled{cursor:not-allowed;opacity:.5}
+.accept label{cursor:pointer;color:var(--ink);flex:1}
+.accept label strong{color:var(--blue-dark)}
+
+/* ── CTA ─────────────────────────────────────────────────────── */
+.cta-wrap{margin-top:22px;display:flex;flex-direction:column;gap:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:15px 28px;font-size:15px;font-weight:500;cursor:pointer;font-family:var(--sans);transition:background .2s,transform .15s}
+.btn:hover{background:var(--accent2)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{background:var(--blue-pale);cursor:not-allowed}
+.msg{padding:14px 18px;border-radius:8px;font-size:14px;line-height:1.55;display:none}
+.msg.ok{display:block;background:var(--green-pale);color:#267372;border:1px solid var(--green)}
+.msg.err{display:block;background:var(--red-pale);color:var(--red);border:1px solid #fecaca}
+.hint{color:var(--muted);font-size:12px;line-height:1.6}
+
+/* ── State-Screens ────────────────────────────────────────────── */
+.loading,.error-screen{text-align:center;padding:80px 20px;color:var(--muted)}
+.loading .spin{display:inline-block;width:28px;height:28px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
+.error-screen h2{color:var(--red);font-size:20px;font-weight:500;margin-bottom:12px;font-family:var(--sans)}
+.error-screen p{max-width:480px;margin:0 auto 20px;font-size:14px;line-height:1.6}
+.error-screen a{color:var(--accent);text-decoration:none;font-weight:500}
+.error-screen a:hover{text-decoration:underline}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Summary-Highlight (Firma + Paket) ───────────────────────── */
+.highlight{background:linear-gradient(135deg,var(--blue-dark) 0%,#0f2e43 100%);color:#fff;border-radius:12px;padding:22px 26px;margin-bottom:16px}
+.highlight .hl-label{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--blue-pale);font-weight:500;margin-bottom:6px}
+.highlight .hl-title{font-size:22px;font-weight:400;line-height:1.3;margin-bottom:4px}
+.highlight .hl-sub{font-size:13px;color:var(--blue-pale);font-weight:300}
+
+/* ── Audit-Hinweis ───────────────────────────────────────────── */
+.audit{font-size:12px;color:var(--muted);line-height:1.6;padding:14px 16px;background:#fff;border:1px dashed var(--rule);border-radius:8px;margin-top:18px}
+.audit strong{color:var(--blue-dark);font-weight:500}
+</style>
+</head>
+<body>
+
+<nav>
+  <img src="/eledia_runbot.png" alt="eLeDia Runbot">
+  <span class="title">Bestellung prüfen &amp; bestätigen</span>
+</nav>
+
+<div class="wrap">
+
+  <!-- Loading-State ─────────────────────────────────────────── -->
+  <div id="state-loading" class="loading">
+    <div class="spin"></div>
+    <div>Bestelldaten werden geladen …</div>
+  </div>
+
+  <!-- Error-State ──────────────────────────────────────────── -->
+  <div id="state-error" class="error-screen" style="display:none">
+    <h2>Link ungültig oder abgelaufen</h2>
+    <p id="error-msg">Der Bestätigungs-Link ist nicht mehr gültig. Wir haben Ihnen eine neue Verify-Mail geschickt — bitte prüfen Sie Ihren Posteingang.</p>
+    <a href="/shop">→ Neue Bestellung starten</a>
+  </div>
+
+  <!-- Already-Confirmed-State ───────────────────────────────── -->
+  <div id="state-confirmed" class="error-screen" style="display:none">
+    <h2 style="color:var(--green)">✓ Bereits bestätigt</h2>
+    <p>Diese Bestellung wurde bereits bestätigt. Ihre Moodle-Instanz wird provisioniert.</p>
+    <a id="confirmed-link" href="#">→ Status anzeigen</a>
+  </div>
+
+  <!-- Main Review ────────────────────────────────────────── -->
+  <div id="state-ready" style="display:none">
+
+    <div class="steps">
+      <span class="done"><span class="n">✓</span>Paket</span>
+      <span class="sep">—</span>
+      <span class="done"><span class="n">✓</span>Daten</span>
+      <span class="sep">—</span>
+      <span class="done"><span class="n">✓</span>Bestätigungsmail</span>
+      <span class="sep">—</span>
+      <span class="active"><span class="n">4</span>AGB &amp; AVV</span>
+      <span class="sep">—</span>
+      <span><span class="n">5</span>Moodle läuft</span>
+    </div>
+
+    <div class="eyebrow">Schritt 4 von 5 — Prüfung &amp; Zustimmung</div>
+    <h1 id="greeting">Bitte bestätigen Sie die Bestellung.</h1>
+    <p class="lead">
+      Vor dem Start der Moodle-Instanz bitten wir Sie, die AGB und den Auftragsverarbeitungs-
+      Vertrag (AVV) herunterzuladen und zu bestätigen. Ihre Zustimmung wird mit IP-Adresse
+      und Zeitstempel protokolliert — das erfüllt die Text-Form nach §126b BGB.
+    </p>
+
+    <div class="highlight">
+      <div class="hl-label">Ihre Bestellung</div>
+      <div class="hl-title" id="hl-title">Paket • Firma</div>
+      <div class="hl-sub" id="hl-sub">Subdomain .demo.eledia.ai</div>
+    </div>
+
+    <div class="section">
+      <h2><span class="icon">📋</span>Bestelldaten</h2>
+      <div class="kv" id="kv-billing">
+        <!-- wird per JS gefüllt -->
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="icon">📄</span>Vertragsdokumente</h2>
+      <div class="docs" id="docs-list">
+        <a class="doc" id="doc-agb" href="#" target="_blank" rel="noopener">
+          <span class="doc-ico">📄</span>
+          <span class="doc-body">
+            <div class="doc-title">AGB — Allgemeine Geschäftsbedingungen</div>
+            <div class="doc-sub" id="agb-sub">Personalisiert mit Ihren Bestelldaten</div>
+          </span>
+          <span class="doc-action" id="agb-action">Herunterladen →</span>
+        </a>
+        <a class="doc" id="doc-avv" href="#" target="_blank" rel="noopener">
+          <span class="doc-ico">📄</span>
+          <span class="doc-body">
+            <div class="doc-title">AVV — Auftragsverarbeitungs-Vertrag</div>
+            <div class="doc-sub" id="avv-sub">Art. 28 DSGVO · Auftragsverarbeitung</div>
+          </span>
+          <span class="doc-action" id="avv-action">Herunterladen →</span>
+        </a>
+      </div>
+      <p class="docs-hint">
+        Bitte prüfen Sie beide PDFs sorgfältig. Der SHA256-Prüfsummen-Fingerprint jedes
+        Dokuments wird mit der Bestätigung revisionssicher protokolliert.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="icon">✓</span>Zustimmung</h2>
+      <div class="accepts">
+        <label class="accept" for="accept-agb">
+          <input type="checkbox" id="accept-agb">
+          <span>Ich habe die <strong>AGB</strong> vollständig gelesen und akzeptiere sie.</span>
+        </label>
+        <label class="accept" for="accept-avv">
+          <input type="checkbox" id="accept-avv">
+          <span>Ich habe den <strong>AV-Vertrag</strong> vollständig gelesen und akzeptiere ihn.</span>
+        </label>
+      </div>
+      <div class="cta-wrap">
+        <button class="btn" id="confirm-btn" disabled>
+          Jetzt kostenpflichtig bestellen &amp; Demo starten →
+        </button>
+        <div class="msg" id="msg"></div>
+        <p class="hint">
+          Nach der Bestätigung startet die automatische Provisionierung Ihrer Instanz.
+          Das dauert etwa 3–5 Minuten. Anschließend erhalten Sie eine E-Mail mit Login-Daten
+          und der Moodle-URL. Die Rechnung geht Ihnen am nächsten Arbeitstag separat zu.
+        </p>
+      </div>
+    </div>
+
+    <div class="audit">
+      <strong>Hinweis:</strong> Dieser Bestätigungs-Link ist ausschließlich für Sie bestimmt
+      und 7 Tage nach der Bestellung gültig. Bitte leiten Sie ihn nicht weiter. Bei Fragen
+      erreichen Sie uns unter <a href="mailto:vertrieb@eledia.de" style="color:var(--accent)">vertrieb@eledia.de</a>
+      oder +49 30 50 56 10 -70.
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // Token aus URL extrahieren: /shop/review/<TOKEN>
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  // Erwartet: ["shop", "review", "<token>"]
+  const TOKEN = parts[parts.length - 1] || '';
+  if (!TOKEN || TOKEN === 'review') {
+    showError('Kein Bestätigungs-Token in der URL gefunden.');
+    return;
+  }
+
+  const $ = (id) => document.getElementById(id);
+
+  function escapeHtml(s){
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function showError(msg){
+    $('state-loading').style.display = 'none';
+    $('state-ready').style.display   = 'none';
+    $('state-confirmed').style.display = 'none';
+    $('state-error').style.display   = 'block';
+    if (msg) $('error-msg').textContent = msg;
+  }
+
+  function showConfirmed(){
+    $('state-loading').style.display = 'none';
+    $('state-ready').style.display   = 'none';
+    $('state-error').style.display   = 'none';
+    $('state-confirmed').style.display = 'block';
+    $('confirmed-link').href = '/shop/confirmed/' + encodeURIComponent(TOKEN);
+  }
+
+  function showReady(){
+    $('state-loading').style.display = 'none';
+    $('state-error').style.display   = 'none';
+    $('state-confirmed').style.display = 'none';
+    $('state-ready').style.display   = 'block';
+  }
+
+  async function loadOrder(){
+    try {
+      const r = await fetch('/api/shop/order/' + encodeURIComponent(TOKEN), {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (r.status === 404) { showError('Bestellung nicht gefunden. Der Link ist möglicherweise abgelaufen.'); return; }
+      if (!r.ok) { showError('Bestellung konnte nicht geladen werden (HTTP ' + r.status + ').'); return; }
+      const order = await r.json();
+      // State-Check: Review nur sinnvoll bei ORDER_REVIEW. Andere States:
+      //   PENDING_VERIFICATION → User hat noch nicht verified (sollte nicht passieren, weil der Verify-Handler vorher läuft)
+      //   CONFIRMED/PROVISIONING/LIVE → bereits bestätigt, weiterleiten auf Status-Seite
+      //   VERIFY_EXPIRED/REJECTED    → Fehler-Screen
+      const state = order.state;
+      if (state === 'CONFIRMED' || state === 'PROVISIONING' || state === 'LIVE' || state === 'TERMINATED') {
+        showConfirmed(); return;
+      }
+      if (state === 'VERIFY_EXPIRED' || state === 'REJECTED') {
+        showError('Diese Bestellung ist nicht mehr aktiv (' + state + '). Bitte starten Sie eine neue Bestellung.'); return;
+      }
+      if (state !== 'ORDER_REVIEW') {
+        // PENDING_VERIFICATION: sollte nicht passieren, weil der Verify-Handler vor Redirect transitioned.
+        // Falls doch (z.B. Deep-Link), zeige Fehler.
+        showError('Die Bestellung ist noch nicht zur Prüfung bereit (Status: ' + state + ').'); return;
+      }
+      render(order);
+      showReady();
+    } catch (e) {
+      showError('Netzwerkfehler beim Laden der Bestelldaten.');
+    }
+  }
+
+  function render(order){
+    // Greeting mit Vorname (erstes Wort aus signer.name)
+    const firstName = (order.signer?.name || '').split(/\s+/)[0] || '';
+    if (firstName) {
+      $('greeting').textContent = firstName + ', bitte bestätigen Sie die Bestellung.';
+    }
+
+    // Highlight
+    $('hl-title').textContent = (order.configName || order.configId) + '  ·  ' + (order.billing?.firma || '');
+    const sub = (order.subdomainWish || '') + '.demo.eledia.ai';
+    $('hl-sub').textContent = sub;
+
+    // Billing KV
+    const b = order.billing || {};
+    const s = order.signer  || {};
+    const c = order.contact || {};
+    const rows = [];
+    rows.push(['Paket',            order.configName || order.configId]);
+    rows.push(['Firma',            b.firma || '—']);
+    const addr = [b.strasse, [b.plz, b.ort].filter(Boolean).join(' '), b.land].filter(Boolean).join(', ');
+    rows.push(['Rechnungsadresse', addr || '—']);
+    if (b.ustId) rows.push(['USt-IdNr.', b.ustId]);
+    rows.push(['Kontakt-E-Mail',   c.email || '—']);
+    if (c.phone) rows.push(['Telefon', c.phone]);
+    rows.push(['Unterzeichner',    (s.name || '—') + (s.funktion ? ' (' + s.funktion + ')' : '')]);
+    if (s.email && s.email !== c.email) rows.push(['Signer-E-Mail', s.email]);
+    rows.push(['Wunsch-Subdomain', sub]);
+    if (order.notes) rows.push(['Anmerkung', order.notes]);
+
+    $('kv-billing').innerHTML = rows.map(([k, v]) =>
+      '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(v) + '</div>'
+    ).join('');
+
+    // Doc-Links
+    const agbUrl = '/api/shop/agreement/' + encodeURIComponent(TOKEN) + '/agb';
+    const avvUrl = '/api/shop/agreement/' + encodeURIComponent(TOKEN) + '/avv';
+    $('doc-agb').href = agbUrl;
+    $('doc-avv').href = avvUrl;
+
+    // Bereits heruntergeladen?
+    const agbRec = (order.agreements || []).find(a => a.type === 'agb');
+    const avvRec = (order.agreements || []).find(a => a.type === 'avv');
+    if (agbRec && agbRec.downloadedAt) markDownloaded('agb', agbRec);
+    if (avvRec && avvRec.downloadedAt) markDownloaded('avv', avvRec);
+
+    // Doc-Click → nach kurzer Verzögerung den Download-Status refreshen
+    function wireDownload(id, type){
+      $(id).addEventListener('click', () => {
+        setTimeout(() => { refreshDownloadStatus(); }, 1500);
+      });
+    }
+    wireDownload('doc-agb', 'agb');
+    wireDownload('doc-avv', 'avv');
+  }
+
+  function markDownloaded(type, rec){
+    const box = $('doc-' + type);
+    const action = $(type + '-action');
+    const sub = $(type + '-sub');
+    box.classList.add('downloaded');
+    action.textContent = 'Erneut öffnen ↗';
+    const ts = rec.downloadedAt ? new Date(rec.downloadedAt).toLocaleString('de-DE', {dateStyle:'short', timeStyle:'short'}) : '';
+    const sha = rec.pdfSha256 ? rec.pdfSha256.slice(0, 12) : '';
+    sub.textContent = '✓ Heruntergeladen ' + (ts ? 'am ' + ts : '') + (sha ? '  ·  SHA256 ' + sha + '…' : '');
+  }
+
+  async function refreshDownloadStatus(){
+    try {
+      const r = await fetch('/api/shop/order/' + encodeURIComponent(TOKEN));
+      if (!r.ok) return;
+      const order = await r.json();
+      (order.agreements || []).forEach(a => {
+        if (a.downloadedAt) markDownloaded(a.type, a);
+      });
+    } catch {}
+  }
+
+  // ── Accept-Logic ─────────────────────────────────────────
+  const agb = () => $('accept-agb');
+  const avv = () => $('accept-avv');
+  const btn = () => $('confirm-btn');
+  const msg = () => $('msg');
+
+  function syncBtn(){
+    btn().disabled = !(agb().checked && avv().checked);
+  }
+  document.addEventListener('change', (e) => {
+    if (e.target && (e.target.id === 'accept-agb' || e.target.id === 'accept-avv')) syncBtn();
+  });
+
+  document.addEventListener('click', async (e) => {
+    if (!e.target || e.target.id !== 'confirm-btn') return;
+    if (btn().disabled) return;
+    btn().disabled = true;
+    const origLabel = btn().textContent;
+    btn().textContent = 'Wird gesendet …';
+    msg().className = 'msg';
+    msg().textContent = '';
+
+    try {
+      const r = await fetch('/api/shop/confirm/' + encodeURIComponent(TOKEN), {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body:    JSON.stringify({ acceptedAgb: true, acceptedAvv: true })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        msg().className   = 'msg err';
+        msg().textContent = d.error || ('Fehler: HTTP ' + r.status);
+        btn().disabled    = false;
+        btn().textContent = 'Erneut versuchen →';
+        return;
+      }
+      // Success → Confirmed-Page
+      msg().className = 'msg ok';
+      msg().innerHTML = '✓ Bestellung bestätigt. Weiterleitung zur Status-Seite …';
+      agb().disabled = true;
+      avv().disabled = true;
+      setTimeout(() => {
+        window.location.href = '/shop/confirmed/' + encodeURIComponent(TOKEN);
+      }, 1200);
+    } catch (err) {
+      msg().className   = 'msg err';
+      msg().textContent = 'Netzwerkfehler. Bitte erneut versuchen.';
+      btn().disabled    = false;
+      btn().textContent = origLabel;
+    }
+  });
+
+  // Start
+  loadOrder();
+})();
+</script>
+</body>
+</html>

@@ -43,7 +43,6 @@ import * as snapshotSvc from "./services/snapshot.js";
 import * as snapshotAdmin from "./services/snapshot-admin.js";
 import * as pluginInstall from "./services/plugin-install.js";
 import * as orders from "./services/orders.js";
-import type { Order } from "./services/orders.js";
 import * as contractPdf from "./services/contract-pdf.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
 import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
@@ -691,12 +690,17 @@ async function runHTTP(): Promise<void> {
   app.post("/api/shop/order", shopOrderLimiter, shopCreateOrderHandler);
   app.post("/shop/order",     shopOrderLimiter, shopCreateOrderHandler);
 
-  // (2) GET /api/shop/verify/:token — Double-Opt-In-Landingpage
+  // (2) GET /shop/verify/:token — Double-Opt-In-Landingpage
   //
   // Klick auf den Verify-Link in der Verify-Mail → Backend transitioned
-  // PENDING_VERIFICATION → ORDER_REVIEW und liefert die Review-Seite als
-  // HTML-Stub aus. Der finale Flow (AGB/AVV-Download + Confirm-Button) wird
-  // vom shop.html-Frontend in Woche 3 übernommen.
+  // PENDING_VERIFICATION → ORDER_REVIEW, verschickt parallel die Review-Mail
+  // als Backup-Link und leitet dann weiter auf /shop/review/:token, wo die
+  // statische order-review.html ausgeliefert wird.
+  //
+  // Rationale (Woche 3): Früher wurde hier buildShopReviewStub() als Inline-
+  // HTML gerendert. Jetzt ist die Review-Seite eine eigenständige Datei
+  // (webui/order-review.html), die via REST die Bestelldaten nachlädt. Das
+  // entkoppelt Template vom Backend und erlaubt klar getrennten State.
   const shopVerifyHandler: express.RequestHandler = async (req, res) => {
     const { token } = req.params;
     try {
@@ -713,15 +717,16 @@ async function runHTTP(): Promise<void> {
         );
       }
 
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.send(buildShopReviewStub(order, configName));
+      // 302 Redirect auf die Review-Seite. Der Token bleibt in der URL, damit
+      // order-review.html ihn aus window.location.pathname auslesen kann.
+      res.redirect(302, `/shop/review/${encodeURIComponent(token)}`);
     } catch (e) {
-      const msg = String((e as Error)?.message ?? e);
+      const msg = String((e as Error)?.message ?? e).replace(/[<>&]/g, "");
       res.status(400).setHeader("Content-Type", "text/html; charset=utf-8")
         .send(`<html><body style="font-family:sans-serif;text-align:center;padding:80px;color:#555">
           <h2>Link ungültig oder abgelaufen</h2>
-          <p>${msg.replace(/[<>&]/g, "")}</p>
-          <a href="${process.env.BASE_URL ?? "/"}" style="color:#ab1d79">→ Zurück zum Portal</a>
+          <p>${msg}</p>
+          <a href="${process.env.BASE_URL ?? "/shop"}" style="color:#ab1d79">→ Neue Bestellung starten</a>
         </body></html>`);
     }
   };
@@ -890,15 +895,33 @@ async function runHTTP(): Promise<void> {
       const configs = await loadConfigs().catch(() => [] as DemoConfig[]);
       const config = configs.find(c => c.id === order.configId);
 
+      // Agreements ohne interne Felder (pdfPath) — SHA256 + Timestamps sind OK,
+      // damit das Frontend "Heruntergeladen ✓" anzeigen kann.
+      const agreementsPublic = (order.agreements ?? []).map(a => ({
+        type:             a.type,
+        templateVersion:  a.templateVersion,
+        downloadedAt:     a.downloadedAt,
+        signedAt:         a.signedAt,
+        pdfSha256:        a.pdfSha256,
+      }));
+
       const response: Record<string, unknown> = {
         orderId:        order.id,
         state:          order.state,
         configId:       order.configId,
         configName:     config?.name ?? order.configId,
+        configDescription: config?.description,
         firma:          order.billing.firma,
         subdomainWish:  order.subdomainWish,
         createdAt:      order.createdAt,
         updatedAt:      order.updatedAt,
+        // Review-Daten (für order-review.html) — gleicher Security-Level wie
+        // buildShopReviewStub: Token-basiert, nur der Kunde kennt den Token.
+        contact:        { email: order.contact.email, phone: order.contact.phone },
+        billing:        order.billing,
+        signer:         order.signer,
+        agreements:     agreementsPublic,
+        notes:          order.notes,
       };
 
       if (order.instanceId) {
@@ -1214,6 +1237,19 @@ async function runHTTP(): Promise<void> {
     res.sendFile(path.join(process.cwd(), "webui", "plugin-detail.html"));
   });
 
+  // ── Shop-Frontend (Woche 3) ───────────────────────────────────────────
+  // Statische Seiten mit dynamischen Pfaden. Die API (/api/shop/*) liefert
+  // die Daten, die HTML-Seiten rendern sie JS-seitig.
+  app.get("/shop", (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "webui", "shop.html"));
+  });
+  app.get("/shop/review/:token", (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "webui", "order-review.html"));
+  });
+  app.get("/shop/confirmed/:token", (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "webui", "shop-confirmed.html"));
+  });
+
   const internalRouter = buildInternalRouter();
   app.use("/api/internal", internalRouter);
   app.use("/internal", internalRouter);
@@ -1299,138 +1335,10 @@ setTimeout(async()=>{const keep=await poll();if(!keep)return;const handle=setInt
 </script></body></html>`;
 }
 
-/**
- * Review-Seite für den Shop-Order-Flow (Woche 1b-Stub). Zeigt die Order-
- * Daten + AGB/AVV-Download-Links (TODO: echte PDFs in Woche 2) + einen
- * Confirm-Button, der `POST /api/shop/confirm/:token` aufruft. In Woche 3
- * wird das durch `webui/order-review.html` ersetzt.
- *
- * Corporate Design (`brand.ts`): Fraunces für Headlines, Inter für Body,
- * Accent #ab1d79.
- */
-function buildShopReviewStub(order: Order, configName: string): string {
-  const esc = (s: string): string =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  const token = order.verifyToken;
-  const agbUrl = `/api/shop/agreement/${token}/agb`;
-  const avvUrl = `/api/shop/agreement/${token}/avv`;
-
-  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bestellung prüfen — ${esc(configName)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#f3f5f8;font-family:'Inter',sans-serif;min-height:100vh;color:#353535;padding:40px 16px;font-weight:300}
-.wrap{max-width:640px;margin:0 auto}
-.card{background:#fff;border:1px solid #e9e9e9;border-radius:12px;padding:40px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
-.logo{height:38px;margin-bottom:28px}
-h1{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:28px;line-height:1.25;margin-bottom:12px;color:#194866}
-.lead{color:#6b6b6f;font-size:15px;line-height:1.6;margin-bottom:28px}
-.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
-.pill{background:#f5e4ef;color:#540e3b;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500}
-.section{border:1px solid #e9e9e9;border-radius:8px;padding:18px 22px;margin-bottom:16px;background:#f3f5f8}
-.section h3{font-family:'Fraunces',Georgia,serif;font-size:14px;font-weight:400;color:#194866;margin-bottom:10px;letter-spacing:.3px}
-.kv{display:grid;grid-template-columns:140px 1fr;gap:8px 14px;font-size:13px}
-.kv .k{color:#6b6b6f}.kv .v{color:#353535;font-weight:400}
-.docs{display:flex;flex-direction:column;gap:8px;margin:6px 0}
-.docs a{color:#ab1d79;text-decoration:none;font-size:14px;padding:10px 14px;border:1px solid #e9e9e9;border-radius:6px;background:#fff;display:inline-block}
-.docs a:hover{border-color:#ab1d79}
-.accept{display:flex;align-items:flex-start;gap:10px;padding:14px 18px;background:#ffecdb;border:1px solid #f98012;border-radius:8px;margin-bottom:12px;font-size:13px;line-height:1.5}
-.accept input{margin-top:3px;flex-shrink:0;accent-color:#ab1d79}
-.accept label{cursor:pointer;color:#353535}
-.btn{display:inline-block;background:#ab1d79;color:#fff;border:none;border-radius:8px;padding:14px 32px;font-size:15px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;margin-top:16px;transition:background .2s}
-.btn:hover{background:#540e3b}.btn:disabled{background:#a9cbd5;cursor:not-allowed}
-.msg{margin-top:16px;padding:14px 18px;border-radius:8px;font-size:14px;line-height:1.5;display:none}
-.msg.ok{display:block;background:#e3f2f1;color:#267372;border:1px solid #3aadaa}
-.msg.err{display:block;background:#fdecea;color:#b91c1c;border:1px solid #fecaca}
-.hint{color:#6b6b6f;font-size:12px;margin-top:18px;line-height:1.6}
-</style></head><body>
-<div class="wrap">
-  <div class="card">
-    <img class="logo" src="/eledia_runbot.png" alt="eLeDia">
-    <h1>${esc(order.signer.name.split(" ")[0] || "")}, bitte bestätigen Sie die Bestellung.</h1>
-    <p class="lead">
-      Vor dem Start der Moodle-Instanz bitten wir Sie, die AGB und den AV-Vertrag
-      herunterzuladen und zu bestätigen. Die Zustimmung wird mit IP-Adresse und
-      Zeitstempel protokolliert (Text-Form §126b BGB).
-    </p>
-    <div class="pills">
-      <span class="pill">${esc(configName)}</span>
-      <span class="pill">${esc(order.billing.firma)}</span>
-      <span class="pill">${esc(order.subdomainWish)}.demo.eledia.ai</span>
-    </div>
-
-    <div class="section">
-      <h3>Bestelldaten</h3>
-      <div class="kv">
-        <div class="k">Firma</div><div class="v">${esc(order.billing.firma)}</div>
-        <div class="k">Rechnungsadresse</div><div class="v">${esc(order.billing.strasse)}, ${esc(order.billing.plz)} ${esc(order.billing.ort)}, ${esc(order.billing.land)}</div>
-        <div class="k">Kontakt</div><div class="v">${esc(order.contact.email)}</div>
-        <div class="k">Unterzeichner</div><div class="v">${esc(order.signer.name)} (${esc(order.signer.funktion)})</div>
-        <div class="k">Paket</div><div class="v">${esc(configName)}</div>
-        <div class="k">Wunsch-Subdomain</div><div class="v">${esc(order.subdomainWish)}.demo.eledia.ai</div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h3>Vertragsdokumente</h3>
-      <div class="docs">
-        <a href="${agbUrl}" id="agb-link" target="_blank" rel="noopener">📄 AGB herunterladen</a>
-        <a href="${avvUrl}" id="avv-link" target="_blank" rel="noopener">📄 AVV (Auftragsverarbeitung) herunterladen</a>
-      </div>
-      <p style="font-size:12px;color:#6b6b6f;margin-top:6px">
-        PDFs werden personalisiert auf Ihre Firmendaten generiert. Bitte prüfen Sie
-        beide Dokumente sorgfältig vor dem Klick auf "Bestätigen".
-      </p>
-    </div>
-
-    <div class="accept"><input type="checkbox" id="accept-agb"><label for="accept-agb">Ich habe die <strong>AGB</strong> gelesen und akzeptiert.</label></div>
-    <div class="accept"><input type="checkbox" id="accept-avv"><label for="accept-avv">Ich habe den <strong>AVV</strong> gelesen und akzeptiert.</label></div>
-
-    <button class="btn" id="confirm-btn" disabled>Jetzt kostenpflichtig bestellen &amp; Demo starten →</button>
-    <div class="msg" id="msg"></div>
-    <p class="hint">
-      Nach der Bestätigung startet die automatische Provisionierung Ihrer Instanz.
-      Das dauert etwa 3–5 Minuten. Sie erhalten anschließend eine E-Mail mit Login-Daten
-      und der Moodle-URL. Die Rechnung geht Ihnen am nächsten Arbeitstag zu.
-    </p>
-  </div>
-</div>
-<script>
-const TOKEN = ${JSON.stringify(token)};
-const agb = document.getElementById('accept-agb');
-const avv = document.getElementById('accept-avv');
-const btn = document.getElementById('confirm-btn');
-const msg = document.getElementById('msg');
-function sync(){ btn.disabled = !(agb.checked && avv.checked); }
-agb.addEventListener('change', sync);
-avv.addEventListener('change', sync);
-btn.addEventListener('click', async () => {
-  btn.disabled = true; btn.textContent = 'Wird gesendet…'; msg.className = 'msg';
-  try {
-    const r = await fetch('/api/shop/confirm/' + TOKEN, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ acceptedAgb: true, acceptedAvv: true }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      msg.className = 'msg err'; msg.textContent = d.error || ('Fehler: HTTP ' + r.status);
-      btn.disabled = false; btn.textContent = 'Erneut versuchen →'; return;
-    }
-    msg.className = 'msg ok';
-    msg.innerHTML = '✓ Bestellung bestätigt. Ihre Moodle-Instanz wird jetzt provisioniert — Sie erhalten in 3–5 Minuten eine Welcome-Mail.';
-    btn.style.display = 'none';
-    agb.disabled = true; avv.disabled = true;
-  } catch (e) {
-    msg.className = 'msg err'; msg.textContent = 'Netzwerkfehler. Bitte erneut versuchen.';
-    btn.disabled = false; btn.textContent = 'Erneut versuchen →';
-  }
-});
-</script>
-</body></html>`;
-}
+// Hinweis: Der ehemalige `buildShopReviewStub()` (Woche 1b-Inline-HTML) wurde
+// in Woche 3 / task48 entfernt. Die Review-Seite ist jetzt die statische Datei
+// `webui/order-review.html`, die via `GET /api/shop/order/:token` die Bestell-
+// daten nachlädt. Der Verify-Handler redirectet auf `/shop/review/:token`.
 
 if (transport === "http") {
   cleanupOrphans()
