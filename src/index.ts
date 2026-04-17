@@ -35,12 +35,15 @@ import {
 } from "./tools/configs.js";
 
 import { loadConfigs, updateConfig } from "./services/config.js";
+import type { DemoConfig } from "./services/config.js";
 import * as tokens from "./services/tokens.js";
 import * as email from "./services/email.js";
 import * as github from "./services/github.js";
 import * as snapshotSvc from "./services/snapshot.js";
 import * as snapshotAdmin from "./services/snapshot-admin.js";
 import * as pluginInstall from "./services/plugin-install.js";
+import * as orders from "./services/orders.js";
+import type { Order } from "./services/orders.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
 import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
@@ -425,6 +428,412 @@ async function runHTTP(): Promise<void> {
   app.post("/api/extend-code", extendCodeHandler);
   app.post("/extend-code", extendCodeHandler);
 
+  // ── Onlineshop Order-Flow (task46, Woche 1b) ──────────────────────────────
+  //
+  // Vier kundenseitige Endpoints + ein kleiner HTML-Stub für die Review-Seite.
+  // Alle Routes sind ZWEIFACH registriert — einmal mit `/api/*` und einmal ohne —,
+  // weil nginx vor dem Node-Backend den `/api/*`-Präfix wegstripped (siehe
+  // 04-tasks.md → Ideen → "nginx-Config sauber aufräumen").
+  //
+  // Das echte Review-Frontend (shop.html + order-review.html) kommt in Woche 3.
+  // Für Woche 1b reicht der HTML-Stub, damit End-to-End-Tests laufen.
+
+  // Shop-Rate-Limit: bewusst strenger als der Demo-Limiter, weil jede
+  // Order eine Welcome-Mail + Provisioning triggert. 3 Bestellungen
+  // pro IP pro 15 Min reicht für legitime Nutzung; Abuse wird gedrosselt.
+  const shopOrderLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 3,
+    message: { error: "Zu viele Bestellungen. Bitte warten Sie 15 Minuten." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  function isValidSubdomain(s: string): boolean {
+    // a-z0-9 + einzelne Bindestriche, 3–40 Zeichen, kein führender/trailing Dash
+    return /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/.test(s);
+  }
+
+  function clientIp(req: express.Request): string {
+    // Reverse-Proxy hinter nginx → X-Forwarded-For ist die Client-IP
+    const xff = req.headers["x-forwarded-for"];
+    if (typeof xff === "string") return xff.split(",")[0]!.trim();
+    return req.socket.remoteAddress ?? "";
+  }
+
+  function userAgent(req: express.Request): string {
+    return (req.headers["user-agent"] ?? "").slice(0, 500);
+  }
+
+  /**
+   * Provisioniert eine Shop-Instanz aus einer bestätigten Order. Pendant zum
+   * /confirm/:token-Handler im Demo-Flow, nutzt aber die orders.ts-State-
+   * Machine statt tokens.ts. Wird als setImmediate-Background-Task gestartet.
+   *
+   * Happy-Path:  ORDER_REVIEW → CONFIRMED → PROVISIONING → LIVE
+   * Error-Path:  → PROVISION_FAILED + Admin-Alert
+   *
+   * TODO (Woche 2):
+   *   - Random-Admin-Passwort generieren und via SQL-Update in m_user setzen
+   *   - password_expired = 1 für den Admin-Record
+   *   - Echte AGB/AVV-PDFs generieren (src/services/contract-pdf.ts)
+   */
+  async function provisionOrderInstance(orderId: string): Promise<void> {
+    let order = await orders.getOrder(orderId);
+    if (!order) throw new Error(`Order ${orderId} nicht gefunden`);
+
+    const configs = await loadConfigs().catch(() => [] as DemoConfig[]);
+    const config = configs.find(c => c.id === order!.configId);
+    if (!config) {
+      await orders.setProvisioningError(
+        orderId,
+        `Config '${order.configId}' nicht in configs.json gefunden`,
+      );
+      await orders.transitionOrder(orderId, "PROVISION_FAILED", "system",
+        `Config fehlt: ${order.configId}`);
+      return;
+    }
+
+    // CONFIRMED → PROVISIONING (idempotent falls bereits in PROVISIONING)
+    if (order.state === "CONFIRMED") {
+      order = await orders.transitionOrder(orderId, "PROVISIONING", "system",
+        "Auto-Provisioning gestartet");
+    }
+
+    // Subdomain-Sanitization analog bug20 (SSL-Fix): IDs für Subdomain-URLs
+    // müssen DNS-safe sein — Punkte oder Underscores brechen die
+    // *.demo.eledia.ai-Wildcard-Policy.
+    const safeWish = order.subdomainWish.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-").toLowerCase();
+    const id = `shop-${safeWish}-${randomBytes(3).toString("hex")}`;
+    const composeProject = `runbot-${id}`.replace(/[^a-z0-9-]/g, "-");
+
+    const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
+    const PORT_START = parseInt(process.env.PORT_START ?? "8100");
+    const PORT_END = parseInt(process.env.PORT_END ?? "8199");
+    const BASE_DOMAIN = process.env.BASE_DOMAIN ?? "";
+
+    try {
+      const port = await allocatePort(PORT_START, PORT_END);
+      const instanceDir = path.join(WORK_DIR, id);
+      const apiToken = randomBytes(32).toString("hex");
+
+      const instance: MoodleInstance = {
+        id, prId: "shop", branch: "main",
+        pluginDir: config.plugin?.srcPath ?? "",
+        moodleVersion: config.moodleVersion as MoodleInstance["moodleVersion"],
+        phpVersion: config.phpVersion as MoodleInstance["phpVersion"],
+        db: config.db as MoodleInstance["db"],
+        webPort: port, status: "starting",
+        url: BASE_DOMAIN ? `https://${id}.${BASE_DOMAIN}` : `http://localhost:${port}`,
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        composeProject,
+        moodleDockerDir: path.join(instanceDir, "moodle-docker"),
+        moodleDir: path.join(instanceDir, "moodle"),
+        apiToken, configId: config.id,
+        // Shop-Instanzen sind Kunden-Demos: Cleanup-Scheduler MUSS sie in
+        // Ruhe lassen. Kündigung läuft manuell über den Admin-Dashboard-Flow
+        // oder — ab Woche 4 — aus dem Customer-Dashboard heraus.
+        pinned: true,
+        pinReason: `order:${order.id}`,
+      };
+      await saveInstance(instance);
+      await orders.setProvisioningInstance(orderId, instance.id);
+
+      await dockerSvc.provisionInstance(instance);
+      if (config.plugin) {
+        const srcOK = await ensurePluginSrcPath(config.plugin, config.githubRepo);
+        if (!srcOK) {
+          throw new Error(
+            `Plugin-Quellverzeichnis ${config.plugin.srcPath} fehlt und konnte ` +
+            `nicht automatisch geklont werden.`
+          );
+        }
+        await dockerSvc.installPlugin(instance, config.plugin.srcPath, config.plugin.type, config.plugin.name);
+      }
+      const snap = config.snapshotId ? await snapshotSvc.getSnapshot(config.snapshotId) : undefined;
+      await dockerSvc.startContainers(instance, snap?.file);
+      if (snap) {
+        await snapshotSvc.restoreSnapshot(instance, snap.file);
+      }
+      await dockerSvc.setSiteName(instance, `${order.billing.firma} | ${config.name}`)
+        .catch((e: unknown) => console.error(`[shop] setSiteName WARN:`, e));
+      instance.status = "running";
+      instance.lastActivity = new Date().toISOString();
+      await saveInstance(instance);
+      await nginxSvc.registerInstance(instance.id, instance.webPort);
+
+      await orders.setProvisioningFinished(orderId, id);
+      const liveOrder = await orders.transitionOrder(orderId, "LIVE", "system",
+        "Provisioning erfolgreich, Instanz läuft");
+
+      // Kunden-Magic-Token für späteres Customer-Dashboard (Woche 4).
+      // Bereits jetzt ausstellen, damit er in der Welcome-Mail verlinkbar ist.
+      const { token: customerToken } = await orders.issueCustomerMagicToken(orderId);
+      const customerDashboardUrl =
+        `${process.env.BASE_URL ?? "https://demo.eledia.ai"}/kunde/${customerToken}`;
+      const changePasswordUrl = `${instance.url}/login/change_password.php?expired=1`;
+
+      try {
+        await email.sendOrderConfirmedEmail(liveOrder, config.name, {
+          moodleUrl: instance.url,
+          subdomain: id,
+          adminUsername: "admin",
+          // TODO (Woche 2): durch generiertes Random-Passwort ersetzen,
+          // sobald docker.setAdminPassword() verfügbar ist.
+          adminPassword: "demo1234",
+          changePasswordUrl,
+          customerDashboardUrl,
+        });
+      } catch (mailErr) {
+        console.error(`[shop] Welcome-Mail für Order ${orderId} fehlgeschlagen:`, mailErr);
+      }
+      console.error(`[shop] Order ${orderId} → LIVE (instance ${id}, url ${instance.url})`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[shop] Provisioning für Order ${orderId} fehlgeschlagen:`, e);
+      await orders.setProvisioningError(orderId, msg).catch(() => {});
+      await orders.transitionOrder(orderId, "PROVISION_FAILED", "system", msg).catch(() => {});
+      // Admin-Alert feuern (Best-Effort, kein Throw)
+      try {
+        const current = await orders.getOrder(orderId);
+        if (current) await email.sendAdminAlertNewOrderEmail(current, config.name);
+      } catch (alertErr) {
+        console.error(`[shop] Admin-Alert für Order ${orderId} fehlgeschlagen:`, alertErr);
+      }
+    }
+  }
+
+  // (1) POST /api/shop/order — Create Draft + Send Verify-Mail
+  const shopCreateOrderHandler: express.RequestHandler = async (req, res) => {
+    try {
+      const body = (req.body ?? {}) as {
+        configId?:     string;
+        contact?:      { email?: string; phone?: string };
+        billing?:      Partial<orders.BillingAddress>;
+        signer?:       Partial<orders.SignerInfo>;
+        subdomainWish?: string;
+        notes?:        string;
+      };
+
+      // ── Validation ──
+      if (!body.configId) { res.status(400).json({ error: "configId ist erforderlich" }); return; }
+      if (!body.contact?.email) { res.status(400).json({ error: "contact.email ist erforderlich" }); return; }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.contact.email)) {
+        res.status(400).json({ error: "Ungültige E-Mail-Adresse in contact.email" }); return;
+      }
+      if (!body.billing?.firma || !body.billing?.strasse || !body.billing?.plz ||
+          !body.billing?.ort || !body.billing?.land) {
+        res.status(400).json({ error: "billing.firma/strasse/plz/ort/land sind erforderlich" }); return;
+      }
+      if (!body.signer?.name || !body.signer?.funktion || !body.signer?.email) {
+        res.status(400).json({ error: "signer.name/funktion/email sind erforderlich" }); return;
+      }
+      if (!emailRegex.test(body.signer.email)) {
+        res.status(400).json({ error: "Ungültige E-Mail-Adresse in signer.email" }); return;
+      }
+      const wish = (body.subdomainWish ?? "").trim().toLowerCase();
+      if (!wish || !isValidSubdomain(wish)) {
+        res.status(400).json({
+          error: "subdomainWish erforderlich (3–40 Zeichen, a-z/0-9/Bindestrich, kein führender/trailing Dash)",
+        }); return;
+      }
+
+      const configs = await loadConfigs().catch(() => [] as DemoConfig[]);
+      const config = configs.find(c => c.id === body.configId);
+      if (!config) {
+        res.status(404).json({ error: `Config '${body.configId}' nicht gefunden` }); return;
+      }
+
+      const order = await orders.createOrder({
+        configId:      body.configId,
+        contactEmail:  body.contact.email,
+        contactPhone:  body.contact.phone,
+        billing: {
+          firma:    body.billing.firma,
+          strasse:  body.billing.strasse,
+          plz:      body.billing.plz,
+          ort:      body.billing.ort,
+          land:     body.billing.land,
+          ustId:    body.billing.ustId,
+        },
+        signer: {
+          name:     body.signer.name,
+          funktion: body.signer.funktion,
+          email:    body.signer.email,
+        },
+        subdomainWish: wish,
+        notes:         body.notes,
+      });
+
+      // Mails raus (beide im Best-Effort-Modus; Mail-Fehler kippen die Order nicht)
+      await email.sendVerifyOrderEmail(order, config.name).catch((e: unknown) =>
+        console.error(`[shop] Verify-Mail für ${order.id} fehlgeschlagen:`, e)
+      );
+      await email.sendAdminAlertNewOrderEmail(order, config.name).catch((e: unknown) =>
+        console.error(`[shop] Admin-Alert für ${order.id} fehlgeschlagen:`, e)
+      );
+
+      res.json({
+        ok:       true,
+        orderId:  order.id,
+        state:    order.state,
+        message:  "Bestellung angelegt. Wir haben Ihnen eine Verify-Mail geschickt.",
+        ...(process.env.NODE_ENV === "development" ? { verifyToken: order.verifyToken } : {}),
+      });
+    } catch (e) {
+      console.error(`[shop] createOrder failed:`, e);
+      res.status(500).json({ error: String((e as Error)?.message ?? e) });
+    }
+  };
+  app.post("/api/shop/order", shopOrderLimiter, shopCreateOrderHandler);
+  app.post("/shop/order",     shopOrderLimiter, shopCreateOrderHandler);
+
+  // (2) GET /api/shop/verify/:token — Double-Opt-In-Landingpage
+  //
+  // Klick auf den Verify-Link in der Verify-Mail → Backend transitioned
+  // PENDING_VERIFICATION → ORDER_REVIEW und liefert die Review-Seite als
+  // HTML-Stub aus. Der finale Flow (AGB/AVV-Download + Confirm-Button) wird
+  // vom shop.html-Frontend in Woche 3 übernommen.
+  const shopVerifyHandler: express.RequestHandler = async (req, res) => {
+    const { token } = req.params;
+    try {
+      const order = await orders.verifyOrder(token, clientIp(req), userAgent(req));
+      const configs = await loadConfigs().catch(() => [] as DemoConfig[]);
+      const config = configs.find(c => c.id === order.configId);
+      const configName = config?.name ?? order.configId;
+
+      // Parallel die Order-Review-Mail (Backup-Link, falls Browser-Tab
+      // geschlossen wird). Best-Effort.
+      if (order.state === "ORDER_REVIEW") {
+        email.sendOrderReviewEmail(order, configName).catch((e: unknown) =>
+          console.error(`[shop] Review-Mail für ${order.id} fehlgeschlagen:`, e)
+        );
+      }
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(buildShopReviewStub(order, configName));
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      res.status(400).setHeader("Content-Type", "text/html; charset=utf-8")
+        .send(`<html><body style="font-family:sans-serif;text-align:center;padding:80px;color:#555">
+          <h2>Link ungültig oder abgelaufen</h2>
+          <p>${msg.replace(/[<>&]/g, "")}</p>
+          <a href="${process.env.BASE_URL ?? "/"}" style="color:#ab1d79">→ Zurück zum Portal</a>
+        </body></html>`);
+    }
+  };
+  app.get("/api/shop/verify/:token", shopVerifyHandler);
+  app.get("/shop/verify/:token",     shopVerifyHandler);
+
+  // (3) POST /api/shop/confirm/:token — AGB/AVV akzeptiert, triggert Provisioning
+  //
+  // Body: { acceptedAgb: true, acceptedAvv: true }
+  // Setzt markAgreementDownloaded + markAgreementSigned für beide Typen,
+  // transitioned ORDER_REVIEW → CONFIRMED und startet den Provisioning-Job
+  // asynchron via setImmediate.
+  const shopConfirmHandler: express.RequestHandler = async (req, res) => {
+    const { token } = req.params;
+    const body = (req.body ?? {}) as { acceptedAgb?: boolean; acceptedAvv?: boolean };
+
+    if (!body.acceptedAgb || !body.acceptedAvv) {
+      res.status(400).json({
+        error: "AGB und AVV müssen beide bestätigt sein (acceptedAgb=true, acceptedAvv=true)",
+      }); return;
+    }
+
+    try {
+      const order = await orders.getOrderByVerifyToken(token);
+      if (!order) { res.status(404).json({ error: "Order nicht gefunden" }); return; }
+      if (order.state !== "ORDER_REVIEW") {
+        res.status(409).json({
+          error: `Order im Zustand ${order.state} — Confirm nur aus ORDER_REVIEW möglich`,
+          state: order.state,
+        }); return;
+      }
+
+      const ip = clientIp(req);
+      const ua = userAgent(req);
+
+      // Agreements markieren — in Woche 1b mit Platzhalter-PDF-Pfad/Hash.
+      // Woche 2 (task47) ersetzt das durch echte pandoc-generierte PDFs.
+      await orders.markAgreementDownloaded(order.id, "agb", "v1", ip, ua);
+      await orders.markAgreementDownloaded(order.id, "avv", "v1", ip, ua);
+      await orders.markAgreementSigned(order.id, "agb",
+        "pending-pdf-woche2", "0".repeat(64), ip, ua);
+      await orders.markAgreementSigned(order.id, "avv",
+        "pending-pdf-woche2", "0".repeat(64), ip, ua);
+
+      const confirmed = await orders.transitionOrder(order.id, "CONFIRMED", "customer",
+        `AGB/AVV confirmed from ${ip}`);
+
+      // Provisioning im Hintergrund — HTTP-Response geht sofort raus.
+      setImmediate(() => {
+        provisionOrderInstance(order.id).catch((e) => {
+          console.error(`[shop] provisionOrderInstance ${order.id} crashed:`, e);
+        });
+      });
+
+      res.json({
+        ok:       true,
+        orderId:  confirmed.id,
+        state:    confirmed.state,
+        message:  "AGB und AVV bestätigt. Provisioning läuft — Sie erhalten eine Welcome-Mail.",
+        statusUrl: `/api/shop/order/${token}`,
+      });
+    } catch (e) {
+      console.error(`[shop] confirm ${token.slice(0, 6)}… failed:`, e);
+      res.status(500).json({ error: String((e as Error)?.message ?? e) });
+    }
+  };
+  app.post("/api/shop/confirm/:token", shopConfirmHandler);
+  app.post("/shop/confirm/:token",     shopConfirmHandler);
+
+  // (4) GET /api/shop/order/:token — Status-Polling für den Kunden
+  //
+  // Liefert den Orderzustand + bei LIVE die Instance-URL. Wird vom
+  // shop-confirmed.html (Woche 3) als Polling-Endpoint gebraucht.
+  const shopOrderStatusHandler: express.RequestHandler = async (req, res) => {
+    const { token } = req.params;
+    try {
+      const order = await orders.getOrderByVerifyToken(token);
+      if (!order) { res.status(404).json({ error: "Order nicht gefunden" }); return; }
+
+      const configs = await loadConfigs().catch(() => [] as DemoConfig[]);
+      const config = configs.find(c => c.id === order.configId);
+
+      const response: Record<string, unknown> = {
+        orderId:        order.id,
+        state:          order.state,
+        configId:       order.configId,
+        configName:     config?.name ?? order.configId,
+        firma:          order.billing.firma,
+        subdomainWish:  order.subdomainWish,
+        createdAt:      order.createdAt,
+        updatedAt:      order.updatedAt,
+      };
+
+      if (order.instanceId) {
+        const inst = await getInstance(order.instanceId);
+        if (inst) {
+          response.instanceId  = inst.id;
+          response.instanceUrl = inst.url;
+          response.subdomain   = inst.id;
+        }
+      }
+      if (order.state === "PROVISION_FAILED" || order.provisioningError) {
+        response.provisioningError = order.provisioningError;
+      }
+      res.json(response);
+    } catch (e) {
+      res.status(500).json({ error: String((e as Error)?.message ?? e) });
+    }
+  };
+  app.get("/api/shop/order/:token", shopOrderStatusHandler);
+  app.get("/shop/order/:token",     shopOrderStatusHandler);
+
+
   const pluginInfoHandler: express.RequestHandler = async (req, res) => {
     try {
       const configs = await loadConfigs().catch(() => []);
@@ -801,6 +1210,139 @@ wireCopyButtons();
 (function(){const wrap=document.getElementById('extend');const head=document.getElementById('extend-toggle');const input=document.getElementById('extend-input');const btnEl=document.getElementById('extend-btn');const msg=document.getElementById('extend-msg');if(!wrap||!head||!input||!btnEl||!msg)return;head.addEventListener('click',()=>wrap.classList.toggle('open'));async function submit(){const code=(input.value||'').trim().toUpperCase();if(!code){msg.className='extend-msg err';msg.textContent='Bitte einen Code eingeben.';input.focus();return;}btnEl.disabled=true;btnEl.textContent='Prüfe…';msg.className='extend-msg';msg.textContent='';try{const r=await fetch('/api/extend-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,code:code})});const d=await r.json().catch(()=>({}));if(!r.ok){msg.className='extend-msg err';msg.textContent=d.error||('Fehler: HTTP '+r.status);btnEl.disabled=false;btnEl.textContent='Einlösen';return;}const until=d.extendedUntil?new Date(d.extendedUntil):null;const untilStr=until?until.toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):'24 Stunden';msg.className='extend-msg ok';msg.textContent='✓ Verlängert bis '+untilStr;input.disabled=true;btnEl.disabled=true;btnEl.textContent='Eingelöst';}catch(e){msg.className='extend-msg err';msg.textContent='Netzwerkfehler. Bitte noch einmal versuchen.';btnEl.disabled=false;btnEl.textContent='Einlösen';}}btnEl.addEventListener('click',submit);input.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();submit();}});})();
 setTimeout(async()=>{const keep=await poll();if(!keep)return;const handle=setInterval(async()=>{const keepPolling=await poll();if(!keepPolling)clearInterval(handle);},3000);},1500);
 </script></body></html>`;
+}
+
+/**
+ * Review-Seite für den Shop-Order-Flow (Woche 1b-Stub). Zeigt die Order-
+ * Daten + AGB/AVV-Download-Links (TODO: echte PDFs in Woche 2) + einen
+ * Confirm-Button, der `POST /api/shop/confirm/:token` aufruft. In Woche 3
+ * wird das durch `webui/order-review.html` ersetzt.
+ *
+ * Corporate Design (`brand.ts`): Fraunces für Headlines, Inter für Body,
+ * Accent #ab1d79.
+ */
+function buildShopReviewStub(order: Order, configName: string): string {
+  const esc = (s: string): string =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const token = order.verifyToken;
+  const agbUrl = `/api/shop/agreement/${token}/agb`;
+  const avvUrl = `/api/shop/agreement/${token}/avv`;
+
+  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bestellung prüfen — ${esc(configName)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f3f5f8;font-family:'Inter',sans-serif;min-height:100vh;color:#353535;padding:40px 16px;font-weight:300}
+.wrap{max-width:640px;margin:0 auto}
+.card{background:#fff;border:1px solid #e9e9e9;border-radius:12px;padding:40px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.logo{height:38px;margin-bottom:28px}
+h1{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:28px;line-height:1.25;margin-bottom:12px;color:#194866}
+.lead{color:#6b6b6f;font-size:15px;line-height:1.6;margin-bottom:28px}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
+.pill{background:#f5e4ef;color:#540e3b;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500}
+.section{border:1px solid #e9e9e9;border-radius:8px;padding:18px 22px;margin-bottom:16px;background:#f3f5f8}
+.section h3{font-family:'Fraunces',Georgia,serif;font-size:14px;font-weight:400;color:#194866;margin-bottom:10px;letter-spacing:.3px}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:8px 14px;font-size:13px}
+.kv .k{color:#6b6b6f}.kv .v{color:#353535;font-weight:400}
+.docs{display:flex;flex-direction:column;gap:8px;margin:6px 0}
+.docs a{color:#ab1d79;text-decoration:none;font-size:14px;padding:10px 14px;border:1px solid #e9e9e9;border-radius:6px;background:#fff;display:inline-block}
+.docs a:hover{border-color:#ab1d79}
+.accept{display:flex;align-items:flex-start;gap:10px;padding:14px 18px;background:#ffecdb;border:1px solid #f98012;border-radius:8px;margin-bottom:12px;font-size:13px;line-height:1.5}
+.accept input{margin-top:3px;flex-shrink:0;accent-color:#ab1d79}
+.accept label{cursor:pointer;color:#353535}
+.btn{display:inline-block;background:#ab1d79;color:#fff;border:none;border-radius:8px;padding:14px 32px;font-size:15px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;margin-top:16px;transition:background .2s}
+.btn:hover{background:#540e3b}.btn:disabled{background:#a9cbd5;cursor:not-allowed}
+.msg{margin-top:16px;padding:14px 18px;border-radius:8px;font-size:14px;line-height:1.5;display:none}
+.msg.ok{display:block;background:#e3f2f1;color:#267372;border:1px solid #3aadaa}
+.msg.err{display:block;background:#fdecea;color:#b91c1c;border:1px solid #fecaca}
+.hint{color:#6b6b6f;font-size:12px;margin-top:18px;line-height:1.6}
+</style></head><body>
+<div class="wrap">
+  <div class="card">
+    <img class="logo" src="/eledia_runbot.png" alt="eLeDia">
+    <h1>${esc(order.signer.name.split(" ")[0] || "")}, bitte bestätigen Sie die Bestellung.</h1>
+    <p class="lead">
+      Vor dem Start der Moodle-Instanz bitten wir Sie, die AGB und den AV-Vertrag
+      herunterzuladen und zu bestätigen. Die Zustimmung wird mit IP-Adresse und
+      Zeitstempel protokolliert (Text-Form §126b BGB).
+    </p>
+    <div class="pills">
+      <span class="pill">${esc(configName)}</span>
+      <span class="pill">${esc(order.billing.firma)}</span>
+      <span class="pill">${esc(order.subdomainWish)}.demo.eledia.ai</span>
+    </div>
+
+    <div class="section">
+      <h3>Bestelldaten</h3>
+      <div class="kv">
+        <div class="k">Firma</div><div class="v">${esc(order.billing.firma)}</div>
+        <div class="k">Rechnungsadresse</div><div class="v">${esc(order.billing.strasse)}, ${esc(order.billing.plz)} ${esc(order.billing.ort)}, ${esc(order.billing.land)}</div>
+        <div class="k">Kontakt</div><div class="v">${esc(order.contact.email)}</div>
+        <div class="k">Unterzeichner</div><div class="v">${esc(order.signer.name)} (${esc(order.signer.funktion)})</div>
+        <div class="k">Paket</div><div class="v">${esc(configName)}</div>
+        <div class="k">Wunsch-Subdomain</div><div class="v">${esc(order.subdomainWish)}.demo.eledia.ai</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Vertragsdokumente</h3>
+      <div class="docs">
+        <a href="${agbUrl}" id="agb-link" target="_blank" rel="noopener">📄 AGB herunterladen</a>
+        <a href="${avvUrl}" id="avv-link" target="_blank" rel="noopener">📄 AVV (Auftragsverarbeitung) herunterladen</a>
+      </div>
+      <p style="font-size:12px;color:#6b6b6f;margin-top:6px">
+        Hinweis (Woche 1b): Die PDFs werden in Woche 2 via pandoc generiert.
+        Bis dahin sind die Download-Links Platzhalter.
+      </p>
+    </div>
+
+    <div class="accept"><input type="checkbox" id="accept-agb"><label for="accept-agb">Ich habe die <strong>AGB</strong> gelesen und akzeptiert.</label></div>
+    <div class="accept"><input type="checkbox" id="accept-avv"><label for="accept-avv">Ich habe den <strong>AVV</strong> gelesen und akzeptiert.</label></div>
+
+    <button class="btn" id="confirm-btn" disabled>Jetzt kostenpflichtig bestellen &amp; Demo starten →</button>
+    <div class="msg" id="msg"></div>
+    <p class="hint">
+      Nach der Bestätigung startet die automatische Provisionierung Ihrer Instanz.
+      Das dauert etwa 3–5 Minuten. Sie erhalten anschließend eine E-Mail mit Login-Daten
+      und der Moodle-URL. Die Rechnung geht Ihnen am nächsten Arbeitstag zu.
+    </p>
+  </div>
+</div>
+<script>
+const TOKEN = ${JSON.stringify(token)};
+const agb = document.getElementById('accept-agb');
+const avv = document.getElementById('accept-avv');
+const btn = document.getElementById('confirm-btn');
+const msg = document.getElementById('msg');
+function sync(){ btn.disabled = !(agb.checked && avv.checked); }
+agb.addEventListener('change', sync);
+avv.addEventListener('change', sync);
+btn.addEventListener('click', async () => {
+  btn.disabled = true; btn.textContent = 'Wird gesendet…'; msg.className = 'msg';
+  try {
+    const r = await fetch('/api/shop/confirm/' + TOKEN, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ acceptedAgb: true, acceptedAvv: true }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      msg.className = 'msg err'; msg.textContent = d.error || ('Fehler: HTTP ' + r.status);
+      btn.disabled = false; btn.textContent = 'Erneut versuchen →'; return;
+    }
+    msg.className = 'msg ok';
+    msg.innerHTML = '✓ Bestellung bestätigt. Ihre Moodle-Instanz wird jetzt provisioniert — Sie erhalten in 3–5 Minuten eine Welcome-Mail.';
+    btn.style.display = 'none';
+    agb.disabled = true; avv.disabled = true;
+  } catch (e) {
+    msg.className = 'msg err'; msg.textContent = 'Netzwerkfehler. Bitte erneut versuchen.';
+    btn.disabled = false; btn.textContent = 'Erneut versuchen →';
+  }
+});
+</script>
+</body></html>`;
 }
 
 if (transport === "http") {

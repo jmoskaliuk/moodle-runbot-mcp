@@ -271,6 +271,436 @@ eLeDia GmbH · https://eledia.ai`;
   return { html, text };
 }
 
+// ── Onlineshop Order-Flow (task46, Woche 1b) ─────────────────────────────────
+//
+// Vier Templates rund um den Shop-Order-Flow:
+//   1. mailVerifyOrder        — Double-Opt-In an Kunde
+//   2. mailOrderReview        — Nach Verify-Klick: AGB/AVV-Review-Link
+//   3. mailOrderConfirmed     — Welcome-Mail nach Provisioning (Moodle-URL + Admin-Pw)
+//   4. mailAdminAlertNewOrder — Neue-Bestellung-Benachrichtigung an post@moskaliuk.com
+//
+// Alle Templates folgen dem bestehenden baseLayout + button-Pattern und
+// bleiben reiner Text+HTML (kein State, keine DB-Zugriffe).
+
+/**
+ * (1) Double-Opt-In-Mail nach dem Formular-Submit. Kunde muss den Link
+ *     klicken, damit die Bestellung in ORDER_REVIEW übergeht.
+ */
+export function mailVerifyOrder(opts: {
+  firstName:    string;
+  firma:        string;
+  configName:   string;
+  verifyUrl:    string;
+  expiresAt:    string;           // ISO-Datum, wird als "TT.MM.JJJJ" dargestellt
+}): { html: string; text: string } {
+  const { firstName, firma, configName, verifyUrl, expiresAt } = opts;
+  const expiresDate = new Date(expiresAt);
+  const expiresHuman = isNaN(expiresDate.getTime())
+    ? "7 Tagen"
+    : expiresDate.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const content = `
+<p style="font-size:24px;font-weight:500;color:${COLORS.ink};line-height:1.3;margin:0 0 18px;font-family:${FONT_STACK}">
+  ${escapeHtml(firstName)}, bitte bestätigen Sie Ihre E-Mail-Adresse.
+</p>
+<p style="font-size:15px;color:${COLORS.muted};line-height:1.7;margin:0 0 28px;font-family:${FONT_STACK}">
+  Sie haben für <strong style="color:${COLORS.ink}">${escapeHtml(firma)}</strong> eine Moodle-Demo
+  im Paket <strong style="color:${COLORS.ink}">${escapeHtml(configName)}</strong> bestellt.
+  Bevor wir Ihre Instanz bereitstellen, bestätigen Sie kurz Ihre E-Mail-Adresse.
+</p>
+
+${button(verifyUrl, "E-Mail bestätigen →")}
+
+<p style="font-size:13px;color:${COLORS.muted};line-height:1.6;margin:0 0 14px;font-family:${FONT_STACK}">
+  Der Link ist bis <strong>${escapeHtml(expiresHuman)}</strong> gültig. Nach der Bestätigung
+  sehen Sie eine Übersichtsseite mit AGB und AVV — erst nach dem Download und der Zustimmung
+  starten wir das Provisioning Ihrer Moodle-Instanz.
+</p>
+
+<p style="font-size:13px;color:${COLORS.muted};line-height:1.6;margin:0;font-family:${FONT_STACK}">
+  Falls der Button nicht funktioniert, kopieren Sie diesen Link:<br>
+  <a href="${verifyUrl}" style="color:${COLORS.accent};word-break:break-all;text-decoration:underline">${escapeHtml(verifyUrl)}</a>
+</p>`;
+
+  const html = baseLayout({
+    title: `Bestellung bestätigen — ${configName}`,
+    preheader: `Bestätigen Sie Ihre E-Mail-Adresse für die ${configName}-Bestellung`,
+    content,
+  });
+
+  const text = `Hallo ${firstName},
+
+für ${firma} wurde eine Moodle-Demo im Paket "${configName}" bestellt.
+
+Bitte bestätigen Sie Ihre E-Mail-Adresse:
+${verifyUrl}
+
+Der Link ist bis ${expiresHuman} gültig. Nach der Bestätigung sehen Sie die
+Übersicht mit AGB und AVV. Erst nach Zustimmung starten wir das Provisioning.
+
+Falls Sie diese Bestellung nicht ausgelöst haben, können Sie diese E-Mail ignorieren.
+
+eLeDia GmbH · https://eledia.ai`;
+
+  return { html, text };
+}
+
+/**
+ * (2) Order-Review-Mail. Geht raus, sobald der Kunde die Verify-Mail
+ *     geklickt hat. Führt zurück auf die Review-Seite (AGB/AVV-Download,
+ *     Confirm-Button) — als Backup, falls der Kunde den Browser-Tab
+ *     zwischendurch schließt.
+ */
+export function mailOrderReview(opts: {
+  firstName:        string;
+  firma:            string;
+  configName:       string;
+  reviewUrl:        string;
+  agbDownloadUrl:   string;
+  avvDownloadUrl:   string;
+}): { html: string; text: string } {
+  const { firstName, firma, configName, reviewUrl, agbDownloadUrl, avvDownloadUrl } = opts;
+
+  const content = `
+<p style="font-size:24px;font-weight:500;color:${COLORS.ink};line-height:1.3;margin:0 0 18px;font-family:${FONT_STACK}">
+  ${escapeHtml(firstName)}, Ihre Bestellung ist eingegangen.
+</p>
+<p style="font-size:15px;color:${COLORS.muted};line-height:1.7;margin:0 0 28px;font-family:${FONT_STACK}">
+  Vielen Dank, <strong style="color:${COLORS.ink}">${escapeHtml(firma)}</strong>. Bevor wir Ihre
+  <strong style="color:${COLORS.ink}">${escapeHtml(configName)}</strong>-Instanz starten, müssen Sie
+  noch AGB und AVV herunterladen und bestätigen — das erledigen Sie auf der Übersichtsseite.
+</p>
+
+${button(reviewUrl, "Zur Übersichtsseite →")}
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:28px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 12px;font-family:${FONT_STACK}">
+        Vertragsdokumente
+      </p>
+      <p style="font-size:13px;color:${COLORS.ink};line-height:1.8;margin:0;font-family:${FONT_STACK}">
+        <a href="${agbDownloadUrl}" style="color:${COLORS.accent};text-decoration:underline">📄 AGB herunterladen</a><br>
+        <a href="${avvDownloadUrl}" style="color:${COLORS.accent};text-decoration:underline">📄 AVV (Auftragsverarbeitung) herunterladen</a>
+      </p>
+    </td>
+  </tr>
+</table>
+
+<p style="font-size:13px;color:${COLORS.muted};line-height:1.6;margin:0;font-family:${FONT_STACK}">
+  Nach Ihrer Zustimmung starten wir das automatische Provisioning Ihrer Moodle-Instanz.
+  Das dauert etwa 3–5 Minuten — Sie erhalten sofort eine Mail mit Login-Daten und Moodle-URL.
+</p>`;
+
+  const html = baseLayout({
+    title: `${configName} — Bestellung prüfen`,
+    preheader: `Ein Klick fehlt noch: AGB und AVV bestätigen, dann starten wir Ihre Instanz`,
+    content,
+  });
+
+  const text = `Hallo ${firstName},
+
+Ihre Bestellung für "${configName}" (${firma}) ist eingegangen.
+
+Bitte wechseln Sie kurz auf die Übersichtsseite und bestätigen Sie AGB und AVV:
+${reviewUrl}
+
+Vertragsdokumente:
+- AGB:  ${agbDownloadUrl}
+- AVV:  ${avvDownloadUrl}
+
+Nach Ihrer Zustimmung starten wir das automatische Provisioning. Das dauert
+etwa 3–5 Minuten — Sie erhalten anschließend eine Mail mit Login-Daten.
+
+eLeDia GmbH · https://eledia.ai`;
+
+  return { html, text };
+}
+
+/**
+ * (3) Welcome-Mail nach erfolgreichem Provisioning. Enthält Moodle-URL,
+ *     Admin-Login, Temp-Passwort + Link zum Change-Password-Dialog und
+ *     optional einen Magic-Link zum Kunden-Dashboard.
+ */
+export function mailOrderConfirmed(opts: {
+  firstName:           string;
+  firma:               string;
+  configName:          string;
+  subdomain:           string;           // z.B. "acme-schulung"
+  moodleUrl:           string;
+  adminUsername:       string;
+  adminPassword:       string;
+  changePasswordUrl:   string;
+  customerDashboardUrl?: string;         // optional — kommt in Woche 4 hinzu
+}): { html: string; text: string } {
+  const {
+    firstName, firma, configName, subdomain, moodleUrl,
+    adminUsername, adminPassword, changePasswordUrl, customerDashboardUrl,
+  } = opts;
+
+  const content = `
+<p style="font-size:24px;font-weight:500;color:${COLORS.ink};line-height:1.3;margin:0 0 18px;font-family:${FONT_STACK}">
+  ${escapeHtml(firstName)}, Ihre Moodle-Instanz ist bereit. ✓
+</p>
+<p style="font-size:15px;color:${COLORS.muted};line-height:1.7;margin:0 0 28px;font-family:${FONT_STACK}">
+  Die <strong style="color:${COLORS.ink}">${escapeHtml(configName)}</strong>-Instanz für
+  <strong style="color:${COLORS.ink}">${escapeHtml(firma)}</strong> ist fertig provisioniert
+  und erreichbar unter Ihrer Wunsch-Subdomain.
+</p>
+
+${button(moodleUrl, "Moodle öffnen →", COLORS.success)}
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:20px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 12px;font-family:${FONT_STACK}">
+        Instanz
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="font-size:13px;color:${COLORS.muted};padding:3px 0;font-family:${FONT_STACK}">Subdomain</td>
+          <td style="font-size:13px;color:${COLORS.ink};font-weight:500;text-align:right;font-family:${FONT_STACK}">${escapeHtml(subdomain)}</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:${COLORS.muted};padding:3px 0;font-family:${FONT_STACK}">URL</td>
+          <td style="font-size:13px;color:${COLORS.ink};font-weight:500;text-align:right;font-family:${FONT_STACK}"><a href="${moodleUrl}" style="color:${COLORS.accent};text-decoration:none">${escapeHtml(moodleUrl)}</a></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:20px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 12px;font-family:${FONT_STACK}">
+        Admin-Zugang (bitte Passwort sofort ändern)
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="font-size:13px;color:${COLORS.muted};padding:3px 0;font-family:${FONT_STACK}">Username</td>
+          <td style="font-size:13px;color:${COLORS.ink};font-weight:500;text-align:right;font-family:inherit">${escapeHtml(adminUsername)}</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:${COLORS.muted};padding:3px 0;font-family:${FONT_STACK}">Temp-Passwort</td>
+          <td style="font-size:13px;color:${COLORS.ink};font-weight:500;text-align:right;font-family:'SF Mono',Menlo,Consolas,monospace;word-break:break-all">${escapeHtml(adminPassword)}</td>
+        </tr>
+      </table>
+      <p style="font-size:12px;color:${COLORS.muted};line-height:1.5;margin:12px 0 0;font-family:${FONT_STACK}">
+        Beim ersten Login werden Sie automatisch aufgefordert, ein neues Passwort zu setzen.
+        Oder direkt hier ändern: <a href="${changePasswordUrl}" style="color:${COLORS.accent};text-decoration:underline">Passwort jetzt ändern</a>.
+      </p>
+    </td>
+  </tr>
+</table>
+
+${customerDashboardUrl ? `
+<p style="font-size:13px;color:${COLORS.muted};line-height:1.6;margin:0 0 8px;font-family:${FONT_STACK}">
+  <strong style="color:${COLORS.ink}">Kunden-Dashboard:</strong> <a href="${customerDashboardUrl}" style="color:${COLORS.accent};text-decoration:underline">Zum Dashboard</a> — Magic-Link, 30 Tage gültig.
+</p>` : ""}
+
+<p style="font-size:13px;color:${COLORS.muted};line-height:1.6;margin:16px 0 0;font-family:${FONT_STACK}">
+  Fragen? Antworten Sie einfach auf diese E-Mail.
+</p>`;
+
+  const html = baseLayout({
+    title: `${configName} — Ihre Moodle-Instanz ist bereit`,
+    preheader: `Ihre Moodle-Instanz ${subdomain} ist fertig — Admin-Login und Moodle-URL in dieser Mail`,
+    content,
+  });
+
+  const text = `Hallo ${firstName},
+
+Ihre Moodle-Instanz (${configName}) für ${firma} ist bereit:
+${moodleUrl}
+
+Instanz:
+- Subdomain: ${subdomain}
+- URL:       ${moodleUrl}
+
+Admin-Zugang (bitte Passwort sofort ändern):
+- Username:      ${adminUsername}
+- Temp-Passwort: ${adminPassword}
+
+Beim ersten Login werden Sie automatisch aufgefordert, ein neues Passwort
+zu setzen. Oder direkt hier ändern:
+${changePasswordUrl}
+${customerDashboardUrl ? `
+Kunden-Dashboard (Magic-Link, 30 Tage gültig):
+${customerDashboardUrl}
+` : ""}
+Fragen? Antworten Sie einfach auf diese E-Mail.
+
+eLeDia GmbH · https://eledia.ai`;
+
+  return { html, text };
+}
+
+/**
+ * (4) Admin-Alert an post@moskaliuk.com bei jeder neuen Bestellung.
+ *     Dient im MVP als Odoo-Notify — Rechnung wird am nächsten Arbeitstag
+ *     manuell in odoo erfasst.
+ */
+export function mailAdminAlertNewOrder(opts: {
+  orderId:         string;
+  configName:      string;
+  contactEmail:    string;
+  contactPhone?:   string;
+  firma:           string;
+  billingStrasse:  string;
+  billingPlz:      string;
+  billingOrt:      string;
+  billingLand:     string;
+  ustId?:          string;
+  signerName:      string;
+  signerFunktion:  string;
+  signerEmail:     string;
+  subdomainWish:   string;
+  adminReviewUrl:  string;
+  notes?:          string;
+}): { html: string; text: string } {
+  const {
+    orderId, configName, contactEmail, contactPhone, firma,
+    billingStrasse, billingPlz, billingOrt, billingLand, ustId,
+    signerName, signerFunktion, signerEmail,
+    subdomainWish, adminReviewUrl, notes,
+  } = opts;
+
+  const row = (label: string, value: string): string => `
+        <tr>
+          <td style="font-size:13px;color:${COLORS.muted};padding:4px 14px 4px 0;font-family:${FONT_STACK};vertical-align:top;white-space:nowrap">${escapeHtml(label)}</td>
+          <td style="font-size:13px;color:${COLORS.ink};font-family:${FONT_STACK};vertical-align:top">${escapeHtml(value)}</td>
+        </tr>`;
+
+  const content = `
+<p style="font-size:22px;font-weight:500;color:${COLORS.ink};line-height:1.3;margin:0 0 18px;font-family:${FONT_STACK}">
+  🛒 Neue Shop-Bestellung eingegangen
+</p>
+<p style="font-size:14px;color:${COLORS.muted};line-height:1.6;margin:0 0 24px;font-family:${FONT_STACK}">
+  Order <strong style="color:${COLORS.ink};font-family:'SF Mono',Menlo,Consolas,monospace">${escapeHtml(orderId)}</strong>
+  — Paket <strong style="color:${COLORS.ink}">${escapeHtml(configName)}</strong>.
+  Status: wartet auf Kunden-Bestätigung (Double-Opt-In).
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:20px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 10px;font-family:${FONT_STACK}">
+        Kunde
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        ${row("Firma", firma)}
+        ${row("Kontakt-E-Mail", contactEmail)}
+        ${contactPhone ? row("Telefon", contactPhone) : ""}
+        ${row("Unterzeichner", `${signerName} (${signerFunktion})`)}
+        ${row("Unterz.-E-Mail", signerEmail)}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:20px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 10px;font-family:${FONT_STACK}">
+        Rechnungsadresse
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        ${row("Straße", billingStrasse)}
+        ${row("PLZ / Ort", `${billingPlz} ${billingOrt}`)}
+        ${row("Land", billingLand)}
+        ${ustId ? row("USt-ID", ustId) : ""}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:20px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 10px;font-family:${FONT_STACK}">
+        Technik
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        ${row("Paket", configName)}
+        ${row("Wunsch-Subdomain", subdomainWish)}
+      </table>
+    </td>
+  </tr>
+</table>
+
+${notes ? `
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+       style="background:${COLORS.bg};border:1px solid ${COLORS.rule};border-radius:8px;margin-bottom:20px">
+  <tr>
+    <td style="padding:18px 22px">
+      <p style="font-size:11px;color:${COLORS.muted};letter-spacing:1px;text-transform:uppercase;margin:0 0 10px;font-family:${FONT_STACK}">
+        Notiz vom Kunden
+      </p>
+      <p style="font-size:13px;color:${COLORS.ink};line-height:1.6;margin:0;font-family:${FONT_STACK};white-space:pre-wrap">${escapeHtml(notes)}</p>
+    </td>
+  </tr>
+</table>` : ""}
+
+${button(adminReviewUrl, "Im Internal-Dashboard ansehen →")}
+
+<p style="font-size:12px;color:${COLORS.muted};line-height:1.5;margin:0;font-family:${FONT_STACK}">
+  Hinweis: Rechnung bitte am nächsten Arbeitstag manuell in odoo erfassen.
+  Die Demo-Instanz geht ohne Zahlungsstatus live, sobald der Kunde AGB/AVV
+  bestätigt hat.
+</p>`;
+
+  const html = baseLayout({
+    title: `Neue Bestellung: ${configName} — ${firma}`,
+    preheader: `${firma} hat ${configName} bestellt (Order ${orderId})`,
+    content,
+  });
+
+  const text = `🛒 Neue Shop-Bestellung
+
+Order:  ${orderId}
+Paket:  ${configName}
+Status: wartet auf Kunden-Bestätigung (Double-Opt-In)
+
+Kunde:
+- Firma:          ${firma}
+- Kontakt-E-Mail: ${contactEmail}${contactPhone ? `
+- Telefon:        ${contactPhone}` : ""}
+- Unterzeichner:  ${signerName} (${signerFunktion})
+- Unterz.-E-Mail: ${signerEmail}
+
+Rechnungsadresse:
+- ${billingStrasse}
+- ${billingPlz} ${billingOrt}
+- ${billingLand}${ustId ? `
+- USt-ID: ${ustId}` : ""}
+
+Technik:
+- Paket:             ${configName}
+- Wunsch-Subdomain:  ${subdomainWish}
+${notes ? `
+Notiz vom Kunden:
+${notes}
+` : ""}
+Internal-Dashboard:
+${adminReviewUrl}
+
+Hinweis: Rechnung am nächsten Arbeitstag manuell in odoo erfassen.
+Die Demo geht nach AGB/AVV-Bestätigung automatisch live.
+
+eLeDia GmbH · https://eledia.ai`;
+
+  return { html, text };
+}
+
+// ── Error-Template (Demo-Flow, Kurzform) ──────────────────────────────────────
+
 export function errorEmail(opts: {
   firstName:  string;
   pluginName: string;

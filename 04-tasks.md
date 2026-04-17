@@ -131,28 +131,37 @@ entfällt.
 ---
 
 ### task46 Onlineshop Woche 1b — Order-Endpoints + Mail-Templates
-Status: open (in progress)
+Status: **implementiert, pending Verify** (2026-04-17)
 Feature: feat15 (Onlineshop, siehe `konzept-onlineshop.md` v0.6)
 Voraussetzung: `orders.ts`-Service in place (commit `be97b3a`), Konzept v0.6 bestätigt (`793020e`)
 
-**Scope Woche 1b:**
+**Umgesetzt (Woche 1b):**
 
-1. Express-Routen für die State-Transitions:
-   - `POST /api/shop/order` — Create Draft (Formular-Submit)
-   - `GET /api/shop/verify/:token` — Double-Opt-In-Landingpage
-   - `POST /api/shop/confirm/:token` — AGB/AVV akzeptiert, löst Provisioning
-   - `GET /api/shop/order/:token` — Status-Polling für Kunde
-2. Mail-Templates in `src/emailTemplates.ts` erweitern:
-   - `mailVerifyOrder(token)` — "Bitte E-Mail bestätigen"
-   - `mailOrderReview(token, agbUrl, avvUrl)` — "AGB + AVV + Review-Link"
-   - `mailOrderConfirmed(instanceUrl, credentials)` — "Demo ist live"
-   - `mailAdminAlertNewOrder(order)` — Alert an post@moskaliuk.com
-3. Integration mit `orders.ts` State-Machine (DRAFT → PENDING_VERIFICATION
-   → ORDER_REVIEW → CONFIRMED → PROVISIONING → LIVE)
-4. Auto-Provisioning-Trigger: Bei CONFIRMED → `POST /confirm/:token`-Äquivalent
-   ausführen, Instance provisionieren, Credentials generieren (Random PW)
+1. Express-Routen — alle dual registriert (`/api/shop/*` + `/shop/*` wegen nginx-Strip):
+   - `POST /api/shop/order` — Create Draft + Verify-Mail + Admin-Alert (Rate-Limit 3/15min)
+   - `GET /api/shop/verify/:token` — Transitioniert zu ORDER_REVIEW, rendert Review-Stub
+   - `POST /api/shop/confirm/:token` — Agreements signen, transitioniert zu CONFIRMED+PROVISIONING, feuert `setImmediate` Background-Job
+   - `GET /api/shop/order/:token` — Status-Polling (state, subdomain, instanceUrl, error)
+2. Mail-Templates in `src/services/emailTemplates.ts`:
+   - `mailVerifyOrder` — Double-Opt-In
+   - `mailOrderReview` — Bestätigung + Review-Link (Backup)
+   - `mailOrderConfirmed` — Welcome-Mail (Moodle-URL, Admin-Login, Magic-Link)
+   - `mailAdminAlertNewOrder` — Odoo-Notify an `post@moskaliuk.com`
+3. Send-Wrapper in `src/services/email.ts` (`sendVerifyOrderEmail` etc.)
+4. Review-HTML-Stub (`buildShopReviewStub`) mit 2-Checkbox-Confirm-Flow — wird in
+   Woche 3 durch `webui/order-review.html` ersetzt.
+5. `provisionOrderInstance(orderId)` in index.ts: dedizierter Background-Job,
+   pinned-by-default (`pinReason: "order:<id>"`), nutzt den bestehenden Demo-Flow-
+   Stack (docker + nginx + snapshot-restore) und die neue Welcome-Mail.
 
-**Aufwand:** ~8–10 h
+**Offen für Woche 2 (task47):**
+- Echte pandoc-PDFs für AGB/AVV ersetzen die `pending-pdf-woche2`-Platzhalter
+  in `markAgreementSigned()`
+- Random-16-Zeichen-Admin-Passwort via `docker.setAdminPassword()` + SQL-Update
+  auf `m_user.password_expired = 1` (bisher nutzt Shop-Flow `demo1234`, identisch
+  zum Demo-Kurz-Flow)
+
+**Aufwand:** ~8–10 h (Woche 1b), ~6–8 h (PDF-Pipeline Woche 2)
 
 ---
 

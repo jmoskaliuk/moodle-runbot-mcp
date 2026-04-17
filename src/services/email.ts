@@ -9,7 +9,11 @@
 
 import { createTransport } from "nodemailer";
 import type { DemoRequest } from "../types.js";
-import { confirmEmail, readyEmail, errorEmail } from "./emailTemplates.js";
+import {
+  confirmEmail, readyEmail, errorEmail,
+  mailVerifyOrder, mailOrderReview, mailOrderConfirmed, mailAdminAlertNewOrder,
+} from "./emailTemplates.js";
+import type { Order } from "./orders.js";
 
 // ── SMTP-Konfiguration ────────────────────────────────────────────────────────
 
@@ -79,6 +83,136 @@ export async function sendDemoReadyEmail(
     from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to:      `"${request.name}" <${request.email}>`,
     subject: `Ihre ${pluginName} Demo läuft — jetzt erkunden`,
+    html,
+    text,
+  });
+}
+
+// ── Onlineshop Order-Flow (task46, Woche 1b) ─────────────────────────────────
+//
+// Vier Send-Funktionen analog zu den Demo-Flow-Varianten darüber — jede
+// verdrahtet das entsprechende Template aus emailTemplates.ts mit dem
+// SMTP-Transport. Order-Felder kommen direkt aus src/services/orders.ts.
+
+const ADMIN_ALERT_EMAIL  = process.env.ADMIN_ALERT_EMAIL  ?? "post@moskaliuk.com";
+
+function orderFirstName(order: Order): string {
+  return (order.signer?.name || "").split(" ")[0] || "";
+}
+
+/** (1) Double-Opt-In nach Formular-Submit. */
+export async function sendVerifyOrderEmail(order: Order, configName: string): Promise<void> {
+  const verifyUrl = `${BASE_URL}/api/shop/verify/${order.verifyToken}`;
+  const { html, text } = mailVerifyOrder({
+    firstName:  orderFirstName(order),
+    firma:      order.billing.firma,
+    configName,
+    verifyUrl,
+    expiresAt:  order.verifyExpiresAt,
+  });
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to:      `"${order.signer.name}" <${order.contact.email}>`,
+    subject: `Bestellung bestätigen — ${configName}`,
+    html,
+    text,
+  });
+}
+
+/** (2) Nach Verify-Klick: Review-Seite mit AGB/AVV-Download. */
+export async function sendOrderReviewEmail(order: Order, configName: string): Promise<void> {
+  const base = `${BASE_URL}/api/shop`;
+  const reviewUrl      = `${base}/review/${order.verifyToken}`;
+  const agbDownloadUrl = `${base}/agreement/${order.verifyToken}/agb`;
+  const avvDownloadUrl = `${base}/agreement/${order.verifyToken}/avv`;
+
+  const { html, text } = mailOrderReview({
+    firstName:  orderFirstName(order),
+    firma:      order.billing.firma,
+    configName,
+    reviewUrl,
+    agbDownloadUrl,
+    avvDownloadUrl,
+  });
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to:      `"${order.signer.name}" <${order.contact.email}>`,
+    subject: `${configName} — Bestellung prüfen`,
+    html,
+    text,
+  });
+}
+
+/** (3) Welcome-Mail nach Provisioning. */
+export async function sendOrderConfirmedEmail(
+  order: Order,
+  configName: string,
+  opts: {
+    moodleUrl:             string;
+    subdomain:             string;
+    adminUsername:         string;
+    adminPassword:         string;
+    changePasswordUrl:     string;
+    customerDashboardUrl?: string;
+  }
+): Promise<void> {
+  const { html, text } = mailOrderConfirmed({
+    firstName:           orderFirstName(order),
+    firma:               order.billing.firma,
+    configName,
+    subdomain:           opts.subdomain,
+    moodleUrl:           opts.moodleUrl,
+    adminUsername:       opts.adminUsername,
+    adminPassword:       opts.adminPassword,
+    changePasswordUrl:   opts.changePasswordUrl,
+    customerDashboardUrl: opts.customerDashboardUrl,
+  });
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to:      `"${order.signer.name}" <${order.contact.email}>`,
+    subject: `${configName} — Ihre Moodle-Instanz ist bereit`,
+    html,
+    text,
+  });
+}
+
+/** (4) Admin-Alert an post@moskaliuk.com (Odoo-Notify im MVP). */
+export async function sendAdminAlertNewOrderEmail(
+  order: Order,
+  configName: string,
+): Promise<void> {
+  const adminReviewUrl = `${BASE_URL}/admin#order-${order.id}`;
+  const { html, text } = mailAdminAlertNewOrder({
+    orderId:         order.id,
+    configName,
+    contactEmail:    order.contact.email,
+    contactPhone:    order.contact.phone,
+    firma:           order.billing.firma,
+    billingStrasse:  order.billing.strasse,
+    billingPlz:      order.billing.plz,
+    billingOrt:      order.billing.ort,
+    billingLand:     order.billing.land,
+    ustId:           order.billing.ustId,
+    signerName:      order.signer.name,
+    signerFunktion:  order.signer.funktion,
+    signerEmail:     order.signer.email,
+    subdomainWish:   order.subdomainWish,
+    adminReviewUrl,
+    notes:           order.notes,
+  });
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to:      ADMIN_ALERT_EMAIL,
+    replyTo: order.contact.email,
+    subject: `🛒 Neue Bestellung: ${configName} — ${order.billing.firma}`,
     html,
     text,
   });
