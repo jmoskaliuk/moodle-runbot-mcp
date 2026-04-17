@@ -872,6 +872,307 @@ async function runHTTP() {
     };
     app.get("/api/shop/order/:token", shopOrderStatusHandler);
     app.get("/shop/order/:token", shopOrderStatusHandler);
+    // ── Customer-Dashboard (task49, Woche 4) ──────────────────────────────
+    //
+    // Magic-Link-Dashboard für den Kunden. Der Token (`customerMagicToken`)
+    // wird nach erfolgreichem Provisioning in der Welcome-Mail verschickt
+    // (30 Tage Gültigkeit, separater Token vom Verify-Token). Der Kunde
+    // sieht Paket, Instance-Status, Rechnungsdaten + kann AGB/AVV nochmal
+    // herunterladen.
+    //
+    // Rationale (separates Endpoint statt Alias auf /api/shop/order): Der
+    // Shop-Order-Endpoint arbeitet mit verifyToken, der nur 7 Tage gilt
+    // und revoked wird sobald die Order CONFIRMED ist. Der Kunden-Token
+    // bleibt 30 Tage gültig und wird per Mail verschickt → klar getrenntes
+    // Artefakt, damit kein Tokenscope-Leak passiert.
+    // Hilfsfunktion: Public-Shape der Agreements (ohne internen pdfPath).
+    function publicAgreements(list) {
+        return (list ?? []).map(a => ({
+            type: a.type,
+            templateVersion: a.templateVersion,
+            downloadedAt: a.downloadedAt,
+            signedAt: a.signedAt,
+            pdfSha256: a.pdfSha256,
+        }));
+    }
+    const customerDashboardHandler = async (req, res) => {
+        const { token } = req.params;
+        try {
+            const order = await orders.getOrderByCustomerMagicToken(token);
+            if (!order) {
+                res.status(404).json({ error: "Kunden-Link nicht gefunden oder abgelaufen" });
+                return;
+            }
+            const configs = await loadConfigs().catch(() => []);
+            const config = configs.find(c => c.id === order.configId);
+            const response = {
+                orderId: order.id,
+                state: order.state,
+                configId: order.configId,
+                configName: config?.name ?? order.configId,
+                configDescription: config?.description,
+                firma: order.billing.firma,
+                subdomainWish: order.subdomainWish,
+                createdAt: order.createdAt,
+                updatedAt: order.updatedAt,
+                contact: { email: order.contact.email, phone: order.contact.phone },
+                billing: order.billing,
+                signer: order.signer,
+                agreements: publicAgreements(order.agreements),
+                notes: order.notes,
+                customerMagicExpiresAt: order.customerMagicExpiresAt,
+            };
+            // Instance-Snapshot nur wenn Live/Terminated (dann existiert ein
+            // Container bzw. eine Historie). Wir returnen keinen apiToken —
+            // das ist ein interner Wert, den der Admin nutzt.
+            if (order.instanceId) {
+                const inst = await getInstance(order.instanceId);
+                if (inst) {
+                    response.instance = {
+                        id: inst.id,
+                        url: inst.url,
+                        status: inst.status,
+                        createdAt: inst.createdAt,
+                        lastActivity: inst.lastActivity,
+                    };
+                }
+            }
+            if (order.state === "PROVISION_FAILED" || order.provisioningError) {
+                response.provisioningError = order.provisioningError;
+            }
+            res.json(response);
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e?.message ?? e) });
+        }
+    };
+    // JSON-Endpoint: nur unter /api/kunde/:token. Der HTML-Serve-Handler
+    // für /kunde/:token wird weiter unten (nach den Shop-Statics) registriert.
+    app.get("/api/kunde/:token", customerDashboardHandler);
+    // AGB/AVV-Download über Customer-Token. Wrapped den bestehenden PDF-Render
+    // (contract-pdf.ts) — wir loggen den Download aber NICHT als neuen
+    // Agreement-Record, weil der bereits signierte Record die Source-of-
+    // Truth ist. Statt markAgreementDownloaded verwenden wir hier einen
+    // reinen Read-Only-Stream.
+    const customerAgreementHandler = async (req, res) => {
+        const { token, type } = req.params;
+        if (type !== "agb" && type !== "avv") {
+            res.status(400).json({ error: "type muss 'agb' oder 'avv' sein" });
+            return;
+        }
+        try {
+            const order = await orders.getOrderByCustomerMagicToken(token);
+            if (!order) {
+                res.status(404).json({ error: "Kunden-Link nicht gefunden oder abgelaufen" });
+                return;
+            }
+            const configs = await loadConfigs().catch(() => []);
+            const config = configs.find(c => c.id === order.configId);
+            // Signed-PDF zur Order existiert auf Disk (task47). Falls die Datei
+            // irgendwo verschoben / gelöscht wurde → lazy-Render neu auf Basis
+            // des ursprünglichen signedAt-Timestamps (für Determinismus).
+            const rec = (order.agreements ?? []).find(a => a.type === type);
+            const signedAtIso = rec?.signedAt ?? new Date().toISOString();
+            const result = await contractPdf.ensureContractPdf(order, config, type, { signedAtIso });
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `inline; filename="${type.toUpperCase()}-${order.id}-${result.templateVersion}.pdf"`);
+            res.setHeader("X-Runbot-PDF-SHA256", result.sha256);
+            res.sendFile(result.path);
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e?.message ?? e) });
+        }
+    };
+    app.get("/api/kunde/:token/agreement/:type", customerAgreementHandler);
+    app.get("/kunde/:token/agreement/:type", customerAgreementHandler);
+    // ── Admin: Orders-Management (task49, Woche 4) ─────────────────────────
+    //
+    // GET  /admin/orders            → alle Orders, optional ?state=<OrderState>
+    // GET  /admin/orders/:id        → Detail (inkl. history + instance)
+    // POST /admin/orders/:id/reject → manuelle Ablehnung (CONFIRMED → REJECTED
+    //                                 oder PROVISION_FAILED → REJECTED)
+    // POST /admin/orders/:id/terminate → LIVE → TERMINATED + Container stoppen
+    //                                    & Instance-Dir cleanup.
+    app.get("/admin/orders", adminAuth, async (req, res) => {
+        try {
+            const stateFilter = req.query.state?.toUpperCase();
+            const since = req.query.since;
+            const filter = {};
+            if (stateFilter)
+                filter.state = stateFilter;
+            if (since)
+                filter.since = since;
+            const all = await orders.listOrders(filter);
+            // Public shape — kein pdfPath leaken. Verify/Customer-Token bleibt
+            // drin, weil Admin die ggf. zum Debuggen braucht.
+            const rows = all.map(o => ({
+                id: o.id,
+                state: o.state,
+                configId: o.configId,
+                firma: o.billing.firma,
+                subdomainWish: o.subdomainWish,
+                subdomainFinal: o.subdomainFinal,
+                contactEmail: o.contact.email,
+                signerName: o.signer.name,
+                createdAt: o.createdAt,
+                updatedAt: o.updatedAt,
+                verifiedAt: o.verifiedAt,
+                instanceId: o.instanceId,
+                provisioningError: o.provisioningError,
+                agreements: publicAgreements(o.agreements),
+                notes: o.notes,
+            }));
+            res.json({ count: rows.length, orders: rows });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    app.get("/api/admin/orders", adminAuth, async (req, res) => {
+        // Alias — ruft denselben Handler-Code. Wir duplizieren hier, um den
+        // Express-Router nicht zu chainen; das ist konsistent mit dem Dual-
+        // Registrierungsmuster im Rest der Datei.
+        const stateFilter = req.query.state?.toUpperCase();
+        const since = req.query.since;
+        try {
+            const filter = {};
+            if (stateFilter)
+                filter.state = stateFilter;
+            if (since)
+                filter.since = since;
+            const all = await orders.listOrders(filter);
+            const rows = all.map(o => ({
+                id: o.id, state: o.state, configId: o.configId,
+                firma: o.billing.firma, subdomainWish: o.subdomainWish,
+                subdomainFinal: o.subdomainFinal, contactEmail: o.contact.email,
+                signerName: o.signer.name, createdAt: o.createdAt, updatedAt: o.updatedAt,
+                verifiedAt: o.verifiedAt, instanceId: o.instanceId,
+                provisioningError: o.provisioningError, agreements: publicAgreements(o.agreements),
+                notes: o.notes,
+            }));
+            res.json({ count: rows.length, orders: rows });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    app.get("/admin/orders/:id", adminAuth, async (req, res) => {
+        try {
+            const order = await orders.getOrder(req.params.id);
+            if (!order) {
+                res.status(404).json({ error: "Order nicht gefunden" });
+                return;
+            }
+            // Instance-Details mit rausgeben, damit das Admin-UI nicht einen
+            // zweiten Call machen muss.
+            let instance = null;
+            if (order.instanceId) {
+                const inst = await getInstance(order.instanceId);
+                if (inst) {
+                    instance = {
+                        id: inst.id, url: inst.url, status: inst.status,
+                        createdAt: inst.createdAt, lastActivity: inst.lastActivity,
+                        moodleVersion: inst.moodleVersion, phpVersion: inst.phpVersion,
+                        pinned: inst.pinned, pinReason: inst.pinReason,
+                    };
+                }
+            }
+            res.json({
+                ...order,
+                // pdfPath aus agreements herausmaskieren, um kein internes File-
+                // Layout in UIs zu leaken.
+                agreements: publicAgreements(order.agreements),
+                instance,
+            });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    app.get("/api/admin/orders/:id", adminAuth, async (req, res) => {
+        try {
+            const order = await orders.getOrder(req.params.id);
+            if (!order) {
+                res.status(404).json({ error: "Order nicht gefunden" });
+                return;
+            }
+            let instance = null;
+            if (order.instanceId) {
+                const inst = await getInstance(order.instanceId);
+                if (inst) {
+                    instance = {
+                        id: inst.id, url: inst.url, status: inst.status,
+                        createdAt: inst.createdAt, lastActivity: inst.lastActivity,
+                        moodleVersion: inst.moodleVersion, phpVersion: inst.phpVersion,
+                        pinned: inst.pinned, pinReason: inst.pinReason,
+                    };
+                }
+            }
+            res.json({ ...order, agreements: publicAgreements(order.agreements), instance });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e) });
+        }
+    });
+    const adminOrderRejectHandler = async (req, res) => {
+        const { id } = req.params;
+        const reason = typeof req.body?.reason === "string" ? req.body.reason : "Admin-Ablehnung";
+        try {
+            const order = await orders.getOrder(id);
+            if (!order) {
+                res.status(404).json({ error: "Order nicht gefunden" });
+                return;
+            }
+            // Erlaubte Quellzustände für Reject: CONFIRMED, PROVISION_FAILED.
+            // Andere States werfen in transitionOrder() einen State-Machine-Fehler,
+            // der dem Admin als 409 zurückkommt.
+            const updated = await orders.transitionOrder(id, "REJECTED", "admin", reason);
+            res.json({ ok: true, order: { id: updated.id, state: updated.state } });
+        }
+        catch (e) {
+            const msg = String(e?.message ?? e);
+            const status = /Ungültiger Zustandsübergang/.test(msg) ? 409 : 500;
+            res.status(status).json({ error: msg });
+        }
+    };
+    app.post("/admin/orders/:id/reject", adminAuth, adminOrderRejectHandler);
+    app.post("/api/admin/orders/:id/reject", adminAuth, adminOrderRejectHandler);
+    const adminOrderTerminateHandler = async (req, res) => {
+        const { id } = req.params;
+        const reason = typeof req.body?.reason === "string" ? req.body.reason : "Admin-Kündigung";
+        try {
+            const order = await orders.getOrder(id);
+            if (!order) {
+                res.status(404).json({ error: "Order nicht gefunden" });
+                return;
+            }
+            if (order.state !== "LIVE") {
+                res.status(409).json({ error: `Terminate nur aus LIVE möglich (aktuell: ${order.state})` });
+                return;
+            }
+            // Container erst stoppen, dann Order transitionen. Wenn der Stop
+            // fehlschlägt, lieber die Order in LIVE lassen und Fehler zeigen —
+            // sonst hätten wir einen orphanen Container mit TERMINATED-Order.
+            if (order.instanceId) {
+                const inst = await getInstance(order.instanceId);
+                if (inst) {
+                    inst.status = "stopping";
+                    await saveInstance(inst);
+                    await nginxSvc.unregisterInstance(inst.id).catch((e) => console.error(`[admin/orders] WARN nginx unregister:`, e));
+                    await dockerSvc.stopContainers(inst).catch((e) => console.error(`[admin/orders] WARN docker stop:`, e));
+                    await dockerSvc.cleanupInstanceDir(inst).catch((e) => console.error(`[admin/orders] WARN cleanup dir:`, e));
+                    await deleteInstance(inst.id);
+                }
+            }
+            const updated = await orders.transitionOrder(id, "TERMINATED", "admin", reason);
+            res.json({ ok: true, order: { id: updated.id, state: updated.state } });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e?.message ?? e) });
+        }
+    };
+    app.post("/admin/orders/:id/terminate", adminAuth, adminOrderTerminateHandler);
+    app.post("/api/admin/orders/:id/terminate", adminAuth, adminOrderTerminateHandler);
     const pluginInfoHandler = async (req, res) => {
         try {
             const configs = await loadConfigs().catch(() => []);
@@ -1237,6 +1538,11 @@ async function runHTTP() {
     });
     app.get("/shop/confirmed/:token", (_req, res) => {
         res.sendFile(path.join(process.cwd(), "webui", "shop-confirmed.html"));
+    });
+    // Kunden-Dashboard (task49, Woche 4). Magic-Link aus der Welcome-Mail.
+    // JSON-Daten via GET /api/kunde/:token — siehe customerDashboardHandler.
+    app.get("/kunde/:token", (_req, res) => {
+        res.sendFile(path.join(process.cwd(), "webui", "customer.html"));
     });
     const internalRouter = buildInternalRouter();
     app.use("/api/internal", internalRouter);

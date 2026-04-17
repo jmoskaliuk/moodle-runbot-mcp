@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kunden-Dashboard — eLeDia Moodle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="/favicon.ico">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#353535;--muted:#6b6b6f;--rule:#e9e9e9;
+  --bg:#f3f5f8;--white:#fff;
+  --accent:#ab1d79;--accent2:#540e3b;--accent-pale:#f5e4ef;
+  --blue-dark:#194866;--blue-light:#65a1b3;--blue-pale:#a9cbd5;
+  --orange:#f98012;--orange-pale:#ffecdb;
+  --green:#3aadaa;--green-pale:#e3f2f1;
+  --red:#b91c1c;--red-pale:#fdecea;
+  --sans:'Open Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;font-weight:300;-webkit-font-smoothing:antialiased;min-height:100vh}
+nav{background:#fff;border-bottom:1px solid var(--rule);padding:14px clamp(16px,6vw,80px);display:flex;align-items:center;gap:20px;height:68px;position:sticky;top:0;z-index:10}
+nav img{height:36px}
+nav .title{color:var(--muted);font-size:13px;margin-left:auto}
+nav .nav-badge{background:var(--accent-pale);color:var(--accent2);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;margin-left:10px}
+.wrap{max-width:920px;margin:0 auto;padding:clamp(28px,5vw,44px) clamp(16px,6vw,80px) 120px}
+.eyebrow{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:10px}
+h1{font-family:var(--sans);font-weight:300;font-size:clamp(26px,2.8vw,34px);line-height:1.22;color:var(--blue-dark);margin-bottom:8px;letter-spacing:-.3px}
+h1 strong{font-weight:500;color:var(--blue-dark)}
+.lead{color:var(--muted);font-size:15px;line-height:1.7;max-width:640px;margin-bottom:26px}
+
+/* ── Loading / Error ─────────────────────────────────────────── */
+.loading,.error-screen{text-align:center;padding:80px 20px;color:var(--muted)}
+.loading .spin{display:inline-block;width:28px;height:28px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-screen h2{color:var(--red);font-size:20px;font-weight:500;margin-bottom:12px}
+.error-screen p{max-width:520px;margin:0 auto 20px;font-size:14px;line-height:1.6}
+.error-screen a{color:var(--accent);text-decoration:none;font-weight:500}
+
+/* ── Hero ─────────────────────────────────────────────────────── */
+.hero{background:linear-gradient(135deg,var(--blue-dark) 0%,#0f2e43 100%);color:#fff;border-radius:14px;padding:clamp(24px,4vw,36px);margin-bottom:18px;position:relative;overflow:hidden}
+.hero .eyebrow{color:var(--blue-pale);margin-bottom:8px}
+.hero h2{font-size:clamp(22px,2.4vw,28px);font-weight:400;line-height:1.3;margin-bottom:8px;color:#fff}
+.hero .hero-sub{font-size:14px;color:var(--blue-pale);margin-bottom:20px;max-width:540px;line-height:1.6}
+.hero-url-wrap{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.hero-url-wrap code{font-family:'SF Mono',Menlo,monospace;font-size:13.5px;color:#fff;flex:1;min-width:200px;word-break:break-all}
+.hero-url-wrap .copy{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-family:var(--sans);cursor:pointer;transition:all .15s}
+.hero-url-wrap .copy:hover{background:rgba(255,255,255,.25)}
+.hero-url-wrap .copy.copied{background:var(--green);border-color:var(--green)}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn-open{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--blue-dark);border:none;border-radius:10px;padding:12px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--sans);text-decoration:none;transition:all .15s}
+.btn-open:hover{background:var(--accent);color:#fff}
+.btn-ghost-light{display:inline-flex;align-items:center;gap:8px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:12px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--sans);text-decoration:none;transition:all .15s}
+.btn-ghost-light:hover{background:rgba(255,255,255,.1)}
+
+/* ── Status-Pills ─────────────────────────────────────────────── */
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:11.5px;font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+.status-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status-pill.live{background:rgba(58,173,170,.18);color:#fff}
+.status-pill.stopped{background:rgba(255,255,255,.12);color:#fff}
+.status-pill.error{background:rgba(185,28,28,.18);color:#fff}
+.status-pill.live-in-flow{background:var(--green-pale);color:#1a5552}
+.status-pill.live-in-flow .dot{background:var(--green);animation:pulse-dot 1.6s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Grid 2-spaltig ────────────────────────────────────────── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:760px){.grid-2{grid-template-columns:1fr}}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:clamp(22px,3.5vw,28px)}
+.card h3{font-size:14px;font-weight:500;color:var(--blue-dark);margin-bottom:14px;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
+.card h3 .ico{width:24px;height:24px;border-radius:6px;background:var(--accent-pale);color:var(--accent2);display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+.kv{display:grid;grid-template-columns:130px 1fr;gap:10px 14px;font-size:13.5px}
+@media(max-width:480px){.kv{grid-template-columns:1fr}.kv .k{margin-top:6px;font-size:12px;color:var(--muted)}}
+.kv .k{color:var(--muted)}
+.kv .v{color:var(--ink)}
+
+/* ── Doc-Download ───────────────────────────────────────── */
+.doc{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:#fff;text-decoration:none;color:var(--ink);transition:border-color .15s;margin-bottom:8px}
+.doc:hover{border-color:var(--accent)}
+.doc .doc-ico{width:36px;height:36px;border-radius:8px;background:var(--accent-pale);color:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.doc .doc-body{flex:1;min-width:0}
+.doc .doc-title{font-size:13.5px;font-weight:500;color:var(--blue-dark);margin-bottom:1px}
+.doc .doc-sub{font-size:11.5px;color:var(--muted)}
+.doc .doc-action{color:var(--accent);font-size:12.5px;font-weight:500;white-space:nowrap}
+
+/* ── Support-CTA ─────────────────────────────────────────── */
+.support{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:clamp(22px,4vw,30px);margin-bottom:16px}
+.support h3{color:var(--blue-dark);font-size:16px;font-weight:500;margin-bottom:8px}
+.support p{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:14px;max-width:560px}
+.support-links{display:flex;gap:8px;flex-wrap:wrap}
+.support-links a{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid var(--rule);border-radius:8px;text-decoration:none;color:var(--blue-dark);font-size:13.5px;font-weight:500;transition:all .15s;background:#fff}
+.support-links a:hover{border-color:var(--accent);color:var(--accent)}
+.support-links a .ico{font-size:15px;opacity:.85}
+
+/* ── State-spezifische Sections ──────────────────────────── */
+.section-provisioning,.section-failed,.section-terminated,.section-pending{display:none;margin-bottom:16px}
+.section-provisioning.show,.section-failed.show,.section-terminated.show,.section-pending.show{display:block}
+.notice{padding:16px 20px;border-radius:10px;font-size:14px;line-height:1.6}
+.notice.info{background:var(--orange-pale);border:1px solid var(--orange);color:#7a3d0d}
+.notice.error{background:var(--red-pale);border:1px solid var(--red);color:#7a1e1e}
+.notice.neutral{background:#f3f5f8;border:1px solid var(--rule);color:var(--ink)}
+.notice strong{font-weight:500}
+
+/* ── Footer-Hinweise ───────────────────────────────────── */
+.footer-hint{font-size:12px;color:var(--muted);line-height:1.6;padding-top:18px;border-top:1px solid var(--rule);margin-top:24px;text-align:center}
+.footer-hint a{color:var(--accent);text-decoration:none}
+
+/* ── History (Audit-Trail kompakt) ──────────────────────── */
+.history-toggle{color:var(--accent);font-size:13px;cursor:pointer;margin-top:12px;display:inline-block;font-weight:500;user-select:none}
+.history-toggle:hover{text-decoration:underline}
+.history-list{display:none;margin-top:10px;font-size:12.5px;color:var(--muted);font-family:'SF Mono',Menlo,monospace;padding:10px 14px;background:#f3f5f8;border-radius:6px;max-height:280px;overflow-y:auto}
+.history-list.show{display:block}
+.history-list .h-row{padding:4px 0;border-bottom:1px solid var(--rule)}
+.history-list .h-row:last-child{border:none}
+.history-list .h-when{color:var(--blue-dark)}
+.history-list .h-arrow{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<nav>
+  <img src="/eledia_runbot.png" alt="eLeDia Runbot">
+  <span class="nav-badge">Kunden-Portal</span>
+  <span class="title" id="nav-title">— wird geladen —</span>
+</nav>
+
+<div class="wrap">
+
+  <!-- Loading ─────────────────────────────────── -->
+  <div id="state-loading" class="loading">
+    <div class="spin"></div>
+    <div>Dashboard wird geladen …</div>
+  </div>
+
+  <!-- Error ───────────────────────────────────── -->
+  <div id="state-error" class="error-screen" style="display:none">
+    <h2>Link ungültig oder abgelaufen</h2>
+    <p id="error-msg">Dieser Kunden-Link ist nicht mehr gültig. Bitte wenden Sie sich an <a href="mailto:support@eledia.de">support@eledia.de</a>, wir schicken Ihnen gerne einen neuen Zugang.</p>
+    <a href="https://eledia.de">→ Zur eLeDia-Website</a>
+  </div>
+
+  <!-- Main ─────────────────────────────────── -->
+  <div id="state-main" style="display:none">
+
+    <div class="eyebrow">Ihre Moodle-Demo</div>
+    <h1 id="greeting">Willkommen zurück.</h1>
+    <p class="lead" id="lead">Hier finden Sie Ihre Instanz, Rechnungsdaten und Ihre Vertragsdokumente zum Download.</p>
+
+    <!-- Hero: Instance-URL + Actions ─────────────────── -->
+    <div class="hero" id="hero">
+      <div class="eyebrow" id="hero-eyebrow">Instance</div>
+      <h2 id="hero-title">Moodle-Instanz wird geladen …</h2>
+      <div class="hero-sub" id="hero-sub"></div>
+      <div class="hero-url-wrap" id="hero-url-wrap" style="display:none">
+        <code id="hero-url">—</code>
+        <button class="copy" id="hero-copy">Kopieren</button>
+      </div>
+      <div class="hero-actions">
+        <a class="btn-open" id="btn-open" href="#" target="_blank" rel="noopener" style="display:none">↗ Moodle öffnen</a>
+        <a class="btn-ghost-light" id="btn-status" href="#" style="display:none">⟳ Status prüfen</a>
+      </div>
+    </div>
+
+    <!-- State-Banner: Provisioning / Failed / Terminated / Pending ── -->
+    <div class="section-provisioning" id="section-provisioning">
+      <div class="notice info">
+        <strong>⚙️ Provisionierung läuft.</strong> Ihre Moodle-Umgebung wird gerade aufgebaut.
+        Sie erhalten eine Welcome-Mail, sobald alles bereit ist. Die Seite aktualisiert sich
+        automatisch alle 10 Sekunden.
+      </div>
+    </div>
+
+    <div class="section-failed" id="section-failed">
+      <div class="notice error">
+        <strong>⚠️ Provisionierung fehlgeschlagen.</strong> Unser Team ist informiert und
+        wird sich schnellstmöglich bei Ihnen melden. Sie müssen nichts weiter tun —
+        Rückmeldung kommt per E-Mail an <span id="failed-email">—</span>.
+        <div id="failed-detail" style="font-family:'SF Mono',monospace;font-size:12px;margin-top:10px;padding:8px 10px;background:#fff;border:1px solid #fecaca;border-radius:4px;word-break:break-all"></div>
+      </div>
+    </div>
+
+    <div class="section-terminated" id="section-terminated">
+      <div class="notice neutral">
+        <strong>🏁 Demo beendet.</strong> Ihre Demo-Instanz wurde auf Ihren Wunsch hin
+        (oder durch Ablauf der Testphase) beendet. Die Vertragsdokumente bleiben 30 Tage
+        nach Kündigung weiterhin hier verfügbar.
+      </div>
+    </div>
+
+    <div class="section-pending" id="section-pending">
+      <div class="notice info">
+        <strong>⏳ Bestellung noch nicht live.</strong> Ihre Bestellung ist aktuell im Status
+        <code id="pending-state"></code>. Sobald die Instanz bereit ist, sehen Sie hier die URL.
+      </div>
+    </div>
+
+    <!-- Grid: Bestelldaten + Paket ────────────────────── -->
+    <div class="grid-2">
+
+      <div class="card">
+        <h3><span class="ico">📋</span>Bestelldaten</h3>
+        <div class="kv" id="kv-order"></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ico">📦</span>Paket &amp; Vertrag</h3>
+        <div class="kv" id="kv-package"></div>
+      </div>
+
+    </div>
+
+    <!-- Vertragsdokumente ───────────────────────────── -->
+    <div class="card" style="margin-bottom:16px">
+      <h3><span class="ico">📄</span>Vertragsdokumente</h3>
+      <div id="docs-list"></div>
+      <p style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.55">
+        Beide PDFs sind personalisiert auf Ihre Firmendaten und wurden bei der Bestellung
+        SHA256-revisionssicher archiviert. Re-Downloads liefern bit-identische Kopien.
+      </p>
+      <span class="history-toggle" id="history-toggle">Audit-Trail anzeigen ▾</span>
+      <div class="history-list" id="history-list"></div>
+    </div>
+
+    <!-- Support-CTA ────────────────────────────────── -->
+    <div class="support">
+      <h3>Support &amp; Kontakt</h3>
+      <p>
+        Brauchen Sie Hilfe bei Ihrer Moodle-Instanz, möchten den Funktionsumfang erweitern
+        oder Ihre Demo kündigen? Unser Team bei eLeDia ist für Sie da.
+      </p>
+      <div class="support-links">
+        <a href="mailto:support@eledia.de"><span class="ico">📧</span>support@eledia.de</a>
+        <a href="tel:+493050561070"><span class="ico">📞</span>+49 30 50 56 10 -70</a>
+        <a href="https://eledia.de" target="_blank" rel="noopener"><span class="ico">🌐</span>eledia.de</a>
+      </div>
+    </div>
+
+    <div class="footer-hint">
+      Dieser Kunden-Link ist nur für Sie und läuft <span id="link-expires">in 30 Tagen</span> ab.
+      Bitte nicht weiterleiten. Fragen? <a href="mailto:support@eledia.de">support@eledia.de</a>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // Token aus /kunde/:token extrahieren
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const TOKEN = parts[parts.length - 1] || '';
+  if (!TOKEN || TOKEN === 'kunde') {
+    showError('Kein Kunden-Token in der URL.');
+    return;
+  }
+
+  const $ = (id) => document.getElementById(id);
+  function esc(s){
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  let pollHandle = null;
+
+  function showError(msg){
+    $('state-loading').style.display = 'none';
+    $('state-main').style.display   = 'none';
+    $('state-error').style.display   = 'block';
+    if (msg) $('error-msg').textContent = msg;
+  }
+  function showMain(){
+    $('state-loading').style.display = 'none';
+    $('state-error').style.display   = 'none';
+    $('state-main').style.display   = 'block';
+  }
+
+  async function fetchData(){
+    try {
+      const r = await fetch('/api/kunde/' + encodeURIComponent(TOKEN), { headers: { Accept: 'application/json' } });
+      if (r.status === 404) return { error: '404' };
+      if (!r.ok) return { error: 'HTTP ' + r.status };
+      return await r.json();
+    } catch (e) {
+      return { error: 'network' };
+    }
+  }
+
+  function fmtDate(iso){
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('de-DE', {dateStyle:'medium', timeStyle:'short'}); } catch { return iso; }
+  }
+  function fmtDateOnly(iso){
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('de-DE', {day:'2-digit',month:'short',year:'numeric'}); } catch { return iso; }
+  }
+  function fmtDaysUntil(iso){
+    if (!iso) return 'in 30 Tagen';
+    const diff = new Date(iso).getTime() - Date.now();
+    const days = Math.max(0, Math.floor(diff / (86400000)));
+    return `in ${days} Tagen (${fmtDateOnly(iso)})`;
+  }
+
+  const STATE_COPY = {
+    PENDING_VERIFICATION: { title:'Bestätigung ausstehend', sub:'Bitte bestätigen Sie Ihre E-Mail-Adresse über den Link, den wir Ihnen geschickt haben.' },
+    ORDER_REVIEW:         { title:'Bestellung prüfen', sub:'Ihre Bestellung wartet auf AGB/AVV-Zustimmung.' },
+    CONFIRMED:            { title:'Bestätigt — Provisionierung startet', sub:'Ihre Moodle-Instanz wird in wenigen Sekunden aufgebaut.' },
+    PROVISIONING:         { title:'Moodle wird aufgebaut …', sub:'Wir richten gerade Ihre Instanz ein. Das dauert 3–5 Minuten.' },
+    LIVE:                 { title:'Ihre Moodle-Instanz ist live', sub:'Sie können sich direkt einloggen — Login-Daten kamen per Welcome-Mail.' },
+    PROVISION_FAILED:     { title:'Provisionierung fehlgeschlagen', sub:'Unser Team ist bereits informiert.' },
+    TERMINATED:           { title:'Demo beendet', sub:'Ihre Instanz wurde gekündigt. Dokumente bleiben 30 Tage einsehbar.' },
+    VERIFY_EXPIRED:       { title:'Bestellung abgelaufen', sub:'Der Bestätigungs-Link ist leider abgelaufen.' },
+    REJECTED:             { title:'Bestellung storniert', sub:'Diese Bestellung wurde storniert.' },
+  };
+
+  function render(d){
+    // Nav-Title
+    $('nav-title').textContent = `${d.configName || d.configId || '—'} · ${d.billing?.firma || ''}`;
+
+    // Greeting
+    const firstName = (d.signer?.name || '').split(/\s+/)[0];
+    if (firstName) {
+      $('greeting').innerHTML = `Willkommen zurück, <strong>${esc(firstName)}</strong>.`;
+    }
+
+    // Lead je nach State
+    const stateMeta = STATE_COPY[d.state] || { title: d.state, sub: '' };
+
+    // Hero
+    const hero = $('hero');
+    const ey = $('hero-eyebrow');
+    const htitle = $('hero-title');
+    const hsub = $('hero-sub');
+    const urlWrap = $('hero-url-wrap');
+    const urlCode = $('hero-url');
+    const btnOpen = $('btn-open');
+    const btnStatus = $('btn-status');
+
+    htitle.textContent = stateMeta.title;
+    hsub.textContent = stateMeta.sub;
+    urlWrap.style.display = 'none';
+    btnOpen.style.display = 'none';
+    btnStatus.style.display = 'none';
+
+    // Hide all state banners
+    ['section-provisioning','section-failed','section-terminated','section-pending']
+      .forEach(id => $(id).classList.remove('show'));
+
+    if (d.state === 'LIVE' && d.instance?.url) {
+      ey.innerHTML = 'Instance <span class="status-pill live">● Live</span>';
+      urlCode.textContent = d.instance.url;
+      urlWrap.style.display = 'flex';
+      btnOpen.href = d.instance.url;
+      btnOpen.style.display = 'inline-flex';
+    } else if (d.state === 'PROVISIONING' || d.state === 'CONFIRMED') {
+      ey.innerHTML = 'Instance <span class="status-pill live-in-flow"><span class="dot"></span>Wird aufgebaut</span>';
+      $('section-provisioning').classList.add('show');
+    } else if (d.state === 'PROVISION_FAILED') {
+      ey.innerHTML = 'Instance <span class="status-pill error">● Fehler</span>';
+      $('section-failed').classList.add('show');
+      $('failed-email').textContent = d.contact?.email || '—';
+      if (d.provisioningError) $('failed-detail').textContent = d.provisioningError;
+    } else if (d.state === 'TERMINATED') {
+      ey.innerHTML = 'Instance <span class="status-pill stopped">● Gestoppt</span>';
+      $('section-terminated').classList.add('show');
+    } else {
+      ey.textContent = 'Instance';
+      $('section-pending').classList.add('show');
+      $('pending-state').textContent = d.state;
+    }
+
+    // Bestelldaten-KV
+    const b = d.billing || {};
+    const c = d.contact || {};
+    const s = d.signer || {};
+    const orderRows = [];
+    orderRows.push(['Bestell-Nr.', d.orderId]);
+    orderRows.push(['Bestellt am', fmtDate(d.createdAt)]);
+    orderRows.push(['Firma', b.firma]);
+    const addr = [b.strasse, [b.plz, b.ort].filter(Boolean).join(' '), b.land].filter(Boolean).join(', ');
+    orderRows.push(['Rechnungsadresse', addr]);
+    if (b.ustId) orderRows.push(['USt-IdNr.', b.ustId]);
+    orderRows.push(['Kontakt', c.email + (c.phone ? ` · ${c.phone}` : '')]);
+    orderRows.push(['Unterzeichner', s.name + (s.funktion ? ` (${s.funktion})` : '')]);
+    $('kv-order').innerHTML = orderRows.map(([k, v]) =>
+      `<div class="k">${esc(k)}</div><div class="v">${esc(v || '—')}</div>`
+    ).join('');
+
+    // Paket-KV
+    const pkgRows = [];
+    pkgRows.push(['Paket', d.configName || d.configId]);
+    if (d.configDescription) pkgRows.push(['Beschreibung', d.configDescription]);
+    pkgRows.push(['Subdomain', (d.subdomainWish || '') + '.demo.eledia.ai']);
+    if (d.instance?.createdAt) pkgRows.push(['Live seit', fmtDate(d.instance.createdAt)]);
+    if (d.instance?.lastActivity) pkgRows.push(['Letzte Aktivität', fmtDate(d.instance.lastActivity)]);
+    pkgRows.push(['Status', d.state]);
+    if (d.notes) pkgRows.push(['Anmerkung', d.notes]);
+    $('kv-package').innerHTML = pkgRows.map(([k, v]) =>
+      `<div class="k">${esc(k)}</div><div class="v">${esc(v || '—')}</div>`
+    ).join('');
+
+    // Docs
+    const docsList = $('docs-list');
+    const docs = [
+      { type:'agb', title:'AGB — Allgemeine Geschäftsbedingungen' },
+      { type:'avv', title:'AVV — Auftragsverarbeitungs-Vertrag' },
+    ];
+    docsList.innerHTML = docs.map(doc => {
+      const rec = (d.agreements || []).find(a => a.type === doc.type);
+      const sha = rec?.pdfSha256 ? rec.pdfSha256.slice(0, 12) : '';
+      const signedAt = rec?.signedAt ? fmtDate(rec.signedAt) : '—';
+      const url = `/api/kunde/${encodeURIComponent(TOKEN)}/agreement/${doc.type}`;
+      return `
+        <a class="doc" href="${url}" target="_blank" rel="noopener">
+          <span class="doc-ico">📄</span>
+          <span class="doc-body">
+            <div class="doc-title">${esc(doc.title)}</div>
+            <div class="doc-sub">Unterzeichnet am ${esc(signedAt)}${sha ? ` · SHA256 ${esc(sha)}…` : ''}</div>
+          </span>
+          <span class="doc-action">Öffnen ↗</span>
+        </a>
+      `;
+    }).join('');
+
+    // Audit-Trail (history) — lesen aus d.agreements + d.state
+    const historyList = $('history-list');
+    const historyRows = [];
+    historyRows.push({ when: d.createdAt,  what: 'Bestellung erstellt',   arrow: 'DRAFT' });
+    if (d.verifiedAt) historyRows.push({ when: d.verifiedAt, what: 'E-Mail bestätigt', arrow: 'ORDER_REVIEW' });
+    (d.agreements || []).forEach(a => {
+      if (a.signedAt) historyRows.push({ when: a.signedAt, what: `${a.type.toUpperCase()} unterzeichnet`, arrow: `sha ${a.pdfSha256?.slice(0,8) || '—'}` });
+    });
+    if (d.instance?.createdAt) historyRows.push({ when: d.instance.createdAt, what: 'Instanz provisioniert', arrow: 'LIVE' });
+    if (d.state === 'TERMINATED') historyRows.push({ when: d.updatedAt, what: 'Demo gekündigt', arrow: 'TERMINATED' });
+    if (d.state === 'PROVISION_FAILED') historyRows.push({ when: d.updatedAt, what: 'Provisionierung fehlgeschlagen', arrow: 'FAILED' });
+    historyList.innerHTML = historyRows
+      .sort((a, b) => (a.when || '').localeCompare(b.when || ''))
+      .map(r => `<div class="h-row"><span class="h-when">${esc(fmtDate(r.when))}</span> — ${esc(r.what)} <span class="h-arrow">→ ${esc(r.arrow)}</span></div>`)
+      .join('') || '<div class="h-row">Keine Audit-Einträge</div>';
+
+    // Link-Expiry
+    $('link-expires').textContent = fmtDaysUntil(d.customerMagicExpiresAt);
+  }
+
+  async function loadAndRender(){
+    const d = await fetchData();
+    if (d.error === '404' || d.error === 'network') {
+      showError(d.error === '404'
+        ? 'Dieser Kunden-Link ist nicht mehr gültig oder abgelaufen.'
+        : 'Netzwerkfehler. Bitte versuchen Sie es später erneut.');
+      return;
+    }
+    if (d.error) { showError('Fehler beim Laden (' + d.error + ').'); return; }
+    render(d);
+    showMain();
+    // Polling nur während Provisioning-States
+    const stillInFlight = d.state === 'CONFIRMED' || d.state === 'PROVISIONING';
+    if (stillInFlight && !pollHandle) {
+      pollHandle = setInterval(async () => {
+        const next = await fetchData();
+        if (next && !next.error) {
+          render(next);
+          if (next.state !== 'CONFIRMED' && next.state !== 'PROVISIONING') {
+            clearInterval(pollHandle); pollHandle = null;
+          }
+        }
+      }, 10000);
+    }
+    if (!stillInFlight && pollHandle) { clearInterval(pollHandle); pollHandle = null; }
+  }
+
+  // Copy-Button
+  $('hero-copy').addEventListener('click', async () => {
+    const url = $('hero-url').textContent;
+    try {
+      await navigator.clipboard.writeText(url);
+      $('hero-copy').classList.add('copied');
+      $('hero-copy').textContent = '✓ Kopiert';
+      setTimeout(() => {
+        $('hero-copy').classList.remove('copied');
+        $('hero-copy').textContent = 'Kopieren';
+      }, 1600);
+    } catch {}
+  });
+
+  // History-Toggle
+  $('history-toggle').addEventListener('click', () => {
+    const hl = $('history-list');
+    const toggle = $('history-toggle');
+    hl.classList.toggle('show');
+    toggle.textContent = hl.classList.contains('show')
+      ? 'Audit-Trail ausblenden ▴'
+      : 'Audit-Trail anzeigen ▾';
+  });
+
+  loadAndRender();
+})();
+</script>
+</body>
+</html>

@@ -60,6 +60,25 @@ td.mono{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted
 .pill-error{background:#fee2e2;color:#991b1b}
 .pill-started,.pill-confirmed{background:#ede9fe;color:#5b21b6}
 .pill-pending,.pill-expired{background:#f1f5f9;color:var(--muted)}
+.pill-live{background:#d1fae5;color:#065f46}
+.pill-order_review{background:#fef3c7;color:#92400e}
+.pill-pending_verification,.pill-verify_expired,.pill-draft{background:#f1f5f9;color:var(--muted)}
+.pill-provision_failed,.pill-rejected,.pill-terminated{background:#fee2e2;color:#991b1b}
+
+/* Filter chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{font-size:11px;font-weight:500;padding:4px 10px;border-radius:14px;border:1px solid var(--rule);background:var(--white);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+.chip:hover{border-color:#ccc;color:var(--ink)}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .n{font-weight:600;margin-left:4px;opacity:.75}
+
+/* Order detail modal */
+.kv{display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:12px;margin-bottom:16px}
+.kv dt{color:var(--muted);font-weight:500}
+.kv dd{color:var(--ink);word-break:break-word}
+.kv dd code{font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--muted)}
+.detail-section{margin-bottom:20px}
+.detail-section h4{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;border-bottom:1px solid var(--rule);padding-bottom:4px}
 
 /* Action buttons */
 .btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:var(--sans);padding:4px 10px;border-radius:5px;border:1px solid var(--rule);background:var(--white);color:var(--ink);cursor:pointer;transition:all .15s;white-space:nowrap}
@@ -115,12 +134,50 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
 
 <div class="wrap">
   <div class="page-title">Admin-Dashboard</div>
-  <div class="page-sub">Laufende Instanzen &amp; Demo-Anfragen — Live-Refresh alle 30 Sekunden</div>
+  <div class="page-sub">Bestellungen, Instanzen &amp; Demo-Anfragen — Live-Refresh alle 30 Sekunden</div>
 
   <div class="refresh-bar">
     <button class="btn refresh-btn" onclick="refresh()">⟳ Aktualisieren</button>
     <span class="last-update" id="lastUpdate">—</span>
     <span class="auto-badge">AUTO 30s</span>
+  </div>
+
+  <!-- Orders -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-title">Bestellungen (Onlineshop)</span>
+      <span class="badge-count" id="ordCount">—</span>
+    </div>
+    <div class="chips" id="ordFilters">
+      <button class="chip active" data-state="">Alle <span class="n" id="chip-n-all">—</span></button>
+      <button class="chip" data-state="ORDER_REVIEW">Review <span class="n" id="chip-n-ORDER_REVIEW">0</span></button>
+      <button class="chip" data-state="CONFIRMED">Confirmed <span class="n" id="chip-n-CONFIRMED">0</span></button>
+      <button class="chip" data-state="PROVISIONING">Provisioning <span class="n" id="chip-n-PROVISIONING">0</span></button>
+      <button class="chip" data-state="LIVE">Live <span class="n" id="chip-n-LIVE">0</span></button>
+      <button class="chip" data-state="PROVISION_FAILED">Failed <span class="n" id="chip-n-PROVISION_FAILED">0</span></button>
+      <button class="chip" data-state="REJECTED">Rejected <span class="n" id="chip-n-REJECTED">0</span></button>
+      <button class="chip" data-state="TERMINATED">Terminated <span class="n" id="chip-n-TERMINATED">0</span></button>
+      <button class="chip" data-state="PENDING_VERIFICATION">Pending <span class="n" id="chip-n-PENDING_VERIFICATION">0</span></button>
+    </div>
+    <div class="card">
+      <table id="ordTable">
+        <thead>
+          <tr>
+            <th>Order-ID</th>
+            <th>Status</th>
+            <th>Config</th>
+            <th>Firma</th>
+            <th>Subdomain</th>
+            <th>Kontakt</th>
+            <th>Erstellt</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody id="ordBody">
+          <tr><td colspan="8" class="empty">Lade…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Instances -->
@@ -188,6 +245,17 @@ pre.logs{font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.6;
     <div class="modal-body">
       <pre class="logs" id="logContent">Lade…</pre>
     </div>
+  </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="modal-overlay" id="ordModal" onclick="closeOrdModal(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="ordTitle">Order</span>
+      <button class="modal-close" onclick="closeOrdModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="ordDetail">Lade…</div>
   </div>
 </div>
 
@@ -414,11 +482,262 @@ function renderTokens(requests) {
   }).join('');
 }
 
+// ── Orders (Onlineshop) ────────────────────────────────────────────────────────
+
+let ordFilterState = '';   // '' = alle
+let ordLastAll = [];       // letzter geladener Satz für Chip-Counter
+
+async function loadOrders() {
+  // Wir holen IMMER alle und filtern clientseitig — dann stimmen die
+  // Chip-Counter live, ohne dass jeder Filterwechsel einen Roundtrip erzeugt.
+  const r = await fetch(`${API}/api/admin/orders`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function stateLabel(s) {
+  const L = {
+    DRAFT: 'draft',
+    PENDING_VERIFICATION: 'pending',
+    VERIFY_EXPIRED: 'expired',
+    ORDER_REVIEW: 'review',
+    CONFIRMED: 'confirmed',
+    PROVISIONING: 'provisioning',
+    PROVISION_FAILED: 'failed',
+    LIVE: 'live',
+    REJECTED: 'rejected',
+    TERMINATED: 'terminated',
+  };
+  return L[s] ?? (s || '').toLowerCase();
+}
+
+function statePill(s) {
+  const key = (s||'').toLowerCase().replace(/[^a-z_]/g,'');
+  return `<span class="pill pill-${key}">${stateLabel(s)}</span>`;
+}
+
+function updateChipCounts(all) {
+  const counts = {};
+  for (const o of all) counts[o.state] = (counts[o.state] ?? 0) + 1;
+  const allN = document.getElementById('chip-n-all');
+  if (allN) allN.textContent = all.length;
+  for (const chip of document.querySelectorAll('#ordFilters .chip[data-state]')) {
+    const st = chip.getAttribute('data-state');
+    if (!st) continue;
+    const el = document.getElementById('chip-n-' + st);
+    if (el) el.textContent = counts[st] ?? 0;
+  }
+}
+
+function renderOrders(all) {
+  ordLastAll = all;
+  updateChipCounts(all);
+  const filtered = ordFilterState
+    ? all.filter(o => o.state === ordFilterState)
+    : all;
+  document.getElementById('ordCount').textContent =
+    ordFilterState ? `${filtered.length} / ${all.length}` : String(all.length);
+  const tbody = document.getElementById('ordBody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">Keine Bestellungen${ordFilterState ? ' im Status ' + ordFilterState : ''}.</td></tr>`;
+    return;
+  }
+  const sorted = [...filtered].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  tbody.innerHTML = sorted.map(o => {
+    const sub = o.subdomainFinal ?? o.subdomainWish ?? '—';
+    const canReject    = o.state === 'CONFIRMED' || o.state === 'PROVISION_FAILED';
+    const canTerminate = o.state === 'LIVE';
+    const actions = [
+      `<button class="btn" onclick="showOrder('${o.id}')">👁 Details</button>`,
+      canReject    ? `<button class="btn btn-danger" onclick="rejectOrder('${o.id}')">🚫 Ablehnen</button>` : '',
+      canTerminate ? `<button class="btn btn-danger" onclick="terminateOrder('${o.id}')">🗑 Kündigen</button>` : '',
+    ].filter(Boolean).join('');
+    return `<tr>
+      <td class="mono" title="${o.id}">${o.id.slice(0,16)}</td>
+      <td>${statePill(o.state)}</td>
+      <td>${o.configId ?? '—'}</td>
+      <td>${escapeHtml(o.firma ?? '—')}</td>
+      <td class="mono">${escapeHtml(sub)}</td>
+      <td>${escapeHtml(o.contactEmail ?? '—')}</td>
+      <td title="${o.createdAt}">${absTime(o.createdAt)}</td>
+      <td><div class="btn-actions">${actions}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function wireOrderFilters() {
+  for (const chip of document.querySelectorAll('#ordFilters .chip')) {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#ordFilters .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      ordFilterState = chip.getAttribute('data-state') ?? '';
+      renderOrders(ordLastAll);
+    });
+  }
+}
+
+async function showOrder(id) {
+  document.getElementById('ordTitle').textContent = 'Order — ' + id;
+  document.getElementById('ordDetail').innerHTML = 'Lade…';
+  document.getElementById('ordModal').classList.add('open');
+  try {
+    const r = await fetch(`${API}/api/admin/orders/${id}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const o = await r.json();
+    document.getElementById('ordDetail').innerHTML = renderOrderDetail(o);
+  } catch(e) {
+    document.getElementById('ordDetail').innerHTML = `<div class="empty">Fehler: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderOrderDetail(o) {
+  const billing = o.billing ?? {};
+  const signer  = o.signer  ?? {};
+  const contact = o.contact ?? {};
+  const history = Array.isArray(o.history) ? [...o.history].reverse() : [];
+  const agreements = o.agreements ?? [];
+  const inst = o.instance;
+
+  const historyRows = history.length
+    ? history.map(h => `<tr>
+        <td class="mono" style="width:130px">${absTime(h.at)}</td>
+        <td>${statePill(h.to)}</td>
+        <td style="font-size:11px;color:var(--muted)">${escapeHtml(h.from ?? '')} → <strong style="color:var(--ink)">${escapeHtml(h.to)}</strong> · ${escapeHtml(h.by ?? '')}${h.reason ? ' · ' + escapeHtml(h.reason) : ''}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="3" style="padding:12px;color:var(--muted);font-style:italic">Keine History</td></tr>';
+
+  const agreementsRows = agreements.length
+    ? agreements.map(a => `<tr>
+        <td style="width:60px"><span class="pill pill-confirmed">${escapeHtml(a.type.toUpperCase())}</span></td>
+        <td style="font-size:11px">v${escapeHtml(a.templateVersion)}</td>
+        <td class="mono" style="font-size:10px;color:var(--muted)">${escapeHtml(a.pdfSha256?.slice(0,16) ?? '—')}…</td>
+        <td style="font-size:11px;color:var(--muted)">signiert ${a.signedAt ? absTime(a.signedAt) : '—'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" style="padding:12px;color:var(--muted);font-style:italic">Keine Agreements</td></tr>';
+
+  const instanceBlock = inst
+    ? `<div class="detail-section">
+        <h4>Instanz</h4>
+        <dl class="kv">
+          <dt>ID</dt><dd class="mono">${escapeHtml(inst.id)}</dd>
+          <dt>Status</dt><dd>${pill(inst.status, true)}</dd>
+          <dt>URL</dt><dd>${inst.url ? `<a href="${escapeHtml(inst.url)}" target="_blank">${escapeHtml(inst.url)}</a>` : '—'}</dd>
+          <dt>Gestartet</dt><dd>${absTime(inst.createdAt)}</dd>
+          <dt>Letzte Aktivität</dt><dd>${relTime(inst.lastActivity)}</dd>
+          <dt>Moodle / PHP</dt><dd>${escapeHtml(inst.moodleVersion ?? '—')} / ${escapeHtml(inst.phpVersion ?? '—')}</dd>
+          <dt>Pin</dt><dd>${inst.pinned ? '📌 ' + escapeHtml(inst.pinReason ?? 'gepinnt') : '—'}</dd>
+        </dl>
+      </div>`
+    : (o.instanceId
+        ? `<div class="detail-section"><h4>Instanz</h4><p style="color:var(--muted);font-size:12px">Referenz <code>${escapeHtml(o.instanceId)}</code> — Instanz nicht mehr vorhanden.</p></div>`
+        : '');
+
+  const errorBlock = o.provisioningError
+    ? `<div class="detail-section">
+        <h4>Provisioning-Fehler</h4>
+        <pre class="logs" style="background:#fef2f2;color:#7f1d1d;max-height:160px">${escapeHtml(o.provisioningError)}</pre>
+      </div>`
+    : '';
+
+  return `
+    <div class="detail-section">
+      <h4>Bestellung</h4>
+      <dl class="kv">
+        <dt>Order-ID</dt><dd class="mono">${escapeHtml(o.id)}</dd>
+        <dt>Status</dt><dd>${statePill(o.state)}</dd>
+        <dt>Config</dt><dd>${escapeHtml(o.configId)}</dd>
+        <dt>Subdomain (Wunsch)</dt><dd class="mono">${escapeHtml(o.subdomainWish ?? '—')}</dd>
+        <dt>Subdomain (final)</dt><dd class="mono">${escapeHtml(o.subdomainFinal ?? '—')}</dd>
+        <dt>Erstellt</dt><dd>${absTime(o.createdAt)}</dd>
+        <dt>Aktualisiert</dt><dd>${absTime(o.updatedAt)}</dd>
+        <dt>Verifiziert</dt><dd>${o.verifiedAt ? absTime(o.verifiedAt) : '—'}</dd>
+      </dl>
+    </div>
+    <div class="detail-section">
+      <h4>Rechnungsadresse</h4>
+      <dl class="kv">
+        <dt>Firma</dt><dd>${escapeHtml(billing.firma ?? '—')}</dd>
+        <dt>Anschrift</dt><dd>${escapeHtml(billing.street ?? '—')}<br>${escapeHtml(billing.zip ?? '')} ${escapeHtml(billing.city ?? '')}<br>${escapeHtml(billing.country ?? '')}</dd>
+        <dt>USt-IdNr</dt><dd>${escapeHtml(billing.vatId ?? '—')}</dd>
+        <dt>Rechnungs-E-Mail</dt><dd>${escapeHtml(billing.invoiceEmail ?? '—')}</dd>
+      </dl>
+    </div>
+    <div class="detail-section">
+      <h4>Kontakt &amp; Signer</h4>
+      <dl class="kv">
+        <dt>Kontakt</dt><dd>${escapeHtml(contact.email ?? '—')}${contact.phone ? ' · ' + escapeHtml(contact.phone) : ''}</dd>
+        <dt>Unterzeichner</dt><dd>${escapeHtml(signer.name ?? '—')}${signer.role ? ' · ' + escapeHtml(signer.role) : ''}${signer.email ? ' · ' + escapeHtml(signer.email) : ''}</dd>
+      </dl>
+    </div>
+    <div class="detail-section">
+      <h4>Vertragsdokumente</h4>
+      <table style="width:100%"><tbody>${agreementsRows}</tbody></table>
+    </div>
+    ${instanceBlock}
+    ${errorBlock}
+    <div class="detail-section">
+      <h4>History</h4>
+      <table style="width:100%"><tbody>${historyRows}</tbody></table>
+    </div>
+    ${o.notes ? `<div class="detail-section"><h4>Notizen</h4><pre class="logs" style="max-height:100px">${escapeHtml(o.notes)}</pre></div>` : ''}
+  `;
+}
+
+function closeOrdModal(e) {
+  if (e.target === document.getElementById('ordModal')) closeOrdModalDirect();
+}
+function closeOrdModalDirect() {
+  document.getElementById('ordModal').classList.remove('open');
+}
+
+async function rejectOrder(id) {
+  const reason = prompt(`Bestellung ${id.slice(0,16)} ablehnen.\nGrund (wird in History gespeichert):`, 'Manuelle Ablehnung durch Admin');
+  if (reason === null) return;
+  try {
+    const r = await fetch(`${API}/api/admin/orders/${id}/reject`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ reason: reason.trim() || 'Manuelle Ablehnung durch Admin' }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`🚫 ${id.slice(0,16)} abgelehnt`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
+async function terminateOrder(id) {
+  if (!confirm(`Bestellung ${id.slice(0,16)} wirklich kündigen?\n\nDer Container wird gestoppt und die Instanz gelöscht.\nDer Status geht auf TERMINATED.`)) return;
+  const reason = prompt(`Kündigungsgrund (optional):`, 'Admin-Kündigung');
+  if (reason === null) return;
+  try {
+    const r = await fetch(`${API}/api/admin/orders/${id}/terminate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ reason: reason.trim() || 'Admin-Kündigung' }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error ?? 'HTTP ' + r.status);
+    toast(`🗑 ${id.slice(0,16)} terminiert`, 'ok');
+    await refresh();
+  } catch(e) {
+    toast(`Fehler: ${e.message}`, 'err');
+  }
+}
+
 // ── Refresh ────────────────────────────────────────────────────────────────────
 
 async function refresh() {
   try {
-    const [instData, tokData] = await Promise.all([loadInstances(), loadTokens()]);
+    const [ordData, instData, tokData] = await Promise.all([loadOrders(), loadInstances(), loadTokens()]);
+    renderOrders(ordData.orders ?? []);
     renderInstances(instData.instances ?? []);
     renderTokens(tokData.requests ?? []);
     document.getElementById('lastUpdate').textContent =
@@ -441,6 +760,9 @@ function toast(msg, type = 'ok') {
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 
+wireOrderFilters();
+// ESC schließt auch das Order-Modal
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOrdModalDirect(); });
 refresh();
 setInterval(refresh, 30000);
 </script>

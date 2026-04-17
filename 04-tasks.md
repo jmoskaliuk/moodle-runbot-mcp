@@ -252,21 +252,34 @@ Smoke-Tests lokal: alle 3 Static-Routes 200, API-Routen erwartungsgemäß
 ---
 
 ### task49 Onlineshop Woche 4 — Customer-Dashboard + Internal-Dashboard-Erweiterung
-Status: open
+Status: implementiert, pending Verify auf VPS
 Feature: feat15
 
-**Customer-Dashboard** (`webui/customer.html`):
+**Customer-Dashboard** (`webui/customer.html`): ✅
 - Magic-Link unter `/kunde/:token` (Token aus `orders.ts → issueCustomerMagicToken`)
-- Zeigt eigene Demo-Instanzen (URL, Status, Ablaufdatum, Paket)
-- Button "Demo verlängern" (ruft Extend-Code-Flow)
-- AGB/AVV-PDFs zum Download
+- Zeigt Bestelldaten, Paket, Instanz-URL + Status, Vertragsdokumente
+- State-abhängige Hero-Pill (CONFIRMED/PROVISIONING/LIVE/FAILED/TERMINATED)
+- AGB/AVV-PDF-Downloads mit SHA256-Anzeige (lazy via `ensureContractPdf()`)
+- 10s-Polling während CONFIRMED/PROVISIONING, Audit-Trail expandierbar
+- Backend: `GET /api/kunde/:token`, `GET /api/kunde/:token/agreement/:type`
 
-**Internal-Dashboard-Erweiterung** (`webui/admin.html`):
-- Neue Sektion "Bestellungen" — Tabelle aller `orders.json`-Einträge
-- Filter nach State (ORDER_REVIEW, LIVE, TERMINATED)
-- Action-Buttons: "Manuell bestätigen" (für Sonderfälle), "Stornieren"
+**Internal-Dashboard-Erweiterung** (`webui/admin.html`): ✅
+- Neue Sektion "Bestellungen" oberhalb von Instanzen
+- Filter-Chips mit Live-Counter je State (Alle, Review, Confirmed, Provisioning,
+  Live, Failed, Rejected, Terminated, Pending Verification)
+- Tabelle: Order-ID, Status, Config, Firma, Subdomain, Kontakt, Erstellt, Aktionen
+- Detail-Modal zeigt Billing + Signer + Agreements (SHA256) + Instance + History
+- Row-Actions: 👁 Details, 🚫 Ablehnen (CONFIRMED/PROVISION_FAILED), 🗑 Kündigen (LIVE)
+- Backend: `GET /api/admin/orders[?state=X]`, `GET /api/admin/orders/:id`,
+  `POST /api/admin/orders/:id/reject`, `POST /api/admin/orders/:id/terminate`
+- Terminate stoppt Container BEVOR die Order transitioniert — verhindert Orphans
 
-**Aufwand:** ~8 h
+**Deferred auf später:**
+- Demo-Verlängerung aus Customer-Dashboard (Extend-Code-Flow) — braucht
+  erst produktiven Extend-Flow, noch nicht live getestet.
+- Admin "Manuell bestätigen" für Sonderfälle — aktuell über MCP/API.
+
+**Aufwand:** ~8 h (tatsächlich: ~7 h)
 
 ---
 
