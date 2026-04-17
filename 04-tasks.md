@@ -166,21 +166,47 @@ Voraussetzung: `orders.ts`-Service in place (commit `be97b3a`), Konzept v0.6 bes
 ---
 
 ### task47 Onlineshop Woche 2 — PDF-Generator via pandoc
-Status: open
+Status: **implementiert, pending Verify** (2026-04-17)
 Feature: feat15
 
-AGB- und AVV-Template (`templates/agb-v1.md`, `templates/avv-template-v1.md`)
-werden mit Platzhaltern (`{{firma}}`, `{{name}}`, …) via Hash-Map populiert
-und per `pandoc` in PDF gerendert. Pro Order eine AGB-PDF + eine AVV-PDF,
-signiert mit Hash + Timestamp, in `/opt/runbot/contracts/<orderId>/`
-abgelegt. Download-Link geht per Mail an Kunden.
+**Umgesetzt:**
 
-**Scope:**
-- Service `src/services/contract-pdf.ts` mit `renderAgbPdf(order)` / `renderAvvPdf(order)`
-- pandoc + LaTeX auf VPS installieren (`apt install pandoc texlive-xetex`)
-- Branding aus `src/brand.ts` in PDF-Template übernehmen (Logo, Farben, Schrift)
+1. `src/services/contract-pdf.ts` — neuer Service mit:
+   - `renderAgbPdf(order, config, { signedAtIso, signerIp })` — lädt
+     `templates/agb-v1.md`, substituiert `{{…}}`-Platzhalter, rendert via
+     `pandoc -t pdf --pdf-engine=xelatex`, berechnet SHA256.
+   - `renderAvvPdf(order, config, …)` — analog für AVV.
+   - `ensureContractPdf(order, config, kind, …)` — lazy Wrapper mit
+     Cache-Lookup auf `/opt/runbot/contracts/<orderId>/<kind>.pdf`.
+   - `findExistingPdf(orderId, kind)` — reiner Disk-Check ohne Render.
+2. Confirm-Handler (`POST /api/shop/confirm/:token`): ruft jetzt echte
+   `renderAgbPdf` + `renderAvvPdf` vor `markAgreementSigned` auf —
+   `pdfPath` + `pdfSha256` landen korrekt in `order.agreements[]`.
+3. Neuer Endpoint `GET /api/shop/agreement/:token/:type` (dual registriert):
+   Streamt das AGB- bzw. AVV-PDF, setzt `X-Runbot-PDF-SHA256`-Header,
+   aktualisiert `downloadedAt` in orders.json.
+4. Review-Stub: Platzhalter-Disclaimer entfernt (PDFs sind jetzt echt).
+5. Placeholder-Mapping deckt ab: `firma, strasse, plz, ort, land, ustId,
+   name, funktion, email, paket, plugins, userLimit, subdomain, orderId,
+   version, datum, uhrzeit, ip, sha`. Unbekannte Keys → `—` (em-dash).
+6. Henne-Ei-`{{sha}}`: Platzhalter wird durch statischen Hinweis
+   ersetzt, echter SHA liegt in `order.agreements[].pdfSha256`
+   (reicht für §126b BGB + Art. 28 (9) DSGVO).
 
-**Aufwand:** ~6–8 h (inkl. pandoc-Setup + Styling-Iteration)
+**VPS-Setup (einmalig, Johannes):**
+
+```bash
+apt install pandoc texlive-xetex texlive-fonts-recommended
+mkdir -p /opt/runbot/contracts && chown runbot:runbot /opt/runbot/contracts
+```
+
+**Offen (Woche 4+):**
+- Branding im PDF (Logo-Header, eLeDia-Farbakzente) — aktuell xelatex-Defaults.
+- `userLimit` + `plugins` aus strukturierten configs.json-Feldern statt
+  Fallback-Text (ergänzt sich mit Woche 3/4 Dashboard-Arbeit).
+- Integration mit Customer-Dashboard (task49) — Re-Download signierter PDFs.
+
+**Aufwand:** ~6–8 h (umgesetzt)
 
 ---
 

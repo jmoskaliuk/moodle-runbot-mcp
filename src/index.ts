@@ -44,6 +44,7 @@ import * as snapshotAdmin from "./services/snapshot-admin.js";
 import * as pluginInstall from "./services/plugin-install.js";
 import * as orders from "./services/orders.js";
 import type { Order } from "./services/orders.js";
+import * as contractPdf from "./services/contract-pdf.js";
 import { DEMO_PASSWORD } from "./services/moodleUser.js";
 import { getInstance, getAllInstances, saveInstance, deleteInstance, allocatePort } from "./services/registry.js";
 import * as dockerSvc from "./services/docker.js";
@@ -756,17 +757,39 @@ async function runHTTP(): Promise<void> {
       const ip = clientIp(req);
       const ua = userAgent(req);
 
-      // Agreements markieren — in Woche 1b mit Platzhalter-PDF-Pfad/Hash.
-      // Woche 2 (task47) ersetzt das durch echte pandoc-generierte PDFs.
-      await orders.markAgreementDownloaded(order.id, "agb", "v1", ip, ua);
-      await orders.markAgreementDownloaded(order.id, "avv", "v1", ip, ua);
-      await orders.markAgreementSigned(order.id, "agb",
-        "pending-pdf-woche2", "0".repeat(64), ip, ua);
-      await orders.markAgreementSigned(order.id, "avv",
-        "pending-pdf-woche2", "0".repeat(64), ip, ua);
+      // Agreements rendern + markieren (task47, Woche 2):
+      // 1. Download-Marker setzen (falls der Kunde Download-Links umgangen hat)
+      // 2. Echte PDFs via pandoc rendern — Timestamp des Signings fließt rein
+      // 3. Signed-Marker mit echten SHA256-Hashes und Pfaden setzen
+      //
+      // Der Render-Schritt ist teuer (~2s pro PDF inkl. xelatex-Start), blockiert
+      // aber den HTTP-Response bewusst — der Kunde soll bei Fehler "bitte nochmal"
+      // sehen statt stiller Diskrepanz in der Audit-Trail.
+      await orders.markAgreementDownloaded(order.id, "agb", contractPdf.CURRENT_TEMPLATE_VERSION, ip, ua);
+      await orders.markAgreementDownloaded(order.id, "avv", contractPdf.CURRENT_TEMPLATE_VERSION, ip, ua);
+
+      const configsForContract = await loadConfigs().catch(() => [] as DemoConfig[]);
+      const configForContract  = configsForContract.find(c => c.id === order.configId);
+      const signedAtIso = new Date().toISOString();
+
+      let agbPdf, avvPdf;
+      try {
+        agbPdf = await contractPdf.renderAgbPdf(order, configForContract, { signedAtIso, signerIp: ip });
+        avvPdf = await contractPdf.renderAvvPdf(order, configForContract, { signedAtIso, signerIp: ip });
+      } catch (renderErr) {
+        console.error(`[shop] PDF-Rendering für ${order.id} fehlgeschlagen:`, renderErr);
+        res.status(500).json({
+          error: "Vertrags-PDFs konnten nicht generiert werden. Bitte in 1–2 Minuten erneut versuchen.",
+          hint: "Falls das Problem anhält, kontaktieren Sie post@moskaliuk.com mit der Order-ID.",
+          orderId: order.id,
+        }); return;
+      }
+
+      await orders.markAgreementSigned(order.id, "agb", agbPdf.path, agbPdf.sha256, ip, ua);
+      await orders.markAgreementSigned(order.id, "avv", avvPdf.path, avvPdf.sha256, ip, ua);
 
       const confirmed = await orders.transitionOrder(order.id, "CONFIRMED", "customer",
-        `AGB/AVV confirmed from ${ip}`);
+        `AGB/AVV confirmed from ${ip}; agb=${agbPdf.sha256.slice(0,12)}…, avv=${avvPdf.sha256.slice(0,12)}…`);
 
       // Provisioning im Hintergrund — HTTP-Response geht sofort raus.
       setImmediate(() => {
@@ -789,6 +812,70 @@ async function runHTTP(): Promise<void> {
   };
   app.post("/api/shop/confirm/:token", shopConfirmHandler);
   app.post("/shop/confirm/:token",     shopConfirmHandler);
+
+  // (3b) GET /api/shop/agreement/:token/:type — AGB/AVV-PDF streamen
+  //
+  // Lazy-Render: Erster Klick triggert pandoc, alle folgenden Klicks lesen
+  // die Datei vom Disk. Zusätzlich markiert der Endpoint `downloadedAt` im
+  // orders.json, damit das Review-Frontend den Confirm-Button aktivieren
+  // kann (in Woche 3 per State-Polling).
+  //
+  // Sicherheit: Der verify-token dient als Capability — wer den Link
+  // hat, darf die PDFs sehen. Kein zusätzliches Auth. Token-Entropy
+  // ist 256 Bit (32 Random-Bytes hex), das ist ausreichend.
+  const shopAgreementHandler: express.RequestHandler = async (req, res) => {
+    const { token, type } = req.params;
+    if (type !== "agb" && type !== "avv") {
+      res.status(400).json({ error: "type muss 'agb' oder 'avv' sein" }); return;
+    }
+    try {
+      const order = await orders.getOrderByVerifyToken(token!);
+      if (!order) { res.status(404).json({ error: "Order nicht gefunden" }); return; }
+      // Nur vor LIVE erlauben, dass gerendert wird? Nein — nach LIVE bleibt
+      // das PDF auch für Audit-Download zugänglich (IRS §147 AO: 10 Jahre).
+      // Nur bei komplett zurückgezogenen States (REJECTED) blockieren wir.
+      if (order.state === "REJECTED" || order.state === "VERIFY_EXPIRED") {
+        res.status(410).json({ error: "Order wurde zurückgezogen, PDFs nicht mehr verfügbar" }); return;
+      }
+
+      const ip = clientIp(req);
+      const ua = userAgent(req);
+
+      const configsForAgreement = await loadConfigs().catch(() => [] as DemoConfig[]);
+      const configForAgreement  = configsForAgreement.find(c => c.id === order.configId);
+      const pdf = await contractPdf.ensureContractPdf(
+        order, configForAgreement, type as "agb" | "avv",
+        { signedAtIso: new Date().toISOString(), signerIp: ip }
+      );
+
+      // Download-Marker setzen (idempotent — markAgreementDownloaded
+      // aktualisiert downloadedAt bei jedem Aufruf).
+      await orders.markAgreementDownloaded(order.id, type as "agb" | "avv",
+        pdf.templateVersion, ip, ua).catch((e) => {
+        // Logging, aber nicht blockieren — PDF ausliefern ist Priorität
+        console.error(`[shop] markAgreementDownloaded ${order.id}/${type} warn:`, e);
+      });
+
+      const filename = `${type}-${order.id}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Length", String(pdf.bytes));
+      res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+      res.setHeader("X-Runbot-PDF-SHA256", pdf.sha256);
+      res.setHeader("X-Runbot-Template-Version", pdf.templateVersion);
+      res.setHeader("Cache-Control", "private, no-cache");
+
+      const buf = await fs.readFile(pdf.path);
+      res.end(buf);
+    } catch (e) {
+      console.error(`[shop] agreement ${token?.slice(0, 6) ?? "?"}…/${type} failed:`, e);
+      res.status(500).json({
+        error: "Vertrags-PDF konnte nicht ausgeliefert werden",
+        detail: String((e as Error)?.message ?? e).slice(0, 200),
+      });
+    }
+  };
+  app.get("/api/shop/agreement/:token/:type", shopAgreementHandler);
+  app.get("/shop/agreement/:token/:type",     shopAgreementHandler);
 
   // (4) GET /api/shop/order/:token — Status-Polling für den Kunden
   //
@@ -1294,8 +1381,8 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:28px;line-heig
         <a href="${avvUrl}" id="avv-link" target="_blank" rel="noopener">📄 AVV (Auftragsverarbeitung) herunterladen</a>
       </div>
       <p style="font-size:12px;color:#6b6b6f;margin-top:6px">
-        Hinweis (Woche 1b): Die PDFs werden in Woche 2 via pandoc generiert.
-        Bis dahin sind die Download-Links Platzhalter.
+        PDFs werden personalisiert auf Ihre Firmendaten generiert. Bitte prüfen Sie
+        beide Dokumente sorgfältig vor dem Klick auf "Bestätigen".
       </p>
     </div>
 
