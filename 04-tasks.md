@@ -211,18 +211,43 @@ mkdir -p /opt/runbot/contracts && chown runbot:runbot /opt/runbot/contracts
 ---
 
 ### task48 Onlineshop Woche 3 — Shop-Frontend
-Status: open
+Status: implementiert (commit 29c94a9), pending Verify auf VPS
 Feature: feat15
 
 Neue HTML-Seiten in `webui/`:
-- `shop.html` — öffentliches Bestellformular (Firma, Name, Funktion,
-  Wunsch-Subdomain, Wunsch-Paket)
-- `order-review.html` — Magic-Link-Landingpage mit AGB-/AVV-PDF-Download,
-  Zustimmungs-Checkbox, "Jetzt bestätigen"-Button
-- `shop-confirmed.html` — Post-Confirm Success-Page mit Hinweis
-  "Ihre Demo wird bereitgestellt, Sie erhalten in Kürze eine Mail"
+- `shop.html` — öffentliches Bestellformular (Firma, Signer, Subdomain,
+  Paket). Lädt Pakete aus `/api/configs`, POST auf `/api/shop/order`.
+- `order-review.html` — Magic-Link-Landingpage. Fetched via `GET
+  /api/shop/order/:token` (expanded returning billing+signer+agreements),
+  zeigt AGB/AVV-Download + SHA256, 2 Accept-Checkboxes, POST auf
+  `/api/shop/confirm/:token` → redirect auf `/shop/confirmed/:token`.
+- `shop-confirmed.html` — Polling-Success-Page (3s Intervall). Zeigt
+  Progress-Liste, bei LIVE CTA mit `instanceUrl` + Copy-Button, bei
+  PROVISION_FAILED Fehler-Box mit `provisioningError`-Detail.
 
-**Aufwand:** ~6 h
+Routing-Änderung: `GET /shop/verify/:token` rendert **nicht mehr** das
+alte Inline-HTML (`buildShopReviewStub()`), sondern 302-Redirect auf
+`/shop/review/:token`. Die alte Stub-Funktion ist aus `src/index.ts`
+entfernt, unused `Order`-Type-Import entfernt.
+
+API-Erweiterung (nicht-breaking): `/api/shop/order/:token` liefert
+jetzt zusätzlich `billing`, `contact`, `signer`, `agreements` (ohne
+internen `pdfPath`), `configDescription`, `notes` — damit
+order-review.html ohne zweiten Roundtrip rendern kann.
+
+Smoke-Tests lokal: alle 3 Static-Routes 200, API-Routen erwartungsgemäß
+(404/400 bei unbekanntem Token). `tsc --noEmit` grün. VPS-Verify:
+- [ ] GET https://eledia.ai/shop lädt Formular
+- [ ] End-to-End: Order → Verify-Mail → /shop/review → Confirm →
+      /shop/confirmed zeigt LIVE + instanceUrl nach Provisioning
+
+**Aufwand:** ~6 h (tatsächlich: ~5 h)
+
+**Deferred auf task49/Woche 4:**
+- Paket-Preisspalte im Formular (configs.json hat noch keinen Preis)
+- Mobile-Touchpoint für Download-Status-Poll (aktuell über Click-Delay)
+- Persistenter Formular-State bei Reload (localStorage erlaubt, ist aber
+  für das MVP Over-Engineering)
 
 ---
 
