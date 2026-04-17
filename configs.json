@@ -43,7 +43,7 @@
     ],
     "db": "pgsql",
     "phpVersion": "8.3",
-    "moodleVersion": "5.0",
+    "moodleVersion": "5.1",
     "plugin": {
       "srcPath": "/opt/plugins/moodle-mod_spinningwheel",
       "type": "mod",
