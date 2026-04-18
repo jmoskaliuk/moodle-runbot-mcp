@@ -23,6 +23,7 @@ import { promisify } from "util";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { importPluginToDirectus } from "./directus-import.js";
 const execAsync = promisify(exec);
 const PLUGINS_DIR = process.env.PLUGINS_DIR ?? "/opt/plugins";
 const CONFIG_FILE = process.env.CONFIGS_FILE
@@ -116,7 +117,7 @@ export async function clonePluginFromGithub(gitUrl) {
     }
     const versionPath = path.join(dest, "version.php");
     const parsed = await parseVersionPhp(versionPath);
-    return {
+    const result = {
         ...parsed,
         srcPath: dest,
         detectedAt: new Date().toISOString(),
@@ -129,6 +130,10 @@ export async function clonePluginFromGithub(gitUrl) {
         // Marker für die UI. Keine eigene Spalte — kann in der Description erwähnt werden.
         }),
     };
+    // task30: Fire-and-forget Import in Directus SSOT (catalog_editor Draft).
+    // Darf den Wizard-Flow niemals blockieren oder scheitern lassen.
+    importPluginToDirectus(result).catch((e) => console.error("[plugin-install] Directus-Import WARN:", e));
+    return result;
 }
 // ── Config-CRUD ────────────────────────────────────────────────────────────
 /**
