@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "probe:directus-import": "tsx scripts/probe-directus-import.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
