@@ -26,8 +26,8 @@ Admin öffnet Plugin-Wizard
               ├─▶ version.php parse → DetectedPlugin
               └─▶ importPluginToDirectus(detected)  ← fire-and-forget
                     ├─▶ GET /items/plugin_component?filter[component][_eq]=<frankenstyle>
-                    │       existiert?  → Rückgabe existing id, kein POST
-                    └─▶ POST /items/plugin_component { component, display_name, slug, status:"draft" }
+                    │       existiert?  → PATCH technische Felder, Rückgabe existing id
+                    └─▶ POST /items/plugin_component { component, plugin_type, plugin_shortname, display_name, slug, status:"draft", github_repo, git_url, release, version_build, requires_build, maturity, source_path_hint, visible:true }
 ```
 
 ### Service
@@ -46,6 +46,7 @@ importPluginToDirectus(detected: DetectedPlugin): Promise<DirectusImportResult>
 |------|-----|--------------|
 | `id` | `string` | Directus-ID des `plugin_component`-Eintrags (leer bei Fehler/Skip) |
 | `created` | `boolean` | `true` = neuer Draft-Eintrag angelegt |
+| `updated` | `boolean?` | `true` = bestehender Eintrag wurde technisch aktualisiert |
 | `skipped` | `boolean?` | `true` = kein Token konfiguriert, Import übersprungen |
 
 ### Konfiguration
@@ -64,10 +65,28 @@ importPluginToDirectus(detected: DetectedPlugin): Promise<DirectusImportResult>
 ### Fehlerverhalten
 
 - **Kein Token gesetzt:** Import wird lautlos übersprungen (nur WARN-Log).
-- **Duplikat (`component` existiert bereits):** Kein zweiter POST — bestehende ID wird
-  zurückgegeben, kein Error.
+- **Duplikat (`component` existiert bereits):** Kein zweiter POST — technische Importfelder
+  werden per PATCH aktualisiert, redaktionelle Inhalte bleiben unberührt.
 - **Netzwerkfehler / HTTP-Error:** Exception wird geloggt (`[directus-import] WARN: ...`),
   niemals weitergeworfen. Der Plugin-Wizard läuft erfolgreich weiter.
+
+### Probeimport gegen Directus
+
+Für einen kontrollierten Live-Test gibt es einen kleinen CLI-Probeimport:
+
+```bash
+npm run probe:directus-import --
+npm run probe:directus-import -- --write --component local_runbot_probeimport --shortname runbot_probeimport --github-repo owner/repo --git-url https://github.com/owner/repo
+```
+
+Verhalten:
+- ohne `--write`: reine Vorschau des `DetectedPlugin`-Payloads und Check, ob `DIRECTUS_IMPORT_TOKEN` vorhanden ist
+- mit `--write`: ruft die echte Funktion `importPluginToDirectus()` gegen `DIRECTUS_URL` auf
+- Standard-Testdaten sind absichtlich klar als Probe erkennbar (`local_runbot_probeimport`, Release `0.0.0-probe`)
+
+Empfehlung:
+- für den ersten Live-Test einen dedizierten Probe-Component-Namen verwenden
+- nach erfolgreichem Test den erzeugten Draft in Directus prüfen und bei Bedarf wieder löschen
 
 ### Directus Collection `plugin_component`
 
@@ -76,9 +95,21 @@ Beim Draft-Import werden folgende Felder belegt:
 | Feld | Wert | Notiz |
 |------|------|-------|
 | `component` | frankenstyle, z.B. `local_myplugin` | Primärschlüssel |
-| `display_name` | = `component` | Admin befüllt manuell nach Import |
-| `slug` | shortname als kebab-case, z.B. `my-plugin` | Aus shortname abgeleitet |
+| `plugin_type` | Präfix aus `component`, z.B. `local` | Technische Herkunft |
+| `plugin_shortname` | Suffix aus `component`, z.B. `myplugin` | Ohne Typ-Präfix |
+| `display_name` | Humanized `shortname`, z.B. `Myplugin` | Redaktionsfreundlicher Draft-Startwert |
+| `slug` | `component` als kebab-case, z.B. `local-myplugin` | Kollisionsärmer als shortname-only |
 | `status` | `draft` | Admin publiziert nach Review |
+| `github_repo` | `owner/repo` | Für spätere Metadata-/Repo-Lookups |
+| `git_url` | Originale Wizard-URL | Audit / Reimport-Basis |
+| `release` | `version.php -> $plugin->release` | Technischer Rohwert |
+| `version_build` | `version.php -> $plugin->version` | Build-Integer |
+| `requires_build` | `version.php -> $plugin->requires` | Moodle-Minimum als Build |
+| `maturity` | normalisiert auf `alpha|beta|rc|stable|unknown` | Aus `MATURITY_*` |
+| `source_path_hint` | `"."` | Plugin liegt im Wizard-Fall im Repo-Root |
+| `visible` | `true` | Soft-Hint für Downstream-Systeme |
+| `import_last_run_at` | aktueller Timestamp | Letzter technischer Import |
+| `import_last_status` | `imported` oder `updated` | Ergebnis des letzten Runs |
 
 ---
 
@@ -145,10 +176,10 @@ interface DetectedPlugin {
   component:   string;   // frankenstyle, z.B. "local_myplugin"
   type:        string;   // "local", "mod", "block", ...
   shortname:   string;   // "myplugin"
-  version:     string;   // aus version.php
+  version:     number;   // aus version.php
   release:     string;
   maturity?:   string;
-  requires?:   string;
+  requires?:   number;
   srcPath:     string;   // absoluter Pfad zu /opt/plugins/<repo>
   detectedAt:  string;   // ISO-Timestamp
   gitUrl:      string;
