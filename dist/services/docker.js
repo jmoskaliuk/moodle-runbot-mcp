@@ -5,11 +5,13 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 const execAsync = promisify(exec);
 const MOODLE_DOCKER_REPO = "https://github.com/moodlehq/moodle-docker.git";
 const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_CACHE_DIR = process.env.MOODLE_CACHE_DIR ?? "/opt/moodle-cache";
 const WORK_DIR = process.env.RUNBOT_WORK_DIR ?? "/opt/runbot";
+const RUNBOT_ADMIN_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../moodle-plugins/local_runbotadmin");
 const MOODLE_BRANCH_MAP = {
     "4.3": "MOODLE_403_STABLE",
     "4.4": "MOODLE_404_STABLE",
@@ -74,17 +76,16 @@ export async function provisionInstance(instance) {
     if (BASE_DOMAIN) {
         await patchConfigForProduction(configPath, instance, BASE_DOMAIN);
     }
-    const runbotAdminSrc = path.join(process.cwd(), "moodle-plugins", "local_runbotadmin");
     const runbotAdminDst = path.join(instance.moodleDir, "local", "runbotadmin");
     try {
         const { stat } = await import("fs/promises");
-        await stat(runbotAdminSrc);
+        await stat(RUNBOT_ADMIN_SRC);
         await fs.mkdir(path.dirname(runbotAdminDst), { recursive: true });
-        await run(`cp -r ${runbotAdminSrc} ${runbotAdminDst}`);
+        await run(`cp -r ${RUNBOT_ADMIN_SRC} ${runbotAdminDst}`);
         console.error(`[docker] task37: local_runbotadmin plugin installed into ${runbotAdminDst}`);
     }
     catch (e) {
-        console.error(`[docker] WARN task37: local_runbotadmin source not found at ${runbotAdminSrc} — skipping. ` +
+        console.error(`[docker] WARN task37: local_runbotadmin source not found at ${RUNBOT_ADMIN_SRC} — skipping. ` +
             `(${String(e).slice(0, 120)})`);
     }
 }
