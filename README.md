@@ -26,7 +26,10 @@ Demo- und Produktiv-Instanzen bestellen können (siehe unten).
 
 **Demo-Portal** (`webui/demo-portal.html`)
 
-Kachel-Ansicht aller Demo-Angebote aus `configs.json`. Pro Karte:
+Kachel-Ansicht aller Demo-Angebote aus `src/services/config.ts`.
+Standardmäßig kommen die Daten aus `configs.json`; optional kann der
+Runbot die Karten im `hybrid`- oder `directus`-Modus direkt aus Directus
+laden. Pro Karte:
 Plugin-Icon aus GitHub, Kurzbeschreibung, Feature-Liste, "Demo starten"-
 CTA. Filter nach Kategorie (Lernen, Verwaltung, Prüfungen, Reporting,
 Referenz-Moodles). Warteseite mit Live-Polling bis die Instanz bereit ist.

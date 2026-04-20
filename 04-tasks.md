@@ -47,6 +47,28 @@ Der nginx vor dem Node-Backend proxyt `/api/*` mit trailing-slash
 Cleanup-Vorschlag: `proxy_pass http://127.0.0.1:3000;` (ohne trailing slash).
 Muss ein Wartungsfenster sein. Low-risk, aber aktuell nicht pressing.
 
+### idea: Demo-Portal-Konfiguration aus Directus statt aus `configs.json`
+
+Aktuell ist `configs.json` die SSOT für die Portal-Karten, während Plugin-Metadaten
+teilweise bereits in Directus liegen bzw. beim Plugin-Wizard dorthin als Draft
+importiert werden (`src/services/directus-import.ts`). Sinnvolle Zielarchitektur:
+Portal-Karten, GitHub-Repo, Deployment-Pfad, Sichtbarkeit und Marketing-Texte
+liegen in Directus; der Runbot baut daraus zur Laufzeit oder per Sync einen
+`DemoConfig`-kompatiblen Datensatz.
+
+Nutzen:
+- Nur ein redaktionärer Pflegeort für Plugin-Inhalte
+- Deployment-relevante Felder (`githubRepo`, `plugin.srcPath`, Snapshot-Zuordnung)
+  bleiben mit der Portal-Karte gekoppelt
+- Plugin-Wizard könnte nach dem Parse nicht nur Drafts anlegen, sondern später
+  direkt in den Live-Katalog überführen
+
+Offen:
+- Welche Directus-Collection wird SSOT: bestehendes `plugin_component` erweitern
+  oder neue Collection `runbot_demo_config`?
+- Bleibt `configs.json` als Cache/Fallback erhalten oder wird komplett abgelöst?
+- Wie werden Vanilla-Moodle-Karten modelliert, die kein Plugin haben?
+
 ---
 
 ## 🆕 New
@@ -68,6 +90,11 @@ Aktuell nichts Neues seit dem 2026-04-16 Onlineshop-Konzept-Abschluss.
   Unterauftragsverarbeiter-Liste.
 - **Styleguide für PDF:** Johannes sagte existiert. Muss an die pandoc-Pipeline
   in Woche 2 angedockt werden.
+- **Pakete / Preise:** Für den Shop sind Pakete konzeptionell skizziert, aber
+  Preis- und Leistungsdarstellung auf `shop.html` ist noch nicht final entschieden.
+- **Directus-Datenmodell:** Wenn das Demo-Portal aus Directus gespeist werden soll,
+  braucht es eine Entscheidung, ob Plugin-Redaktion und Runbot-spezifische
+  Deployment-Felder in einer oder zwei Collections gepflegt werden.
 
 ---
 
@@ -102,6 +129,46 @@ Feature: feat04
 
 In `demo-portal.html` `catFilters` den Button `pruefungen` ergänzen +
 i18n-Strings `filter_exam`. Aufwand: ~15 min.
+
+### task51 Shop/Launch-Härtung — letzte produktive Restarbeiten bündeln
+Status: open
+Feature: feat15
+
+Im Code ist der Shop-Flow weitgehend fertig, aber ein paar MVP-Reste sind noch
+nicht produktionsreif bzw. nur als Fallback umgesetzt:
+
+1. Random-Admin-Passwort für Shop-Instanzen statt hartem `demo1234`
+2. `password_expired = 1` / erzwungener Passwortwechsel beim ersten Login
+3. PDF-Branding (Logo/Header/Farben) an `src/services/contract-pdf.ts` anbinden
+4. `userLimit` und ggf. Plugin-Liste strukturiert aus Datenmodell ziehen statt
+   Fallback-Text in den PDF-Placeholders
+5. `eledia_logo.png` als echtes Asset beim Deploy bereitstellen
+
+Ziel: Letzte technische MVP-Lücken schließen, bevor der Shop öffentlich beworben wird.
+
+### task52 Directus als SSOT für Demo-Portal und Deployment-Metadaten evaluieren
+Status: open
+Feature: feat04, feat14
+
+Der Runbot hat bereits eine erste Directus-Anbindung: Der Plugin-Wizard importiert
+erkannte Plugins als Draft nach Directus (`src/services/directus-import.ts`).
+Als nächster Schritt soll geprüft und spezifiziert werden, wie `https://demo.eledia.ai/`
+seine Karten aus Directus statt aus `configs.json` beziehen kann.
+
+Zu klären/umzusetzen:
+1. Zieldatenmodell definieren: bestehendes `plugin_component` erweitern oder
+   Runbot-spezifische Collection daneben
+2. Mapping Directus → `DemoConfig` festziehen (`name`, `description`, `features`,
+   `githubRepo`, `plugin.srcPath`, `moodleVersion`, `phpVersion`, `db`, `snapshotId`,
+   `visible`, Kategorie/Labels)
+3. Sync-Strategie wählen:
+   - runtime fetch aus Directus mit lokalem Fallback
+   - oder Build-/Cron-Sync nach `configs.json`
+4. Vanilla-Karten und nicht-pluginbasierte Referenzsysteme mitmodellieren
+5. Admin-/Wizard-Flow anpassen, damit neue Plugins nicht doppelt gepflegt werden
+
+Ergebnis soll zuerst ein belastbares Architektur- und Migrationskonzept sein,
+danach ggf. technische Umsetzung in einer Folgetask.
 
 ---
 
@@ -377,6 +444,12 @@ Deployed: `ef6e9a7` + `95e1eb1` (2026-04-16)
 
 ### Weitere offene Verify-Items
 - [ ] nginx Pre-Flight: fehlende Cert-Files → Warning im Log, kein Crash
+- [ ] Shop E2E live verifizieren: Order → Verify-Mail → `/shop/review/:token`
+      → Confirm → `/shop/confirmed/:token` → Instanz wird `LIVE`
+- [ ] Customer-Dashboard live verifizieren: Welcome-Mail/Magic-Link öffnet
+      `/kunde/:token`, PDFs laden, Status-Polling funktioniert
+- [ ] Admin-Orders-Tab live verifizieren: Listenansicht, Filter, Details,
+      Reject/Terminate-Aktionen gegen echte Testbestellung
 
 ---
 

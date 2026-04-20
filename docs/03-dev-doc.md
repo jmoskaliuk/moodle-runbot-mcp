@@ -82,6 +82,48 @@ Beim Draft-Import werden folgende Felder belegt:
 
 ---
 
+## Directus als Config-Quelle (task52)
+
+Seit task52 kann der Runbot Demo-Konfigurationen nicht nur aus `configs.json`,
+sondern optional auch aus Directus laden. Ziel ist eine hybride Architektur:
+
+- Directus ist die redaktionäre SSOT für Portal-/Katalogdaten
+- `configs.json` bleibt Fallback, Bootstrap und lokales Schreibziel des Wizards
+
+### Modus-Auswahl
+
+| Env-Variable | Werte | Verhalten |
+|---|---|---|
+| `CONFIGS_SOURCE` | `file` | Nur `configs.json` laden |
+| `CONFIGS_SOURCE` | `directus` | Nur Directus laden, Fehler sind fatal |
+| `CONFIGS_SOURCE` | `hybrid` | Erst Directus, bei Fehler/0 Datensätzen Fallback auf Datei |
+
+### Directus-Collection
+
+Default: `runbot_demo_config` (`DIRECTUS_CONFIG_COLLECTION` überschreibbar)
+
+Empfohlenes Modell:
+- `plugin_component` enthält pluginbezogene Stammdaten
+- `runbot_demo_config` enthält Runbot-spezifische Felder wie `snapshot_id`,
+  `moodle_version`, `php_version`, `db`, `visible`, Kategorie und Features
+- Vanilla-Karten haben keine `plugin_component`-Relation
+
+### Tolerantes Mapping
+
+Der Loader erwartet kein starres Schema, sondern mappt aus mehreren Feldnamen:
+
+- `slug | demo_id | code` → `DemoConfig.id`
+- `name | title | display_name` → `DemoConfig.name`
+- `description | summary | teaser` → `DemoConfig.description`
+- `features[] | feature_list` → `DemoConfig.features`
+- `github_repo | plugin_component.github_repo` → `DemoConfig.githubRepo`
+- `plugin_src_path | plugin_component.component` → `DemoConfig.plugin`
+
+Wenn `plugin_src_path` fehlt, wird der Pfad aus `githubRepo` (`PLUGINS_DIR/<repo>`)
+oder notfalls aus dem Moodle-Component-Namen abgeleitet.
+
+---
+
 ## Plugin-Wizard Backend (task43d)
 
 **Datei:** `src/services/plugin-install.ts`

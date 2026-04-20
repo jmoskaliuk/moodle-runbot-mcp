@@ -20,6 +20,10 @@ export interface DemoConfig {
     visible: boolean;
     type?: string;
     githubRepo?: string;
+    licenseUrl?: string;
+    userLimit?: number | string;
+    source?: "file" | "directus";
+    directusId?: string;
 }
 export declare function loadConfigs(): Promise<DemoConfig[]>;
 export declare function getConfig(id: string): Promise<DemoConfig | undefined>;

@@ -81,6 +81,10 @@ RunbotConfig    → Server-Konfiguration
 | `ADMIN_PASSWORD` | Passwort für `/admin` (HTTP Basic Auth, Pflicht) | — |
 | `EXTEND_CODES` | Komma-getrennte Verlängerungscodes | `""` |
 | `RUNBOT_INTERNAL_API_KEY` | Auth-Key für `src/api/internal.ts` (wird vom Moodle-Plugin gesetzt) | — |
+| `CONFIGS_SOURCE` | `file`, `directus`, `hybrid` | `file` |
+| `CONFIGS_FILE` | Pfad zu lokalem Config-Fallback | `<repo>/configs.json` |
+| `DIRECTUS_CONFIG_COLLECTION` | Collection für Demo-Configs | `runbot_demo_config` |
+| `DIRECTUS_CONFIG_TOKEN` | Optionaler Bearer-Token für Config-Reads | `DIRECTUS_IMPORT_TOKEN` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Brevo-SMTP-Credentials | — |
 
 ---
@@ -202,7 +206,16 @@ sie nach dem Template evaluiert werden.
 ## feat04 — Plugin-Konfigurationssystem (`src/services/config.ts`)
 
 **Overview**
-Configs werden aus `configs.json` im Projekt-Root geladen. Pfad überschreibbar via `CONFIGS_FILE`-Env-Variable.
+Configs werden über `src/services/config.ts` geladen. Seit task52 unterstützt der
+Service drei Modi:
+
+- `CONFIGS_SOURCE=file` — lädt nur `configs.json`
+- `CONFIGS_SOURCE=directus` — lädt nur aus Directus
+- `CONFIGS_SOURCE=hybrid` — versucht zuerst Directus und fällt bei Fehlern oder
+  leeren Ergebnissen auf `configs.json` zurück
+
+`configs.json` bleibt damit lokaler Fallback, Bootstrap-Datei und Schreibziel
+für den bestehenden Plugin-Wizard. Pfad überschreibbar via `CONFIGS_FILE`.
 
 **DemoConfig-Struktur**
 
@@ -222,6 +235,11 @@ Configs werden aus `configs.json` im Projekt-Root geladen. Pfad überschreibbar 
   phpVersion:    string      // "8.2"
   db:            string      // "pgsql"
   visible:       boolean     // false = in Portal-Liste versteckt
+  githubRepo?:   string      // "owner/repo"
+  licenseUrl?:   string
+  userLimit?:    number | string
+  source?:       "file" | "directus"
+  directusId?:   string
 }
 ```
 
@@ -235,10 +253,34 @@ Configs werden aus `configs.json` im Projekt-Root geladen. Pfad überschreibbar 
 - `loadConfigs()` → lädt alle Configs mit `visible !== false`
 - `getConfig(id)` → gibt einzelne Config zurück
 - `GET /configs` → gibt alle sichtbaren Configs als JSON zurück (für Demo-Portal)
+- `updateConfig(id, mutator)` → schreibt weiterhin **nur** in `configs.json`
+  (bewusst: Datei bleibt Fallback/Cache; Directus-Schreiben ist aktuell kein Teil
+  dieses Services)
+
+**Directus-Mapping (hybrid/directus mode)**
+
+Default-Collection: `runbot_demo_config` (`DIRECTUS_CONFIG_COLLECTION` überschreibbar).
+Die Collection kann direkte Runbot-Felder enthalten und optional eine Relation
+`plugin_component`. Der Loader mappt tolerant aus mehreren möglichen Feldnamen:
+
+- Identität: `slug | demo_id | code`
+- Anzeigename: `name | title | display_name | plugin_component.display_name`
+- Kategorie: `category`, `category_label`
+- Beschreibung: `description | summary | teaser`
+- Feature-Liste: `features[] | feature_list`
+- Plugin: `plugin_src_path`, `plugin_type`, `plugin_name` oder aus
+  `plugin_component.component`
+- GitHub: `github_repo` oder `plugin_component.github_repo`
+- Technik: `snapshot_id`, `moodle_version`, `php_version`, `db`
+
+Falls `plugin_src_path` fehlt, leitet der Loader ihn aus `githubRepo`
+(`PLUGINS_DIR/<repo>`) oder aus dem Moodle-Component-Namen ab.
 
 **Constraints**
-- `configs.json` wird bei jedem Aufruf neu gelesen (kein Caching)
-- Fehler beim Laden wirft Exception mit Pfadangabe
+- Kein Caching: Datei- und Directus-Daten werden pro Aufruf frisch geladen
+- In `hybrid` führt ein Directus-Fehler nur zu einem WARN-Log + Datei-Fallback
+- In `directus` wird ein Directus-Fehler bewusst hart geworfen
+- Admin-/Wizard-Schreibpfade schreiben derzeit nur die Datei, nicht Directus
 
 ---
 
@@ -657,3 +699,176 @@ Statische HTML-Dateien, vom nginx aus `$APP_DIR/webui/` serviert. Kein Build-Sch
 **nginx-Routing**
 - `GET /` → `webui/demo-portal.html` (statisch)
 - `location /api/` → `proxy_pass http://127.0.0.1:3000/` (MCP-Server, `/api/`-Prefix wird gestripped)
+
+---
+
+# Dev-Workflow & Code-Check
+
+*Dieser Abschnitt wurde nach dem Code-Review vom 2026-04-19 ergänzt.*
+
+---
+
+## Local Dev Quickstart
+
+```bash
+# 1. Dependencies installieren (nach jedem git clone / git pull)
+npm ci
+
+# 2. Bauen
+npm run build          # tsc → dist/
+
+# 3. Starten (HTTP-Modus, lokal)
+TRANSPORT=http PORT=3000 NODE_ENV=development ADMIN_PASSWORD=admin npm start
+
+# 4. Dev-Loop mit Auto-Rebuild
+npm run dev            # tsx watch src/index.ts (kein Build nötig)
+```
+
+> **Pflicht nach jedem `git pull`:** `npm ci` ausführen.
+> Ohne das schlägt `npm run build` mit `TS2307 Cannot find module '...'` fehl
+> (bug19 — betrifft insb. `express-basic-auth`).
+
+---
+
+## Build- und Typ-Prüfung
+
+```bash
+npm run build          # Fehlerfrei = Grün. Kompilierungsfehler → Fix vor Commit.
+```
+
+**Wichtige tsconfig-Einstellungen:**
+
+| Option | Wert | Bedeutung |
+|--------|------|-----------|
+| `strict` | `true` | Volle TS-Prüfung (noImplicitAny, strictNullChecks, …) |
+| `skipLibCheck` | `true` | Typ-Fehler in `node_modules/*.d.ts` werden ignoriert |
+| `module` / `moduleResolution` | `NodeNext` | ESM mit expliziten `.js`-Importen nötig |
+| `target` | `ES2022` | Moderne Features (await top-level, `at()`, …) nutzbar |
+
+> Packages ohne Typ-Deklarationen (z.B. `express-basic-auth`) werden durch
+> `skipLibCheck` toleriert, solange der Import selbst auflösbar ist. Falls
+> neue Packages fehlen: `npm install` prüfen.
+
+---
+
+## Pflicht-Checks vor jedem Commit / PR
+
+1. **Build sauber:** `npm run build` → 0 errors
+2. **Secrets kein Hardcode:** Kein `console.log` mit Token/Passwort-Werten
+3. **Neue Env-Variablen dokumentieren:** In `03-dev-doc.md` → Env-Tabelle eintragen
+4. **Neue Bugs/Befunde eintragen:** In `05-quality.md` als `bugXX` anlegen
+
+---
+
+## Sicherheits-Checkliste (OWASP-relevante Patterns im Code)
+
+### Authentifizierung
+
+| Route-Gruppe | Schutz |
+|---|---|
+| `POST /mcp` | `mcpAuthMiddleware` (Header `x-api-key` oder Query `api_key`) — nur wenn `MCP_API_KEY` gesetzt |
+| `/admin/*` | HTTP Basic Auth via `express-basic-auth` (`ADMIN_PASSWORD` Pflicht, Server startet sonst nicht) |
+| `/api/internal/*` | Per-Instance Token (`X-Runbot-Instance-Id` + `X-Runbot-Api-Token`) — Middleware in `src/api/internal.ts` |
+| `/confirm/:token` | 32-Byte-hex-Token in URL (Guessing nicht praktikabel) |
+| Alle anderen | Öffentlich (Demo-Anfrage, Portal-Configs, Health) |
+
+> **Pflicht:** `ADMIN_PASSWORD` muss in `/etc/moodle-runbot.env` gesetzt sein.
+> Der Server verweigert den Start sonst explizit (exit 1).
+
+### Eingabevalidierung
+
+- E-Mail: Regex-Prüfung in `POST /request-demo`
+- Config-ID: `.find(c => c.id === configId)` — keine Injection möglich
+- Snapshot-ID in `/api/internal/snapshot/download/:id`: Whitelist `[A-Za-z0-9._-]+`
+- GitHub-URL in `plugin-install.ts`: Regex erlaubt nur `https://github.com/owner/repo`
+- Snapshot-Label in `POST /api/internal/snapshot/create`: `[A-Za-z0-9-]+`
+
+### Path Traversal
+
+- `snapshot/download` in `internal.ts`: Zusätzlicher `path.resolve()` + `startsWith(SNAPSHOT_DIR)` Check ✅
+- `docker.ts` Shell-Befehle: Pfade basieren auf `path.join(WORK_DIR, instance.id)`. Instance-ID wird aus zufälligem Hex + sanitized configId gebaut → kein Traversal möglich
+
+### Shell-Injection (bekannte Risikostellen)
+
+Alle Docker/nginx-Befehle werden als Template-Literal-Strings an `execAsync()` übergeben.
+Das ist sicher, solange keine Nutzer-Eingabe direkt in den String interpoliert wird.
+
+**Stellen die überprüft wurden:**
+
+| Datei | Funktion | Eingabe-Quelle | Risiko |
+|---|---|---|---|
+| `docker.ts` | `run(\`cp -r ${pluginSrcPath} ...\`)` | Admin-API (validierter Pfad) | niedrig |
+| `docker.ts` | `run(\`cp -r ${cachedDocker} ...\`)` | MOODLE_CACHE_DIR Env | niedrig |
+| `cleanup.ts` | `docker rm -fv ${names.join(' ')}` | docker ps Output (intern) | niedrig (bug21) |
+| `snapshot.ts` | `mysqldump -u moodle -pm@0dl3ing` | hardcoded (Demo-PW) | niedrig (bug20) |
+| `plugin-install.ts` | `git clone --depth 1 ${gitUrl} ${dest}` | GitHub-URL validiert via Regex | niedrig |
+
+> **Hardening-TODO (kein akuter Bug):** `execFileAsync` statt `execAsync` für Befehle mit
+> externen Inputs verwenden — dann werden Argumente nicht vom Shell geparst.
+> Tracked als bug21.
+
+### Rate Limiting
+
+- `POST /request-demo`: `express-rate-limit` — 5 Anfragen / 15 Minuten / IP
+- `/mcp`: Kein Rate-Limit — liegt hinter API-Key, nur für interne/CI-Nutzung
+
+---
+
+## Häufige Fehler & Lösungen
+
+| Symptom | Ursache | Lösung |
+|---------|---------|--------|
+| `TS2307: Cannot find module` | `node_modules` fehlen | `npm ci` |
+| `ADMIN_PASSWORD nicht gesetzt` beim Start | Env-Variable fehlt | `/etc/moodle-runbot.env` prüfen, `systemctl restart moodle-runbot` |
+| Demo startet, aber Moodle lädt nicht | `config.php` wwwroot falsch | `patchConfigForProduction()` wurde nicht aufgerufen (nur bei `BASE_DOMAIN` gesetzt) |
+| `nginx -t` schlägt fehl | Syntax-Fehler in neu erstellter Config | `cat /etc/nginx/conf.d/runbot-<id>.conf` prüfen |
+| Snapshot-Restore wirft `tool_replace_allowdb not set` | Config.php Override-Block fehlt | `patchConfigForProduction()` wurde nicht vor `startContainers()` aufgerufen |
+| `mdl_sessions`-Fehler nach Snapshot | Sessions vom Seed-Host enthalten | `restoreSnapshot()` truncated mdl_sessions — prüfen ob bis Ende lief |
+| MariaDB-Ping: `Access denied for 'root'` | Kein Passwort übergeben | `mysqladmin -u root -proot ping` — Root-PW im moodle-docker-Container ist `root` |
+| `git clone fehlgeschlagen` im Plugin-Wizard | Privates Repo / Netzwerk | Nur öffentliche HTTPS GitHub-URLs unterstützt (kein SSH) |
+
+---
+
+## Deployment (Checkliste)
+
+Push auf `main` → GitHub Actions (`.github/workflows/deploy.yml`) → SSH auf VPS:
+
+```
+git fetch + reset --hard → npm ci → npm run build → systemctl restart → health check
+```
+
+**Nach dem Deploy manuell prüfen:**
+- `curl -sf https://demo.eledia.ai/health` → `{"status":"ok"}`
+- `journalctl -u moodle-runbot -n 50` → keine ERROR-Zeilen
+
+**Manuelle Deployment-Schritte (nur bei Env-Änderungen nötig):**
+```bash
+nano /etc/moodle-runbot.env   # Env-Variablen editieren
+systemctl restart moodle-runbot
+journalctl -fu moodle-runbot
+```
+
+---
+
+## Code-Review-Protokoll: 2026-04-19
+
+**Durchgeführt von:** GitHub Copilot (Claude Sonnet 4.6)
+**Scope:** Vollständiger Source-Code (`src/`, `moodle-plugins/local_runbotadmin/`)
+
+### Findings (Zusammenfassung)
+
+| ID | Datei | Typ | Status |
+|----|-------|-----|--------|
+| bug19 | `src/index.ts` | Build-Fehler: fehlende `node_modules` | **fixed** (npm ci) |
+| bug20 | `src/services/snapshot.ts`, `docker.ts` | MariaDB-Passwort in Shell-Cmdline sichtbar | open (low risk) |
+| bug21 | `src/services/cleanup.ts` | `docker rm -fv` mit ungepaddeten Container-Namen | open (low risk) |
+
+### Positives
+
+- **Authentifizierung korrekt implementiert:** Admin-Route hinter Basic Auth; internes API mit per-Instance Token (Blast-Radius begrenzt); MCP-Endpoint hinter API-Key.
+- **Path-Traversal-Schutz vorhanden:** `snapshot/download` hat expliziten `path.resolve()` + `startsWith(SNAPSHOT_DIR)`-Check.
+- **Input-Validation konsistent:** Snapshot-IDs, GitHub-URLs, Config-IDs alle mit Whitelist-Regex validiert.
+- **Fehler-Handling differenziert:** Demo-Start-Fehler → Error-E-Mail (bug03 fix); Snapshot-URL-Rewrite-Fehler → non-fatal Log; Session-Truncate-Fehler → non-fatal Log.
+- **TypeScript strict mode aktiv:** `"strict": true` in `tsconfig.json` — volle Typ-Prüfung.
+- **Atomares Config-File-Schreiben:** `configs.json` wird via tmp+rename geschrieben → kein halb-geschriebener State bei Server-Crash.
+- **Moodle-Plugin korrekt strukturiert:** `local_runbotadmin` mit `confirm_sesskey()` auf allen POST-Actions, `PARAM_ALPHA` / `PARAM_TEXT` auf allen `required_param()` / `optional_param()` Aufrufen, `s()` auf allen HTML-Ausgaben.

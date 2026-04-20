@@ -353,6 +353,75 @@ Leitnerflow-v1-Snapshot: Das Rewrite findet einen Diff zwischen dem Seed-URL und
 
 ## 🧪 Tests
 
+---
+
+### bug19 TypeScript-Build schlug fehl: express-basic-auth fehlte
+
+Feature: infra
+Status: **fixed 2026-04-19** (npm ci)
+Entdeckt: Code-Review 2026-04-19
+
+**Description**
+`npm run build` brach mit `TS2307: Cannot find module 'express-basic-auth'` ab.
+`express-basic-auth` war in `dependencies` deklariert, aber die `node_modules/` waren
+nicht installiert (kein `npm ci` nach letztem Clone oder Env-Wechsel).
+`express-basic-auth` liefert keine eigenen TypeScript-Deklarationen — daher fehlen
+Typen auch nach `npm ci` ohne weitere Maßnahmen, aber `skipLibCheck: true` im
+`tsconfig.json` verhindert Typ-Fehler aus transitiven Depencencies. Eigener Import-Fehler
+wird durch das fehlende Modul selbst verursacht, nicht durch die Typen.
+
+**Fix**
+`npm ci` ausgeführt — alle Abhängigkeiten installiert. Build läuft seitdem fehlerfrei.
+
+**Prävention**
+→ siehe Devflow-Abschnitt "Local Dev Quickstart" in `03-dev-doc.md`. CI-Workflow
+(`deploy.yml`) führt `npm ci` bereits aus, trifft also Production nicht.
+
+---
+
+### bug20 mysql-Passwort im Shell-Log sichtbar (mysqldump / mysql)
+
+Feature: feat05
+Status: **open** (low risk, VPS-intern)
+Entdeckt: Code-Review 2026-04-19
+
+**Description**
+`snapshot.ts` und `docker.ts` bauen Shell-Befehle mit hartem Passwort in der Kommandozeile:
+```
+mysqldump -u moodle -pm@0dl3ing moodle | gzip > …
+mysql -u moodle -pm@0dl3ing moodle
+mysqladmin -u root -proot ping
+```
+Passwörter erscheinen in `/proc/<pid>/cmdline`, `ps aux`-Output und im Node-stderr-Log.
+
+**Risiko**
+Niedrig: VPS-interne Demo-Instanzen, Passwörter gelten nur für die kurzlebige
+MariaDB-Container-Instanz, kein externer Zugriff. Kein Production-Daten-Exposure.
+
+**Workaround**
+`MYSQL_PWD`-Umgebungsvariable oder `--defaults-file=/tmp/my.cnf` würde das Passwort
+aus dem Prozess-Cmdline entfernen. Für MVP akzeptiert; Track als Hardening-Item.
+
+---
+
+### bug21 Shell-Injektion in cleanup.ts: docker rm -fv mit ungepaddeten Namen
+
+Feature: cleanup
+Status: **open** (low risk, intern)
+Entdeckt: Code-Review 2026-04-19
+
+**Description**
+`cleanup.ts` baut `docker rm -fv ${names.join(' ')}`. Container-Namen kommen aus
+`docker ps --format '{{.Names}}'` mit einem Filter — aber ein Container-Name mit Leerzeichen
+oder Shell-Metazeichen würde zu ungültigem Command führen. In der Praxis generiert
+`composeProject` nur `[a-z0-9-]`-Namen, daher kein realer Exploit-Pfad.
+
+**Fix**
+Defensive Absicherung: Namen durch `names.map(n => n.replace(/[^a-z0-9._-]/gi, ''))` filtern
+oder als separate Array-Argumente via `execFileAsync` übergeben.
+
+---
+
 ### test01 Verify: config.php nach Patch
 
 Feature: feat02
